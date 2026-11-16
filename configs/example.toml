@@ -1,6 +1,7 @@
 # Copy to local.toml or set GEOTRANSFER_CONFIG. Relative paths use the project root.
 [paths]
 source = "../data/levelxdata/inD-dataset-v1.1"
+reference_data = "../data/WOMD"
 bench = "../behavior-bench"
 artifacts = "artifacts"
 runs = "runs"

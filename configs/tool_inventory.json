@@ -267,7 +267,7 @@
   {
     "old": "pilot_ind.py",
     "disposition": "package",
-    "replacement": "src/geotransfer_gap/conversion/pilot_ind.py"
+    "replacement": "src/geotransfer_gap/conversion/pipeline.py"
   },
   {
     "old": "probe_source_guided_idm.py",

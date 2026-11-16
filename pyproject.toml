@@ -20,7 +20,7 @@ geotransfer = "geotransfer_gap.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-geotransfer_gap = ["tool_registry.json"]
+geotransfer_gap = ["tool_registry.json", "visualization/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
