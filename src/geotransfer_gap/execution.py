@@ -148,6 +148,7 @@ def main(argv=None):
                         *args.bb_args,
                     ],
                     env=env,
+                    cwd=settings().bench,
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     check=True,

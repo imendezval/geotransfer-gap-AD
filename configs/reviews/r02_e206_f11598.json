@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage and timed source pedestrian/ego tracks and physical audit",
+  "recording": 2,
+  "ego_track_id": 206,
+  "first_frame": 11598,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_ahead"
+  ],
+  "ineligible_interaction_types": [
+    "main_road_priority_gap_acceptance",
+    "all_nearby_pedestrians_are_crossing"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    209
+  ],
+  "binary_sha256": "db72d3b1e5caf88418dc2f606d0547f0346fc34323db514e0dc2e7df572d1d4a",
+  "rule_audit_sha256": "536a6bd98050a1366b94e9a99b4c55098f357e25fb1ce6f63d39eba71a9e8678",
+  "interaction_source_digest": "278b39ebf4ffb69040a1c56425a2ee4408229d449aaad8d43ce893d36b7ff7c6",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "4392e72dbe9d44c376813332ea4a53da96789274d7cb3727880b7696326ed6c9",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk. Full source footprint/boundary and directed occupied-route audits pass without removing any source actor.",
+  "interaction_decision_steps": [
+    20,
+    30,
+    50,
+    56
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk. Source ego/209 swept physical footprints overlap at ego58/ped21 before source goal entry83. Source ego remains slow while209 moves through the lane and accelerates after clearance. Closest timed box gap3.20m at56, all40source-close frames preserved. The source-speedup diagnostic reduces the gap but is not used as proof of causality. The downstream goal requires traversing the actual crossing, supporting a crossing approach decision with observed slow progress, without attributing every speed change solely to209.",
+  "reviewed_boundary_way_ids": [
+    100025,
+    100040,
+    100044,
+    100046,
+    100047,
+    100050,
+    100057,
+    100120,
+    100121,
+    100170,
+    100171,
+    100187,
+    100188,
+    100193,
+    100194,
+    100217,
+    100218,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk. The connected turning/main-road lane geometry requires no lateral lane change or solid-line traversal. Physical source box auditing is clear of raised boundaries; source polygons1142/1143 and refuge geometry remain intact.",
+  "rule_resolutions": [
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205 sign100261 governs the north approach to relation1170. This scene starts downstream of that approach: no ego occupied lanelet is a governed member in the source role audit. The bounded task is crossing1143 after the connector, not initial entry across the upstream approach yield. No main-road priority-lane actor is present in the source role inventory. The crossing remains represented rather than discarding its pedestrians. Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source crossing1142 is retained as a full aligned polygon through JSON18/binary8 and verified actual SMART map tokens. The ego travels the connector across1143 toward1142;209 crosses that connector from the refuge. The audit's centre/box contact distinction does not suppress1143: the complete source polygon is present even where ego-centre contacts differ. Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source crossing1143 is retained as a full aligned polygon through JSON18/binary8 and verified actual SMART map tokens. The ego travels the connector across1143 toward1142;209 crosses that connector from the refuge. The audit's centre/box contact distinction does not suppress1143: the complete source polygon is present even where ego-centre contacts differ. Provider montage10/30/50/75 shows ego206 finishing the paved right-turn connector toward the westbound main road while pedestrian209 walks from the central refuge across its path toward the northern sidewalk. Pedestrians199/201 are already clearing toward the sidewalk and are not claimed as the primary interaction. Ego speed is0.98m/s at10,0.58at20,0.57at30, then rises1.11at40,2.80at50 and4.96at60 as209 clears the driving corridor. The car stays on paved vehicle lanes outside the raised refuge and sidewalk."
+    }
+  ]
+}

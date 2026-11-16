@@ -1,5 +1,6 @@
 """Planner-specific SMART admission over the mandatory technical scene gate."""
 
+from geotransfer_gap.provenance import converter_fingerprint
 from geotransfer_gap.artifacts import reference
 from geotransfer_gap.validation.scene_contract import contracts_equal
 from geotransfer_gap.planners.protocol import input_paths, execution_hashes
@@ -80,7 +81,7 @@ def main():
         lateral.get("passed")
         and lateral.get("lane_change_tool_sha256")
         == sha(project_path("source_lane_changes.py"))
-        and (lateral.get("converter_sha256") == sha(project_path("pilot_ind.py")))
+        and (lateral.get("converter_sha256") == converter_fingerprint())
         and any(
             (
                 r.get("source_sha256")

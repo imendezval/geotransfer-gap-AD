@@ -1,9 +1,12 @@
+from geotransfer_gap.provenance import converter_fingerprint
+
 """Freeze a verified manifest and its effective SMART/runtime protocol.
 
 Fails on stale admission, unequal scene protocols, stale batch output or missing
 single/batch parity. It records existing evidence; it never grants admission.
 """
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.artifacts import evidence_current
 from geotransfer_gap.validation.scene_contract import contracts_equal
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
@@ -34,7 +37,7 @@ def main():
     baseline = []
     protocols = []
     for row in rows:
-        root = Path(row["root"])
+        root = resolve_reference(row["root"])
         t = root / "testing"
         gate_path = t / f"admission_smart_{row['traffic_protocol']}.json"
         gate = json.loads(gate_path.read_text())
@@ -161,7 +164,11 @@ def main():
             ("map_preprocessor_sha256", "faithful_map.py"),
             ("queue_sha256", "run_oriented_candidate_queue.py"),
         ]:
-            if field in data and data[field] != sha(project_path(tool)):
+            if field in data and data[field] != (
+                converter_fingerprint()
+                if field == "converter_sha256"
+                else sha(project_path(tool))
+            ):
                 raise ValueError("Stale tool proof: " + name)
     result = {
         "schema_version": 2,
@@ -187,7 +194,7 @@ def main():
     if {r["root"] for r in access["scenes"]} != {r["root"] for r in rows}:
         raise ValueError("Incomplete ordinary-road access proof")
     for row in access["scenes"]:
-        root = Path(row["root"])
+        root = resolve_reference(row["root"])
         contract = scene_contract.build(root, "expert")
         if (
             not row["passed"]
@@ -214,12 +221,13 @@ def main():
         raise ValueError("Stale US closed-loop references")
     for row in us["results"]:
         report_path = (
-            Path(row["root"])
+            resolve_reference(row["root"])
             / "testing/smart_all_actors_closed_loop_hybrid_startup.json"
         )
         report = json.loads(report_path.read_text())
         input_path = (
-            Path(row["root"]) / "testing/smart_map_transfer_all_actors_probe.json"
+            resolve_reference(row["root"])
+            / "testing/smart_map_transfer_all_actors_probe.json"
         )
         if (
             row["report_sha256"] != sha(report_path)

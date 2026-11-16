@@ -23,9 +23,9 @@ def main(us_json, output_root, steps):
         raise ValueError(
             "US parity probe needs at least one initially stopped vehicle that restarts"
         )
-    alias = Path("/tmp") / ("geo_us_hybrid_" + sha(us_json)[:12])
-    if not alias.exists():
-        alias.symlink_to(output_root.resolve(), target_is_directory=True)
+    from geotransfer_gap.runtime.session import short_alias
+
+    alias = short_alias(output_root)
     sys.path.insert(0, str(settings().bench))
     from geotransfer_gap.runtime import late_spawn_runtime
 

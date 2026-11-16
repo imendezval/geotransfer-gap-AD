@@ -1,0 +1,143 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex provider aerial inspected with source trajectory/role and physical path audit",
+  "recording": 0,
+  "ego_track_id": 366,
+  "first_frame": 23240,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_approach"
+  ],
+  "ineligible_interaction_types": [
+    "observed_source_yielding",
+    "main_road_priority_gap_acceptance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    357
+  ],
+  "binary_sha256": "ce93696e6d662a533a6383ec318bd1a7dfb1518f0615e58e98dde668a6160808",
+  "rule_audit_sha256": "864fe37e221d5e2d103bb262dc08590eafa110209a0e37b360dc7186eee79ad6",
+  "interaction_source_digest": "27bc8f7a90b773af81dd7c79354658bd6dac25ae72d6de9fc752edcc45d0a867",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "4a812526a6e3f318e2d6cef0361611d795c1544e16c9b3c343081f7af8b8089d",
+  "source_surface_steps": [
+    10,
+    35,
+    55,
+    78
+  ],
+  "source_surface_evidence": "Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter. The red box is on paved motor-vehicle lanes at all four reviewed times, outside the raised splitter/sidewalk. Occupied lanelet subtypes are road, without bus-lane occupancy, and the full physical source footprint audit is clear.",
+  "interaction_decision_steps": [
+    25,
+    35,
+    42
+  ],
+  "interaction_decision_evidence": "Pedestrian357 moves from the southern part of the divided-road crossing toward the north sidewalk while ego366 approaches and crosses1143. Source ego speed rises from3.47m/s at10 to5.55 at25,6.14 at35 and7.77 at45; it passes before the pedestrian reaches its lane. The minimum timed box gap is2.09m at42, and all18 close source frames are preserved by hybrid traffic. Source physical paths intersect within the bounded task, so route/goal completion cannot bypass the active crossing. This supports a timed crossing opportunity, without attributing a yielding response to the source driver.",
+  "reviewed_boundary_way_ids": [
+    100024,
+    100025,
+    100040,
+    100044,
+    100046,
+    100047,
+    100050,
+    100057,
+    100058,
+    100099,
+    100120,
+    100121,
+    100142,
+    100170,
+    100171,
+    100186,
+    100187,
+    100188,
+    100189,
+    100193,
+    100194,
+    100217,
+    100218,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter. The source vehicle follows the connected curved turning lane into the main-road lane. The directed graph matches native Lanelet2 successors, and no lateral lane change, solid separator shortcut or curb traversal is needed by the source task.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "Relation1170 assigns ego lane1125 yield relative to priority lane1086. The full source role inventory contains only stationary tracks4/5 in1086, with no moving source actor occupying that priority movement during this task. Moving365 travels the separate main-road lane and367 is in the curb-side bay; neither creates the1170 priority movement across the tested turning corridor. The tested interaction is pedestrian357 at represented crossing1143, not a main-road gap-acceptance or yield-compliance claim. This decision is based on role occupancy over time and the provider montage, not sign distance."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "DE205 sign100261 belongs to relation1170 and the north approach. The source window begins downstream of the approach crossing1146; the audited priority movement1086 contains no moving traffic during the complete evaluated task. The source role/timing evidence and provider montage above bound this claim to the pedestrian crossing and right-turn geometry; the sign is not encoded or claimed to be obeyed from observation."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1141,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "Crosswalk1141 is retained as its aligned source polygon, through JSON type18, binary type8 and actual SMART crosswalk tokens. The divided-road crossings1141/1142/1143 and approach1146 are present rather than ignored; pedestrian357 traverses the relevant route corridor at1143 before reaching the north sidewalk. Source image/timed tracks distinguish the adjacent stationary pedestrian138 from the claimed encounter. Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "Crosswalk1142 is retained as its aligned source polygon, through JSON type18, binary type8 and actual SMART crosswalk tokens. The divided-road crossings1141/1142/1143 and approach1146 are present rather than ignored; pedestrian357 traverses the relevant route corridor at1143 before reaching the north sidewalk. Source image/timed tracks distinguish the adjacent stationary pedestrian138 from the claimed encounter. Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "Crosswalk1143 is retained as its aligned source polygon, through JSON type18, binary type8 and actual SMART crosswalk tokens. The divided-road crossings1141/1142/1143 and approach1146 are present rather than ignored; pedestrian357 traverses the relevant route corridor at1143 before reaching the north sidewalk. Source image/timed tracks distinguish the adjacent stationary pedestrian138 from the claimed encounter. Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1146,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        35,
+        55,
+        78
+      ],
+      "source_evidence": "Crosswalk1146 is retained as its aligned source polygon, through JSON type18, binary type8 and actual SMART crosswalk tokens. The divided-road crossings1141/1142/1143 and approach1146 are present rather than ignored; pedestrian357 traverses the relevant route corridor at1143 before reaching the north sidewalk. Source image/timed tracks distinguish the adjacent stationary pedestrian138 from the claimed encounter. Provider aerial at10/35/55/78 shows ego366 following the paved right-turn connection from the northern approach into the westbound main-road lane. Pedestrian357 runs from the south side across the divided-road crossing toward the north sidewalk. Source actor365 remains in the adjacent inner traffic lane while367 occupies the curb-side bay. This is a crossing decision opportunity, not evidence that source ego yielded: its speed increases through the encounter."
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, source slow-following phase/goal envelope, complete source roles and physical audit",
+  "recording": 0,
+  "ego_track_id": 321,
+  "first_frame": 21017,
+  "eligible_interaction_types": [
+    "lead_vehicle_constrained_following"
+  ],
+  "ineligible_interaction_types": [
+    "full_leader_stop_and_restart",
+    "causal_pedestrian_yielding",
+    "main_road_priority_gap_acceptance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    317
+  ],
+  "binary_sha256": "6ced7859cde0d5cba698ab8c8d6d0599c6838fa7d192deeddf70bed6de959e8d",
+  "rule_audit_sha256": "343c825f6a58b09ba521319e82c19e1639b52a1631343b4de56d0087bb9e514a",
+  "interaction_source_digest": "89409250225cc88df70d3bcbcd1960bc74b3e67ba19d260c317ae18a4d0ada60",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "32344da0726e25a5bee3c250bbf36415407b6c613921ee2a7b20b1058930cc69",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317. Full source footprint/boundary and directed occupied-route audits pass. No vehicle is cropped, resized, reclassified or teleported to repair the encounter.",
+  "interaction_decision_steps": [
+    10,
+    17,
+    25,
+    35,
+    45,
+    55
+  ],
+  "interaction_decision_evidence": "During10\u201319, source leader317 stays below1.767m/s and ego321 below1.398m/s, aligned ahead with a close longitudinal body gap. Source317 then exceeds its phase maximum by2m/s for five consecutive samples from35, followed by an ego speed rise exceeding1.5m/s. The complete goal disk plus arbitrary ego orientation lies0.601m beyond the leader reference collision envelope, with source goal first entry82; completing before that preceding vehicle is not possible. Source closest body gap3.250m is at17, reproduced with leader position error0.139m and all25source-close frames preserved. This establishes physical constrained following, without asserting a stationary queue or source-action imitation.",
+  "reviewed_boundary_way_ids": [
+    100006,
+    100040,
+    100044,
+    100050,
+    100096,
+    100099,
+    100100,
+    100119,
+    100120,
+    100121,
+    100122,
+    100123,
+    100142,
+    100186,
+    100187,
+    100188,
+    100189,
+    100217,
+    100218,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317. The source route follows the connected motor lane without changing to the opposing northbound lane, cutting a solid separator or crossing a curb. The large bus remains ahead along the same turn, and native-directed route plus full source footprint checks support that corridor.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Relation1170 assigns1125 yield relative to1086. No moving source actor occupies1086 in the complete role inventory. Source main-road318/320 pass the downstream merge before321 proceeds behind317;317 remains the physical preceding constraint along the single connector. The task concerns that observed constrained following and subsequent progress, not an independent main-road gap-acceptance or unencoded precedence choice. All other source actors remain present under the frozen traffic model. Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205100261 refers to1170 and the north approach, without an unconditional stop. Its protected1086 movement has no moving source actor during this window. The tested ego follows317 through the connected approach, rather than independently entering against a priority movement. Crosswalk geometry and pedestrian315 remain visible; the sign is not claimed to become observable through an arbitrary token. Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source polygon1142 is emitted through JSON18/binary8 and verified actual SMART crosswalk tokens.1146 lies on the approach and carries the incoming315 pedestrian context;1143/1142 are downstream at the divided road. No polygon or VRU is removed to simplify the preceding-bus task. Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source polygon1143 is emitted through JSON18/binary8 and verified actual SMART crosswalk tokens.1146 lies on the approach and carries the incoming315 pedestrian context;1143/1142 are downstream at the divided road. No polygon or VRU is removed to simplify the preceding-bus task. Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1146,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source polygon1146 is emitted through JSON18/binary8 and verified actual SMART crosswalk tokens.1146 lies on the approach and carries the incoming315 pedestrian context;1143/1142 are downstream at the divided road. No polygon or VRU is removed to simplify the preceding-bus task. Provider montage10/30/50/75 shows321 creeping behind preceding bus317 on the paved southbound approach, then following its departure through the right-turn connector. This is constrained following, not a complete stop/restart: the leader is already moving slowly during the scored interval. Pedestrian315 approaches1146 from the east; its source track and mapped crossing remain represented, without attributing source braking to that pedestrian. Source321 stays outside raised splitters and sidewalk, with no lateral pass of317."
+    }
+  ]
+}

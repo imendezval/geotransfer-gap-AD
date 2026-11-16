@@ -37,7 +37,7 @@ def scenes(manifest=None):
 def scene_root(identifier):
     if isinstance(identifier, dict):
         return resolve_reference(identifier)
-    path = Path(identifier)
+    path = resolve_reference(str(identifier))
     if path.is_dir():
         return path.resolve()
     matches = [r for r in scenes() if r["name"] == identifier]
@@ -62,7 +62,18 @@ def reference(path):
 
 def resolve_reference(value):
     if isinstance(value, str):
-        return Path(value).resolve()
+        path = Path(value)
+        # Historical evidence keeps its original bytes and paths. Resolve only
+        # this project's documented directory rename, then verify content hashes.
+        parts = path.parts
+        if "geotransfer-AD-gap" in parts:
+            tail = parts[parts.index("geotransfer-AD-gap") + 1 :]
+            if tail and tail[0] == "pilot":
+                return settings().artifacts.joinpath(*tail[1:]).resolve()
+            return settings().project.joinpath(*tail).resolve()
+        if parts and parts[0] == "pilot":
+            return settings().artifacts.joinpath(*parts[1:]).resolve()
+        return path.resolve()
     roots = {
         k: getattr(settings(), k)
         for k in ("project", "artifacts", "source", "bench", "reference_data")

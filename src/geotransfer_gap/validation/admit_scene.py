@@ -4,6 +4,8 @@ Technical admission establishes source reconstruction. Research admission also
 requires current source-linked semantic evidence and an explicit scene review.
 """
 
+from geotransfer_gap.provenance import converter_fingerprint
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.validation.scene_contract import contracts_equal
 from geotransfer_gap.maps import lanelet as map_geometry
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
@@ -229,7 +231,7 @@ def main():
             oracle.get("passed")
             and oracle.get("lane_change_tool_sha256")
             == sha(Path(source_lane_changes.__file__))
-            and (oracle.get("converter_sha256") == sha(project_path("pilot_ind.py")))
+            and (oracle.get("converter_sha256") == converter_fingerprint())
             and any(
                 (
                     row.get("source_sha256")
@@ -626,7 +628,7 @@ def main():
                         current["files"]["source_tracks_csv"]["path"]
                     ).parent
                     reference_recording = evidence.get("reference_recording")
-                    reference_root = Path(
+                    reference_root = resolve_reference(
                         evidence.get("reference_scene_root", "/missing")
                     )
                     reference_background = (

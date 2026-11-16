@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, source timing/kinematics and physical footprint audit",
+  "recording": 6,
+  "ego_track_id": 281,
+  "first_frame": 20211,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_approach"
+  ],
+  "ineligible_interaction_types": [
+    "observed_source_yielding",
+    "main_road_priority_gap_acceptance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    272
+  ],
+  "binary_sha256": "02db1e9161c21cbb1f9327056c970693046fbcb7bbbb743d82383afe2705e891",
+  "rule_audit_sha256": "f1f0ed5cf8cbe6dfe99dbe383d7daa3dd15eb5b0dbd49d4807d03d1bbf4d793e",
+  "interaction_source_digest": "bbd6df9d9f974dc44d217f06cb56374a8d45cbfb31b54046c8dadb14320b33cd",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "4ce580707e16944a679485b912458dee20347e21086f8a1084329bd057af40bf",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay. Full source physical boundary/overlap and directed route audits pass without removing or resizing source actors.",
+  "interaction_decision_steps": [
+    15,
+    20,
+    24,
+    30
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay. Source swept ego and pedestrian footprints intersect within the task, with screened crossing ego33/ped15. Pedestrian272 is already moving through the actual connector at the first observed planner-history interval, rather than remaining on a remote sidewalk until after the ego passes. Closest timed box gap2.067m at24; all28source-close frames are preserved. The source goal first entry84 is downstream of the crossing, so the bounded task cannot end before this encounter. This supports a timed crossing decision opportunity without inferring causal source deceleration.",
+  "reviewed_boundary_way_ids": [
+    100024,
+    100025,
+    100040,
+    100044,
+    100046,
+    100047,
+    100050,
+    100057,
+    100058,
+    100120,
+    100121,
+    100170,
+    100171,
+    100187,
+    100188,
+    100193,
+    100194,
+    100217,
+    100218,
+    100228,
+    100230,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay. No lateral lane change, solid-road-separator shortcut or curb traversal is required; the full source box boundary audit is clear. The native-verified directed connector and main-road route preserve the source turn.",
+  "rule_resolutions": [
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205100261 governs the upstream north-approach priority movement1170. Source ego281 starts downstream of that approach and no occupied lanelet belongs to a governing right-of-way relation in the full role audit. The evaluated task follows the connector through the represented crossing before proceeding along the westbound lane. No source actor occupies a protected priority movement across this bounded corridor; this is role/route evidence, not a sign-distance exemption. Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1141,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source crossing polygon1141 is emitted through JSON18/binary8 and verified actual SMART tokens. Pedestrian272 clears the connector at1143;1142/1141 remain retained at the divided-road crossing. The actual source ego footprint contacts1142 during23\u201340, while the complete mapped crossing remains present regardless of individual polygon-contact lists. Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source crossing polygon1142 is emitted through JSON18/binary8 and verified actual SMART tokens. Pedestrian272 clears the connector at1143;1142/1141 remain retained at the divided-road crossing. The actual source ego footprint contacts1142 during23\u201340, while the complete mapped crossing remains present regardless of individual polygon-contact lists. Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full source crossing polygon1143 is emitted through JSON18/binary8 and verified actual SMART tokens. Pedestrian272 clears the connector at1143;1142/1141 remain retained at the divided-road crossing. The actual source ego footprint contacts1142 during23\u201340, while the complete mapped crossing remains present regardless of individual polygon-contact lists. Provider montage10/30/50/75 shows ego281 following the paved right-turn connector into the westbound motor lane. Pedestrian272 is clearing the connector crossing toward the northern sidewalk during the approach. The raised refuge stays outside the driven footprint. Ego accelerates1.70m/s at0 to2.73at10,3.86at20,5.20at30 and8.07at50, so this is an active crossing approach without a claimed source yielding response. Follower282 arrives later behind281; parked278 remains in the curb-side bay."
+    }
+  ]
+}

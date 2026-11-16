@@ -84,5 +84,6 @@
   "lanelet.py": "src/geotransfer_gap/maps/lanelet.py",
   "binary.py": "src/geotransfer_gap/conversion/binary.py",
   "session.py": "src/geotransfer_gap/runtime/session.py",
-  "ind.py": "src/geotransfer_gap/sources/ind.py"
+  "ind.py": "src/geotransfer_gap/sources/ind.py",
+  "provenance.py": "src/geotransfer_gap/provenance.py"
 }

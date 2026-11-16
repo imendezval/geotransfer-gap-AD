@@ -1,0 +1,127 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage and timed source tracks, priority occupancy and full physical audit",
+  "recording": 2,
+  "ego_track_id": 347,
+  "first_frame": 18595,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_ahead"
+  ],
+  "ineligible_interaction_types": [
+    "main_road_priority_gap_acceptance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    330
+  ],
+  "binary_sha256": "102f79b3d2e2786c0239b35c9e5ae935ec281ec30afa2a18751407d6b0833322",
+  "rule_audit_sha256": "30e1e40a4aa90ac10cc648fb6954500a7fad02bd3d00c1c45373881f512cc993",
+  "interaction_source_digest": "61c0e6dd5c30d3721b504b4c4182370ff6c91eb0d8fcb9af521e9a1fb2fc19f5",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "c03a132981efdd79f54ed1d6e99cc4be8e869d9bf4ec477ea716d35db19a97cb",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane. Physical source audit has no ego boundary contact; occupied route is directed-reachable and road-surface supported.",
+  "interaction_decision_steps": [
+    25,
+    35,
+    50,
+    54
+  ],
+  "interaction_decision_evidence": "Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane. The source swept oriented footprints overlap within the bounded task; earliest source goal entry82 follows the crossing interval33\u201362. Source box closest gap2.488m at54 and all58close frames are preserved. A valid route to the downstream goal traverses the active approach crossing; this supports a crossing decision with observed source deceleration, without claiming sole causal attribution of the driver response.",
+  "reviewed_boundary_way_ids": [
+    100005,
+    100006,
+    100040,
+    100044,
+    100050,
+    100096,
+    100097,
+    100099,
+    100100,
+    100119,
+    100120,
+    100121,
+    100122,
+    100123,
+    100142,
+    100186,
+    100187,
+    100188,
+    100189,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane. No lateral change, solid-separator crossing or sidewalk shortcut is required; the actual box boundary audit is clear. Dashed/virtual continuation connects the north approach to the right-turn path.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source relation1170 makes lane1125 yield to1086. The full source occupancy audit finds no moving actor on1086 in this window; parked6/7 occupy it without a conflicting movement. Main-road342/344 and later348/349 use other lanes. The goal is on the curved connector before main-road gap acceptance. This task tests crossing1146 and pedestrian330, not precedence against an absent1086 movement. Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205 sign100261 governs the approach relation1170 rather than creating an unconditional stop. The protected1086 movement has no moving source participant during the bounded task. The live constraint at steps20\u201355 is pedestrian330 on represented crossing1146; no stop/yield-sign observability is claimed. Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source polygon1142 is emitted intact through JSON18/binary8 and verified actual SMART crosswalk tokens. Pedestrian330 crosses1146 ahead of347;1142/1143 remain retained at the downstream divided-road crossing. These geometries are never suppressed for lack of nearby VRUs. Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source polygon1143 is emitted intact through JSON18/binary8 and verified actual SMART crosswalk tokens. Pedestrian330 crosses1146 ahead of347;1142/1143 remain retained at the downstream divided-road crossing. These geometries are never suppressed for lack of nearby VRUs. Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1146,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source polygon1146 is emitted intact through JSON18/binary8 and verified actual SMART crosswalk tokens. Pedestrian330 crosses1146 ahead of347;1142/1143 remain retained at the downstream divided-road crossing. These geometries are never suppressed for lack of nearby VRUs. Provider factor12, zero-translation montage10/30/50/75 shows ego347 approaching on the paved southbound motor lane and following its curved right-turn connector. Pedestrian330 walks east-to-west across approach crossing1146 before ego passes, then continues on the western sidewalk. Raised separators remain outside the driven footprint. The source ego slows from5.39m/s at10 to2.49at25 and2.15at35, then accelerates to3.81at55 after the pedestrian clears its lane."
+    }
+  ]
+}

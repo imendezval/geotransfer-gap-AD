@@ -86,6 +86,7 @@ def build(root, traffic_mode):
         "binary.py",
         "ind.py",
         "session.py",
+        "provenance.py",
     ):
         paths["tool_" + name] = tool_path(name)
     return {

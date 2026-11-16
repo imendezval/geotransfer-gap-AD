@@ -4,6 +4,7 @@ This is a cheap screening queue, never scene admission. Relative-corridor
 crossing is deliberately broad; turns/sidewalks require source review.
 """
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 import json
 import math
@@ -76,7 +77,7 @@ ledger = json.loads(
 )
 results = []
 for r in ledger:
-    root = Path(r["root"])
+    root = resolve_reference(r["root"])
     files = list((root / "testing").glob("ind_*.json"))
     if len(files) != 1:
         continue
@@ -208,4 +209,4 @@ print(
     Counter((e["kind"] for x in results for e in x["events"])),
 )
 for r in results[:35]:
-    print(Path(r["root"]).name, "loc", r["location"], r["events"])
+    print(resolve_reference(r["root"]).name, "loc", r["location"], r["events"])

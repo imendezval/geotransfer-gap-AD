@@ -1,0 +1,122 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, timed pedestrian/ego source positions and full physical/rule audits",
+  "recording": 1,
+  "ego_track_id": 252,
+  "first_frame": 16915,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_approach"
+  ],
+  "ineligible_interaction_types": [
+    "observed_source_yielding",
+    "mandatory_braking",
+    "main_road_priority_gap_acceptance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    241
+  ],
+  "binary_sha256": "56fa2245b6aa2e216f329392c6ca9bb2627c47def997ee794a32f1001857fab9",
+  "rule_audit_sha256": "f9ebb46db2a92f0a9798ea85395c44b4ab4cf92a2f94e1d5bcf12553ccebb78a",
+  "interaction_source_digest": "2f979c85d4adba9198b9ab823904bdf63f73192a6c3a296c534e1e41ee1b76ef",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "abb43b6fb646f8f455c8faa1d645854c8fad833f525f5b0a520893fadbe5055b",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators. Physical footprint audit and native-verified directed occupied route pass, without cropping or resizing source actors.",
+  "interaction_decision_steps": [
+    15,
+    21,
+    49,
+    56
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators. The sampled oriented source footprints overlap at ego49/ped21, within the bounded task and2.8s of each other. This is a mild early-clearance encounter, not a mandatory yielding test. Closest timed box gap3.600m at56, all37source-close frames preserved. The source goal first entry80 lies beyond1146, so the route cannot terminate before the crossing. Source timing/active lane crossing establish the task; no planner outcome was used to select it.",
+  "reviewed_boundary_way_ids": [
+    100005,
+    100006,
+    100096,
+    100097,
+    100099,
+    100100,
+    100119,
+    100120,
+    100121,
+    100122,
+    100123,
+    100142,
+    100186,
+    100188,
+    100189,
+    100247
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators. No lateral lane change or solid-road-separator shortcut is required. The complete source boundary footprint audit is clear, and the connector/main-road topology is native verified.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Relation1170 assigns source1125 yield relative to1086. No moving source actor occupies1086 in the full role audit (219/241/249/250/251/253/254/255 have no protected-lane samples). Parked source cars do not create that moving priority conflict. The bounded task concerns pedestrian241 at1146 and the turn connector, without a main-road precedence claim. This uses complete role occupancy and route timing, not a sign-distance waiver. Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205100261 is attached to1170; it is an approach-yield context rather than an unconditional stop. The protected1086 movement has no moving source traffic during this window. The active crossing1146 is retained in actual SMART input. No ability to infer or obey the unencoded sign is claimed. Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source crossing1142 is emitted as its full aligned polygon through JSON18/binary8 and actual SMART crosswalk tokens.1146 carries the pedestrian241 encounter;1145 is the opposite approach crossing and1142 is downstream at the divided road. These polygons are retained irrespective of individual source box-contact timing. Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1145,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source crossing1145 is emitted as its full aligned polygon through JSON18/binary8 and actual SMART crosswalk tokens.1146 carries the pedestrian241 encounter;1145 is the opposite approach crossing and1142 is downstream at the divided road. These polygons are retained irrespective of individual source box-contact timing. Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1146,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source crossing1146 is emitted as its full aligned polygon through JSON18/binary8 and actual SMART crosswalk tokens.1146 carries the pedestrian241 encounter;1145 is the opposite approach crossing and1142 is downstream at the divided road. These polygons are retained irrespective of individual source box-contact timing. Provider montage10/30/50/75 shows ego252 approaching southbound on the paved vehicle lane and pedestrian241 finishing its east-to-west approach crossing1146 toward the western sidewalk. Source241 is still moving across the approach after warmup (x131.44/y\u221243.11at10 to129.90/\u221243.75at20), then walks along the sidewalk. Ego speed4.37m/s at10 and4.08at20/30 is nearly steady, so only a crossing approach opportunity is claimed, not observed yielding or necessary braking. Ego follows the connected right-turn path and stays outside the raised separators."
+    }
+  ]
+}

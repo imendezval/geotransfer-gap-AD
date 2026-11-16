@@ -139,3 +139,69 @@ def test_viewer_is_standalone_and_safe(tmp_path):
     assert "__DATA__" not in body and "data:image/png;base64," in body
     assert "https://" not in body and "fetch(" not in body
     assert "Source recording" in body and "Converted scene" in body
+
+
+def test_contract_identity_ignores_only_absolute_location_metadata():
+    import copy
+    from geotransfer_gap.validation.scene_contract import contracts_equal
+
+    a = {
+        "schema_version": 2,
+        "scene_root": "/old/project/scene",
+        "scene_reference": {"root": "artifacts", "path": "scene"},
+        "files": {
+            "scene_binary": {
+                "path": "/old/project/scene/map.bin",
+                "reference": {"root": "artifacts", "path": "scene/map.bin"},
+                "sha256": "abc",
+            }
+        },
+    }
+    b = copy.deepcopy(a)
+    b["scene_root"] = "/new/project/scene"
+    b["files"]["scene_binary"]["path"] = "/new/project/scene/map.bin"
+    assert contracts_equal(a, b)
+    b["files"]["scene_binary"]["sha256"] = "changed"
+    assert not contracts_equal(a, b)
+
+
+def test_portable_evidence_survives_relocation_but_not_content_change(
+    monkeypatch, tmp_path
+):
+    from geotransfer_gap.artifacts import evidence_current, sha256
+
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "proof.json").write_text('{"passed": true}')
+    gate = {
+        "evidence_files": [
+            {
+                "reference": {"root": "artifacts", "path": "proof.json"},
+                "sha256": sha256(first / "proof.json"),
+            }
+        ]
+    }
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(first))
+    assert evidence_current(gate)
+    (second / "proof.json").write_bytes((first / "proof.json").read_bytes())
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(second))
+    assert evidence_current(gate)
+    (second / "proof.json").write_text('{"passed": false}')
+    assert not evidence_current(gate)
+    (second / "proof.json").unlink()
+    assert not evidence_current(gate)
+
+
+def test_converter_fingerprint_includes_extracted_map_implementation(monkeypatch):
+    from geotransfer_gap import provenance
+
+    before = provenance.converter_fingerprint()
+    original = provenance.sha256
+    monkeypatch.setattr(
+        provenance,
+        "sha256",
+        lambda path: "0" * 64 if Path(path).name == "lanelet.py" else original(path),
+    )
+    assert provenance.converter_fingerprint() != before

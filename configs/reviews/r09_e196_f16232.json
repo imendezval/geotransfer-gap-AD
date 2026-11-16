@@ -1,0 +1,314 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex source montage inspected; source lane-role and timed-actor inventory reviewed",
+  "recording": 9,
+  "ego_track_id": 196,
+  "first_frame": 16232,
+  "eligible_interaction_types": [
+    "uncontested_turn_with_nearby_vrus"
+  ],
+  "ineligible_interaction_types": [
+    "cyclist_crossing_ahead_turn",
+    "source_driver_yield_causality",
+    "side_street_priority_yield",
+    "stop_sign_compliance"
+  ],
+  "interaction_opportunity": false,
+  "interaction_actor_ids": [],
+  "binary_sha256": "b0dd42439e1d4ca44eea2e30325a29bc05e51ddb77066dbad9eea6fa3c0b46d4",
+  "rule_audit_sha256": "6ef2011c3daa933d3e393e13add21976717eb6a80150dc941c3e10ffb27cb960",
+  "interaction_source_digest": "fbac0360e9493021917de3607255ad721911a760c27e651ac7942f97a4f6b09d",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "3b9fcef05d57e01f667ab1c65ae18bb486a779d9360b90f0b67f31709231b349",
+  "source_surface_steps": [
+    0,
+    35,
+    65,
+    80
+  ],
+  "source_surface_evidence": "Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach. The source red footprint at35 lies on the main-road turning lane, at65 follows the asphalt corner outside the raised sidewalk, and at80 lies in the branch vehicle lane. The previous fitted registration is not used.",
+  "interaction_decision_steps": [
+    60,
+    65,
+    73
+  ],
+  "interaction_decision_evidence": "Source-path audit corrects the earlier ego-relative cyclist-crossing interpretation: cyclist197 remains at least2.12m outside the evaluated ego swept footprint for all source time pairings before goal entry81. Pedestrian192 crossed the future path earlier, but source-path timing speedups1.25/1.5 still retain box gaps1.48/1.08m; these diagnostics do not establish an obligatory response or source-driver yielding. Retain the technically valid turn only as a control, pending stronger independent interaction evidence.",
+  "reviewed_boundary_way_ids": [
+    1471,
+    1475,
+    1476,
+    1490,
+    1497,
+    1533,
+    1574,
+    1612,
+    1653,
+    2051,
+    2052,
+    2053,
+    2055,
+    2076,
+    2077,
+    2078,
+    2081,
+    2087,
+    2091,
+    2103,
+    2104,
+    2109
+  ],
+  "boundary_and_lane_change_evidence": "Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach. Reviewed dashed/solid lane boundaries, curbstones and virtual connectors against the source: the ego turns along the directed connection without a source lane change or curb shortcut. The full footprint check is clear.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 2169,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Relation2169 assigns occupied ego lanes [(2146, 'right_of_way')]. Every listed ego membership is right_of_way, not yield. Relation2170 also gives cyclist197's observed lane2155 right_of_way; it does not assign precedence between these two priority members. The unencoded priority against the side approaches is outside the claimed conflict: vehicle195 passes at step26, well before cyclist197's birth51/encounter73; vehicles191/193 leave away from the turn, with minimum timed box gaps17.07/35.49m. This is supported by route roles, timed source tracks and the montage, rather than sign-distance exemption."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Relation2170 assigns occupied ego lanes [(2147, 'right_of_way')]. Every listed ego membership is right_of_way, not yield. Relation2170 also gives cyclist197's observed lane2155 right_of_way; it does not assign precedence between these two priority members. The unencoded priority against the side approaches is outside the claimed conflict: vehicle195 passes at step26, well before cyclist197's birth51/encounter73; vehicles191/193 leave away from the turn, with minimum timed box gaps17.07/35.49m. This is supported by route roles, timed source tracks and the montage, rather than sign-distance exemption."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2174,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Relation2174 assigns occupied ego lanes [(2146, 'right_of_way')]. Every listed ego membership is right_of_way, not yield. Relation2170 also gives cyclist197's observed lane2155 right_of_way; it does not assign precedence between these two priority members. The unencoded priority against the side approaches is outside the claimed conflict: vehicle195 passes at step26, well before cyclist197's birth51/encounter73; vehicles191/193 leave away from the turn, with minimum timed box gaps17.07/35.49m. This is supported by route roles, timed source tracks and the montage, rather than sign-distance exemption."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2178,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Relation2178 assigns occupied ego lanes [(2147, 'right_of_way')]. Every listed ego membership is right_of_way, not yield. Relation2170 also gives cyclist197's observed lane2155 right_of_way; it does not assign precedence between these two priority members. The unencoded priority against the side approaches is outside the claimed conflict: vehicle195 passes at step26, well before cyclist197's birth51/encounter73; vehicles191/193 leave away from the turn, with minimum timed box gaps17.07/35.49m. This is supported by route roles, timed source tracks and the montage, rather than sign-distance exemption."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2179,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Relation2179 assigns occupied ego lanes [(2147, 'right_of_way')]. Every listed ego membership is right_of_way, not yield. Relation2170 also gives cyclist197's observed lane2155 right_of_way; it does not assign precedence between these two priority members. The unencoded priority against the side approaches is outside the claimed conflict: vehicle195 passes at step26, well before cyclist197's birth51/encounter73; vehicles191/193 leave away from the turn, with minimum timed box gaps17.07/35.49m. This is supported by route roles, timed source tracks and the montage, rather than sign-distance exemption."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1691,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "DE357 belongs to the other branch/dead-end approach. Ego196 follows the through-main-road right turn, not that branch; no dead-end entry is claimed. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1694,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "DE206 controls the northwest side-street approach associated with relations2178/2179. Ego196 is a right_of_way member2147, not its yield member; the montage shows no traversal of that stop line by ego. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1695,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "DE314 denotes parking next to stationary vehicle5. Ego196 stays on the road around the corner and neither parks nor enters the parking area. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1696,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "DE301 describes main-road priority over side traffic; no side-approach vehicle conflicts with the tested turn interval. Cyclist197 and ego are both priority members of2170, so this sign does not resolve their relative path conflict. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1701,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "DE205 applies to the southwest side-street approach through2169, where ego member2146 is right_of_way. The ego approaches from southeast and turns northeast without entering that yield approach. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1698,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way1698 (line_thick) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2126,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way2126 (line_thick) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1495,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way1495 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1530,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way1530 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1613,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way1613 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1656,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way1656 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2085,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way2085 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2086,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way2086 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2088,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way2088 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2093,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        35,
+        65,
+        80
+      ],
+      "source_evidence": "Source way2093 (wall) is inventoried rather than silently dropped. The reviewed montage places walls outside the driven pavement; thick lines1698/2126 belong to the side-entry/edge area, not an ego stop/yield traversal. The swept source vehicle box passes the physical boundary audit, and this turn contains no lane change across a prohibited separator. Provider-projection montage at steps0/35/65/80 shows ego196 turning from the southeast main-road approach into the northeast branch on the paved vehicle surface. Cyclist197 enters at51 and crosses ahead during60\u201370; ego is already beyond the side-street stop/yield approaches and remains in the priority corridor. The claim is the timed cyclist path conflict during the turn, not sign compliance or allocation of priority to an unseen approach."
+    }
+  ],
+  "carried_forward_source_review": {
+    "path": "/home/inigo/data/git/repo/student-project/geotransfer-AD-gap/pilot/expansion_v2/r09_e196_f16232_turn/testing/semantic_review_smart_hybrid_startup.json",
+    "sha256": "f2b6ee3d5f14f2e401715625b2b831de89d9f0d54ec5099355c72d28fda3a12a",
+    "unchanged_actor_fields": true,
+    "unchanged_rule_and_boundary_inventory": true,
+    "change": "Road boundary orientation/centerlines and directed connectivity corrected; source tracks, physical edges, crossings and applicable rule inventory unchanged. New technical/model evidence is mandatory."
+  },
+  "task_scope_reclassification": "Source swept-path audit, not policy outcome; previous crossing claim rejected by the new generic necessary conflict check."
+}

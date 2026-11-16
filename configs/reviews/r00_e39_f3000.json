@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex provider-projection source aerial, source kinematics, map-rule and SMART input review",
+  "ego_track_id": 39,
+  "recording": 0,
+  "first_frame": 3000,
+  "eligible_interaction_types": [
+    "uncontested_turn_with_adjacent_parallel_traffic"
+  ],
+  "ineligible_interaction_types": [
+    "cyclist_crossing_response",
+    "pedestrian_crossing_response",
+    "priority_yield_response",
+    "response_to_vehicle_40",
+    "yield_to_vehicle_40"
+  ],
+  "interaction_opportunity": false,
+  "interaction_actor_ids": [],
+  "binary_sha256": "55e0e8d2cbbeb9684cb435c7dd7da116e1886737d0c4e437f03d1b7ed8521edf",
+  "rule_audit_sha256": "dcfcb657d26ab48ed3985a21cd4501f9855be6716e163ea5605ad72a8299e511",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "c3ea0b4a32682fe831f2895d691a7038e7df3847adeaf331b087af80eb5acb5a",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1171,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        50,
+        85
+      ],
+      "source_evidence": "Source relation 1171 gives occupied ego lanelet 1024 right of way over yield lanelet 1128; its DE205 sign 100261 is physically on the north approach. Ego 39 starts on the southwest main-road lane and turns north, while the only close moving vehicle 40 travels through behind and alongside it on lanelet 1025. That vehicle is not from the yielding approach, so this relation does not require a source action toward vehicle 40."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 1173,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        43,
+        53,
+        85
+      ],
+      "source_evidence": "Source relation 1173 gives occupied ego lanelet 1024 a yield role against lanelets 1085 and 1086. The full source-window occupancy audit finds no moving actor on either priority lanelet while ego 39 crosses the junction. Moving vehicle 40 occupies lanelet 1025 at steps 42-50, remains on the through carriageway, and is not priority traffic for relation 1173. This turn cannot support a priority-yield response claim."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        50,
+        85
+      ],
+      "source_evidence": "DE205 sign 100261 is at local map coordinate approximately (128,-40) on the north approach, whereas the ego turns from the southwest main-road carriageway. It is referenced by right-of-way relation 1171 for yield lanelet 1128, not as a stop or yield sign facing ego 39. The relevant relation is uncontested in the source window; vehicle 40 passes in an adjacent main-road through lane."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100281,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        50,
+        85
+      ],
+      "source_evidence": "DE301 sign 100281 is at local map coordinate approximately (164,-38), farther east than the ego turn goal, and is not referenced by a source regulatory relation attached to the ego occupied lanelets. The source aerial montage places it beyond the tested turn. It does not instruct ego 39 to yield or stop for adjacent through vehicle 40 during this window."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1140,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        43,
+        53
+      ],
+      "source_evidence": "Source crosswalk lanelet 1140 is in the review band. Ego source box contacts it at steps 43-53. The nearest pedestrian or cyclist source track stays at least 16.9 m from this crossing over the full window. The aerial overlay shows no VRU occupying the ego crossing at the relevant steps; crosswalk semantics do not change the uncontested turn and this scene is ineligible for VRU-response claims."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1141,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        50,
+        85
+      ],
+      "source_evidence": "Source crosswalk lanelet 1141 is nearby but the full ego source box never contacts its polygon. The nearest pedestrian or cyclist source track stays at least 13.5 m from this crossing over the full window. The aerial overlay shows no VRU occupying the ego crossing at the relevant steps; crosswalk semantics do not change the uncontested turn and this scene is ineligible for VRU-response claims."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        50,
+        85
+      ],
+      "source_evidence": "Source crosswalk lanelet 1142 is nearby but the full ego source box never contacts its polygon. The nearest pedestrian or cyclist source track stays at least 5.9 m from this crossing over the full window. The aerial overlay shows no VRU occupying the ego crossing at the relevant steps; crosswalk semantics do not change the uncontested turn and this scene is ineligible for VRU-response claims."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1144,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        82,
+        90
+      ],
+      "source_evidence": "Source crosswalk lanelet 1144 is in the review band. Ego source box contacts it at steps 82-90. The nearest pedestrian or cyclist source track stays at least 13.2 m from this crossing over the full window. The aerial overlay shows no VRU occupying the ego crossing at the relevant steps; crosswalk semantics do not change the uncontested turn and this scene is ineligible for VRU-response claims."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1145,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        30,
+        50,
+        85
+      ],
+      "source_evidence": "Source crosswalk lanelet 1145 is nearby but the full ego source box never contacts its polygon. The nearest pedestrian or cyclist source track stays at least 9.8 m from this crossing over the full window. The aerial overlay shows no VRU occupying the ego crossing at the relevant steps; crosswalk semantics do not change the uncontested turn and this scene is ineligible for VRU-response claims."
+    }
+  ],
+  "reviewed_boundary_way_ids": [
+    100020,
+    100030,
+    100060,
+    100064,
+    100074,
+    100078,
+    100083,
+    100084,
+    100087,
+    100088,
+    100117,
+    100118,
+    100132,
+    100133,
+    100136,
+    100137,
+    100138,
+    100140,
+    100141,
+    100165,
+    100166,
+    100214,
+    100215,
+    100234,
+    100235,
+    100263,
+    100264,
+    100265,
+    100270,
+    100271
+  ],
+  "boundary_and_lane_change_evidence": "The full source ego box does not contact an emitted curbstone or road border in the physical audit. The aerial/source-map overlay shows the ego leaving the southwest main-road turn lane toward the north approach without a discretionary lateral lane change. Every left and right way of the occupied lanelets is inventoried, including virtual and painted ways. Vehicle 40 continues through in an adjacent lane, preserving about 2.1 m source box gap near step 51; its IDM position error is 1.68 m and evaluator box gap 2.94 m at the same step. The source montage shows vehicle 40 traveling in the neighboring through lane without entering the ego turn path during this window. Its timing survives in IDM, but no recorded braking, yielding, lane choice, or crossing decision depends on it. This scene is counted as an uncontested turn. No omitted wall, fence, or thick marking is in the ego 5 m review band. The source surface and lane travel were rechecked using the provider projection at steps 0,35,60,83.",
+  "interaction_source_digest": "55637ddedc780f0e9502a0c2763bf731be51758b58899d6ceeb9f7c8d8d76572",
+  "traffic_protocol": "hybrid_startup",
+  "protocol_scope_note": "Same source path and rule applicability as IDM review; hybrid source-timed startup applies generically to initially stopped vehicles, then IDM takes control. Claims are restricted to the listed scene interaction.",
+  "source_surface_steps": [
+    0,
+    30,
+    50,
+    85
+  ],
+  "source_surface_evidence": "The provider-projection aerial uses inD scale factor 12 and zero translation. At source steps 0,35,60,83 the red ego box follows the paved vehicle carriageway between the visible lane markings and curbs. It stays off pedestrian paving, planted areas and raised traffic islands. This correct projection replaces the former fitted factor-10 source overlay.",
+  "crosswalk_orientation_rereview": "Corrected polygons reviewed on the aerial at steps 0,35,60,83: VRUs remain on the remote side approach/sidewalk; no crossing response is claimed.",
+  "carried_forward_source_review": {
+    "path": "/home/inigo/data/git/repo/student-project/geotransfer-AD-gap/pilot/smart_pilot/r00_e39_f3000_turn/testing/semantic_review_smart_hybrid_startup.json",
+    "sha256": "e66338c70c5924da0f8e4f20fb4987d7db5c8a618c3e8b5487346b892a91ca2e",
+    "unchanged_actor_fields": true,
+    "unchanged_rule_and_boundary_inventory": true,
+    "change": "Road boundary orientation/centerlines and directed connectivity corrected; source tracks, physical edges, crossings and applicable rule inventory unchanged. New technical/model evidence is mandatory."
+  }
+}

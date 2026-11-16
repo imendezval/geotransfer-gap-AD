@@ -1,0 +1,240 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, native source rule/marking membership, source stop/restart timing, goal envelope and road-access inventory",
+  "recording": 12,
+  "ego_track_id": 151,
+  "first_frame": 12041,
+  "eligible_interaction_types": [
+    "lead_vehicle_stop_and_restart"
+  ],
+  "ineligible_interaction_types": [
+    "mandatory_source_action_imitation",
+    "side_road_stop_compliance",
+    "priority_gap_acceptance",
+    "unmarked_crossing_right_of_way"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    141
+  ],
+  "binary_sha256": "a96e81746f2af80f8786dd1ccf44518259c79fbaba892205e7c284a3329d842e",
+  "rule_audit_sha256": "59c3a2e7a293962add469b961d58840a8c51cfb0087e4f0afe241e3fd62dfec5",
+  "interaction_source_digest": "41c500afaa2709e24f2fc9ad00ba477acab611914f16a646c8606ffad6b1ab6a",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "56e146442506bfd4ce7fe0bad3a460d1b562146f181dbad9a99117e8b352bf45",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear. No source actor is cropped or resized to repair the evaluator collision; the generic expert-velocity state correction addresses it.",
+  "interaction_decision_steps": [
+    10,
+    20,
+    30,
+    34,
+    44,
+    50,
+    60
+  ],
+  "interaction_decision_evidence": "Source141 is effectively stopped through30, reaches0.78m/s at40,2.86at50 and4.44at60. Ego151 stays below0.10m/s at20/30/40, then resumes0.37at50,2.46at60 and5.18at75. This is a visible leader restart followed by ego progress, not a braking-only proxy. Source closest physical gap1.400m occurs at34. The complete2m goal disk plus any ego orientation remains0.618m beyond the stopped leader collision envelope; source goal first entry82 therefore cannot complete upstream of141. The source phase alone selects this task. Fidelity and actual-model preservation must pass the refreshed runtime gate; no policy outcome is used.",
+  "reviewed_boundary_way_ids": [
+    1483,
+    1512,
+    1514,
+    1516,
+    1545,
+    1557,
+    1563,
+    1590,
+    2068,
+    2094
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear. The tested source route makes no lateral lane change or solid-separator/curb shortcut. All inventoried boundary ways were reviewed; source directed topology and full footprint checks pass.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 2190,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Every governing source relation2190/2191/2194/2195/2196 assigns the ego right_of_way, never yield.139/141 are preceding main-lane traffic; other moving cars have disjoint swept physical footprints from ego (including149 gap1.02m,150 gap3.97m,146 gap3.92m and147 gap3.52m), and the montage confirms opposing/side movements rather than an active crossing-priority choice. The tested obligation is responding to stopped141 before progressing along the main lane, not resolving unencoded side-road precedence. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2191,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Every governing source relation2190/2191/2194/2195/2196 assigns the ego right_of_way, never yield.139/141 are preceding main-lane traffic; other moving cars have disjoint swept physical footprints from ego (including149 gap1.02m,150 gap3.97m,146 gap3.92m and147 gap3.52m), and the montage confirms opposing/side movements rather than an active crossing-priority choice. The tested obligation is responding to stopped141 before progressing along the main lane, not resolving unencoded side-road precedence. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2194,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Every governing source relation2190/2191/2194/2195/2196 assigns the ego right_of_way, never yield.139/141 are preceding main-lane traffic; other moving cars have disjoint swept physical footprints from ego (including149 gap1.02m,150 gap3.97m,146 gap3.92m and147 gap3.52m), and the montage confirms opposing/side movements rather than an active crossing-priority choice. The tested obligation is responding to stopped141 before progressing along the main lane, not resolving unencoded side-road precedence. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2195,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Every governing source relation2190/2191/2194/2195/2196 assigns the ego right_of_way, never yield.139/141 are preceding main-lane traffic; other moving cars have disjoint swept physical footprints from ego (including149 gap1.02m,150 gap3.97m,146 gap3.92m and147 gap3.52m), and the montage confirms opposing/side movements rather than an active crossing-priority choice. The tested obligation is responding to stopped141 before progressing along the main lane, not resolving unencoded side-road precedence. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2196,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Every governing source relation2190/2191/2194/2195/2196 assigns the ego right_of_way, never yield.139/141 are preceding main-lane traffic; other moving cars have disjoint swept physical footprints from ego (including149 gap1.02m,150 gap3.97m,146 gap3.92m and147 gap3.52m), and the montage confirms opposing/side movements rather than an active crossing-priority choice. The tested obligation is responding to stopped141 before progressing along the main lane, not resolving unencoded side-road precedence. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1691,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE357 concerns the western minor/dead-end branch, which the straight main-road ego never enters. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1692,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE262 is attached to the eastern minor approach; the ego remains in its main-road lane and does not enter the restricted branch. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1693,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE283 concerns the side-approach stopping/parking context. The tested main-road ego is waiting in traffic behind141, without a parking/stopping choice on that side road. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1694,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE206 is the eastern minor-approach stop sign in2196; the audited ego is right_of_way on1761, not a yield member or a minor-road entrant. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1695,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE314 identifies the side parking area, which the ego neither enters nor uses as its goal. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1696,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE301 denotes main-road priority. The bounded scene exposes the physical stopped leader and its restart, without a source footprint crossing conflict with non-following traffic. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1700,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE301 denotes priority on the ego main-road approach. No source yield-role obligation is assigned to151; its task is following stopped141. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1701,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205 governs the western yield approach in2191/2195, not ego2141/1761. The main-road ego does not traverse the corresponding yield branch. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2125,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source OSM explicitly assigns dashed thick line2125 to relation2189:2140 yield relative to2146. Neither is the ego yield lane;151 occupies2141/1761 and the connected main-road path. The near distance is not used as a waiver: source relation membership distinguishes the other movement. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1559,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source wall1559 is the building boundary in multipolygons1711/2173. The provider image and full source footprint audit place the ego on paved road outside that building; this wall does not govern the lead restart. Provider montage10/30/50/75 shows151 following141 in the paved southeast-bound main-road lane.141 and139 queue ahead;151 stops behind141, then resumes after141 restarts. Source150/149 use the opposite-side turning/opposing corridor, rather than crossing the tested ego footprint. The source ego stays on road lanelets1754/1761/2141/2151/2166; no bus-only lane is occupied. The physical footprint/boundary audit is clear."
+    }
+  ]
+}

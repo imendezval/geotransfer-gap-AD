@@ -5,6 +5,7 @@ The wheel may be installed to a temporary --target directory and supplied via
 PYTHONPATH. No vehicle trajectories or scene IDs participate in normalization.
 """
 
+from geotransfer_gap.provenance import converter_fingerprint
 from geotransfer_gap.maps import lanelet as map_geometry
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 import csv
@@ -135,7 +136,7 @@ def main():
         )
     result = {
         "oracle": "lanelet2==1.2.3 native OSM loader",
-        "converter_sha256": hashlib.sha256(Path(p.__file__).read_bytes()).hexdigest(),
+        "converter_sha256": converter_fingerprint(),
         "maps": reports,
         "passed": all(
             (

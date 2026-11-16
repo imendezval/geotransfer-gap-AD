@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider source montage, raw pre-window lane ancestry, source route certificate and full goal/body bounds",
+  "recording": 1,
+  "ego_track_id": 301,
+  "first_frame": 20017,
+  "eligible_interaction_types": [
+    "lead_vehicle_stop_and_restart"
+  ],
+  "ineligible_interaction_types": [
+    "main_road_priority_gap_acceptance",
+    "independent_crossing_traffic_negotiation",
+    "mandatory_source_action_imitation"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    300
+  ],
+  "binary_sha256": "da11977fb8c475590f7c17b1097b151641d46645e84683f34944924ace16c70e",
+  "rule_audit_sha256": "d0262510267803b04bdff2fc35e780448e5eab6659d74b1fca29e84b321bf1c3",
+  "interaction_source_digest": "184c42e97d87c1957c58bfe004f79e6975681355c978a312e948b18fe6241339",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "d0b2c59497474bb15de2acc6a54f30c912b075cf28026ff69e8bbb841fb37410",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim. The complete physical source footprint and directed route audits pass without removing, resizing or teleporting traffic.",
+  "interaction_decision_steps": [
+    10,
+    20,
+    30,
+    43,
+    50,
+    60
+  ],
+  "interaction_decision_evidence": "Both source cars remain nearly stopped at10/20/30. Leader300 reaches0.90m/s at40,3.55at50 and5.66at60; ego301 follows later with0.20at40,1.43at50 and3.55at60. Closest source body gap1.459m at30 and all50source-close frames are preserved. The complete goal disk plus arbitrary ego orientation lies3.207m beyond the stopped-leader envelope; source goal first entry83 cannot finish before the queue. A later turn does not remove this preceding interaction. This window was selected by the fixed source-phase/fidelity rule before its planner outcomes.",
+  "reviewed_boundary_way_ids": [
+    100040,
+    100044,
+    100046,
+    100047,
+    100050,
+    100099,
+    100120,
+    100121,
+    100142,
+    100186,
+    100187,
+    100188,
+    100189,
+    100193,
+    100194,
+    100247,
+    100248,
+    100249,
+    100250
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim. Source301 remains in the connected motor lane, without a lateral pass, solid separator shortcut or curb traversal.300 follows that same route ahead, with source ancestry in1125 at frame19918, route offset<=0.740m versus half-body-width bound0.912m, local heading error<=0.080rad and source arc separation>=5.705m. Its changing heading reflects the bend rather than an oncoming/crossing approach.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1170,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Relation1170 assigns1125 yield relative to1086. No moving source actor occupies1086 in the complete source role inventory. Source305/306 pass along the major road before the ego can progress through the connector behind300: spatial encounter pairs are ego79/305at19 and ego83/306at49, with minimum simultaneous body gaps6.99m/7.59m. Source301 remains stopped while300 is ahead; its primary task is following that physical leader, not choosing an independent entry gap. These other movements are not declared absent, and no unencoded priority awareness is claimed. Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205100261 belongs to1170, without an unconditional stop obligation. The protected1086 movement has no moving source participant; the actual305/306 major-road flows clear the source future route before the follower reaches it behind300. Source300 is itself a preceding vehicle from the same directed approach, not a protected crossing movement; its apparent crosspath warning is independently resolved by the source ancestry/route certificate. Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full aligned source polygon1142 is retained through JSON18/binary8 and actual SMART map tokens.1146 lies at the approach,1143/1142 at the divided-road crossing. No VRU is the claimed leader interaction here; the polygons remain represented irrespective of VRU presence. Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1143,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full aligned source polygon1143 is retained through JSON18/binary8 and actual SMART map tokens.1146 lies at the approach,1143/1142 at the divided-road crossing. No VRU is the claimed leader interaction here; the polygons remain represented irrespective of VRU presence. Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1146,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Full aligned source polygon1146 is retained through JSON18/binary8 and actual SMART map tokens.1146 lies at the approach,1143/1142 at the divided-road crossing. No VRU is the claimed leader interaction here; the polygons remain represented irrespective of VRU presence. Provider montage10/30/50/75 shows301 stopped behind300 in the paved southbound approach/right-turn connector.300 departs first and301 follows the same curve toward the westbound lane.302 is behind301, not crossing in front. The raised splitter and sidewalk remain outside the source driven footprint. This is a leader stop/restart response followed by a turn, without a main-road priority gap-acceptance claim."
+    }
+  ],
+  "same_route_following_actor_ids": [
+    300
+  ],
+  "following_scope_sha256": "3333e7807a11b72ea7cc85916c39a25765113e3cd30d727c7c5c29b5c2f816a3"
+}

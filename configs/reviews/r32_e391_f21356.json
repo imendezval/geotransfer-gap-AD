@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, both parked-overlap crops, stop half-space proof and timed source occupancy",
+  "recording": 32,
+  "ego_track_id": 391,
+  "first_frame": 21356,
+  "eligible_interaction_types": [
+    "pedestrian_crossing_ahead"
+  ],
+  "ineligible_interaction_types": [
+    "main_road_priority_gap_acceptance",
+    "mandatory_stop_compliance",
+    "lead_vehicle_restart"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    379
+  ],
+  "binary_sha256": "ab437333ae49fbe9f72a6f6ff4b1e84d89f810fc6068930a258ae2cbff8e82f7",
+  "rule_audit_sha256": "798efb0a12187cf233996a87423f2ceda0a6886339eeda53d084cffb168de0d1",
+  "interaction_source_digest": "035d2a88ec9ba84e621a71b9e930054e1930caa4a18c137604fd2ce9b3f6b096",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "76806c8f5abde98014a8318aad2ad7021517de3c3bc4471f8284da45baa1611a",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task. Full ego source boundary audit passes. Two minor stationary annotation overlaps were individually inspected against record32 aerial crops, with distinct car bodies and no resizing/removal.",
+  "interaction_decision_steps": [
+    20,
+    30,
+    40,
+    46,
+    50
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task. Ego speed falls1.63m/s at0 to1.04at10 and0.07at20, stays below0.02at30/40/50, then rises0.84at60 and2.28at75. Pedestrian379 is physically crossing the approach ahead, with closest timed box gap1.960m at46 and all67source-close frames preserved. The goal beyond this crossing cannot terminate upstream of its swept corridor. The source car also follows390. Its preserved stopping/departure is essential context even though the primary interaction label is the pedestrian. Source stopping is not attributed exclusively to the pedestrian. This scene tests the crossing opportunity upstream of the stop, without pretending to evaluate entry rules.",
+  "reviewed_boundary_way_ids": [
+    100036,
+    100106,
+    100107,
+    100156,
+    100157,
+    100158,
+    100207,
+    100208
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task. The source route remains on its straight minor-approach lane, without lateral change or solid separator contact; physical source audit verifies no raised-boundary contact. Parked7/8 and9/10 are16.86m and27.36m from ego at minimum.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1152,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Relation1152 governs the minor approach stop obligation and main-road priority. The source_task_rule_scope proof checks referenced bar100247 against all source task footprints and the entire2m goal disk plus vehicle circumradius: both remain upstream, maximum signed distances\u22124.011m and\u22120.430m. Thus every goal-completing pose remains before the stop line, without a distance-only sign exemption. Main-road393/392/394/395 stay outside this bounded approach movement; source full paths have respective gaps3.57/9.56/9.59/9.78m. No entry or precedence claim is made. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100241,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE206 governs the opposite side approach in1152; ego391 remains on its own upstream minor-road task and never enters that opposite approach. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100242,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205 applies to the other side approach/priority relation rather than this bounded approach pedestrian encounter. The task does not enter the main road or traverse that yield movement. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100245,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE301 describes main-road priority; ego391 completes upstream of the main-road stop plane. The main-road vehicles stay in their own corridor, so no priority choice between them and an entering ego is part of the bounded task. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100246,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE206 governs the ego minor approach. The complete goal-region vehicle envelope and source task remain upstream of its referenced stop bar100247 by the recorded half-space proof; this benchmark does not claim mandatory-stop compliance or entry through the sign. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1023,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Crosswalk1023 is retained as its full aligned source polygon through JSON18/binary8 and actual SMART tokens. Pedestrian379 walks diagonally across the approach upstream of that polygon; neither its complete path nor the mapped crossing is omitted. Crossing coverage is verified independently of the stop-scope proof. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100044,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100044 (line_thick) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100068,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100068 (line_thick) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100111,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100111 (line_thick) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100205,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100205 (line_thick) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100247,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100247 (line_thick) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 100046,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Inventoried source marking100046 (wall) remains explicitly reviewed. Stop bar100247 lies beyond every task/goal vehicle envelope by the half-space proof; thick markings100044/100068/100111/100205 are at adjoining approach/bicycle/main-road corridors and do not impose an earlier stop within this bounded pedestrian task. Wall100046 is outside the paved driven footprint. No omitted marking is used to supply the missing main-road priority meaning. Provider montage10/30/50/75 shows391 approaching southwest on the paved minor-road lane behind390. Pedestrian379 crosses diagonally from the splitter island to the northern sidewalk directly ahead of391 while391 stops at20\u201350 and resumes after clearance. Oncoming396 stays on the other side of the approach. This bounded goal ends before the main-road stop line; main-road entry and priority gap acceptance are excluded from the task."
+    }
+  ],
+  "stop_rules_outside_task": [
+    1152
+  ],
+  "task_rule_scope_sha256": "8cc2fcde1841895975485f67f79dde2207bbe31a9914b6b8a5be50b24fe7699f"
+}

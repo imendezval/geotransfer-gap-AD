@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "scope": "Source window definitions, conversion options and expected binary identities. These do not grant admission.",
+  "scenes": [
+    {
+      "scene_id": "r00_e321_f21017",
+      "conversion": {
+        "recording": 0,
+        "ego": 321,
+        "first_frame": 21017,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "6ced7859cde0d5cba698ab8c8d6d0599c6838fa7d192deeddf70bed6de959e8d",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "longitudinal_following"
+      ]
+    },
+    {
+      "scene_id": "r00_e366_f23240",
+      "conversion": {
+        "recording": 0,
+        "ego": 366,
+        "first_frame": 23240,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "ce93696e6d662a533a6383ec318bd1a7dfb1518f0615e58e98dde668a6160808",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r01_e252_f16915",
+      "conversion": {
+        "recording": 1,
+        "ego": 252,
+        "first_frame": 16915,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "56fa2245b6aa2e216f329392c6ca9bb2627c47def997ee794a32f1001857fab9",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r01_e280_f18833",
+      "conversion": {
+        "recording": 1,
+        "ego": 280,
+        "first_frame": 18833,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "66212b7958ccd6feda00a57ffe4d93dab0ce8f3b772b7b1bc1968ce27fbb3790",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "cyclist_crossing"
+      ]
+    },
+    {
+      "scene_id": "r01_e301_f20017",
+      "conversion": {
+        "recording": 1,
+        "ego": 301,
+        "first_frame": 20017,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "da11977fb8c475590f7c17b1097b151641d46645e84683f34944924ace16c70e",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "longitudinal_following"
+      ]
+    },
+    {
+      "scene_id": "r02_e206_f11598",
+      "conversion": {
+        "recording": 2,
+        "ego": 206,
+        "first_frame": 11598,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "db72d3b1e5caf88418dc2f606d0547f0346fc34323db514e0dc2e7df572d1d4a",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r02_e347_f18595",
+      "conversion": {
+        "recording": 2,
+        "ego": 347,
+        "first_frame": 18595,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "102f79b3d2e2786c0239b35c9e5ae935ec281ec30afa2a18751407d6b0833322",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r06_e281_f20211",
+      "conversion": {
+        "recording": 6,
+        "ego": 281,
+        "first_frame": 20211,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "02db1e9161c21cbb1f9327056c970693046fbcb7bbbb743d82383afe2705e891",
+      "split": "heldout_location_4",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r07_e200_f25439",
+      "conversion": {
+        "recording": 7,
+        "ego": 200,
+        "first_frame": 25439,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "8ca81c4ae57376fcf92a8e5ab57c424ea81b1e2f5425c1a6343ee55b96500741",
+      "split": "adaptation_recording",
+      "interaction_families": [
+        "cyclist_crossing"
+      ]
+    },
+    {
+      "scene_id": "r09_e136_f11030",
+      "conversion": {
+        "recording": 9,
+        "ego": 136,
+        "first_frame": 11030,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "bedf9dcdf6b9fed339e27e97082bc4ef7a69468ce72f49f701c3a40c2cc515ee",
+      "split": "adaptation_recording",
+      "interaction_families": [
+        "cyclist_crossing"
+      ]
+    },
+    {
+      "scene_id": "r12_e151_f12041",
+      "conversion": {
+        "recording": 12,
+        "ego": 151,
+        "first_frame": 12041,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "a96e81746f2af80f8786dd1ccf44518259c79fbaba892205e7c284a3329d842e",
+      "split": "adaptation_recording",
+      "interaction_families": [
+        "longitudinal_following"
+      ]
+    },
+    {
+      "scene_id": "r16_e35_f1521",
+      "conversion": {
+        "recording": 16,
+        "ego": 35,
+        "first_frame": 1521,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "b0e66005dd27f2c02edc741d1b20274d0f66e8e5ae64cbcc496f76035c1dea1b",
+      "split": "adaptation_recording",
+      "interaction_families": [
+        "longitudinal_following"
+      ]
+    },
+    {
+      "scene_id": "r32_e391_f21356",
+      "conversion": {
+        "recording": 32,
+        "ego": 391,
+        "first_frame": 21356,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "ab437333ae49fbe9f72a6f6ff4b1e84d89f810fc6068930a258ae2cbff8e82f7",
+      "split": "adaptation_recording",
+      "interaction_families": [
+        "pedestrian_crossing"
+      ]
+    },
+    {
+      "scene_id": "r00_e39_f3000",
+      "conversion": {
+        "recording": 0,
+        "ego": 39,
+        "first_frame": 3000,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "55e0e8d2cbbeb9684cb435c7dd7da116e1886737d0c4e437f03d1b7ed8521edf",
+      "split": "heldout_location_4",
+      "interaction_families": []
+    },
+    {
+      "scene_id": "r09_e196_f16232",
+      "conversion": {
+        "recording": 9,
+        "ego": 196,
+        "first_frame": 16232,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "b0dd42439e1d4ca44eea2e30325a29bc05e51ddb77066dbad9eea6fa3c0b46d4",
+      "split": "adaptation_recording",
+      "interaction_families": []
+    },
+    {
+      "scene_id": "r15_e332_f25626",
+      "conversion": {
+        "recording": 15,
+        "ego": 332,
+        "first_frame": 25626,
+        "goal_sample": 85,
+        "edge_mode": "all",
+        "late_mode": "runtime_spawn",
+        "static_crop_radius": 1000000.0,
+        "exclude_track_ids": [],
+        "parked_as_static_expert": true,
+        "background_goal_mode": "continue",
+        "background_goal_min_distance": 5.0,
+        "emit_crosswalks": true
+      },
+      "binary_sha256": "84258ae1d1522df278aa6fdb737a43c5c4e5a8bc644b3026b8a7161663137be0",
+      "split": "validation_recording",
+      "interaction_families": []
+    }
+  ]
+}

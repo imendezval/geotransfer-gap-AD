@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex provider-projection source aerial, source kinematics, map-rule and SMART input review",
+  "ego_track_id": 332,
+  "recording": 15,
+  "first_frame": 25626,
+  "eligible_interaction_types": [
+    "uncontested_goal_approach_ending_before_queue"
+  ],
+  "ineligible_interaction_types": [
+    "cyclist_crossing_response",
+    "lead_vehicle_braking_response",
+    "mandatory_queue_restart_response",
+    "pedestrian_crossing_response",
+    "priority_yield_response",
+    "stop_sign_compliance"
+  ],
+  "interaction_opportunity": false,
+  "interaction_actor_ids": [],
+  "binary_sha256": "84258ae1d1522df278aa6fdb737a43c5c4e5a8bc644b3026b8a7161663137be0",
+  "rule_audit_sha256": "73749fe85aec09815cca0b9ce262416c6795f1da4b4412360411426f80db1a79",
+  "interaction_source_digest": "bcf7293754f30185f02bd7e68eb2f2dd9f70a9eef352696e9ed722f774ff72b0",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "49a6059707b15b920043e100625b9986f1f7ee991c18333b6633a39edb418492",
+  "rule_resolutions": [
+    {
+      "kind": "sign",
+      "source_id": 1691,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        20,
+        47,
+        55,
+        70,
+        85
+      ],
+      "source_evidence": "DE357 dead-end sign 1691 is at about (43.9,-38.6) on the side approach south of the ego main-road track; the ego remains more than 15 m from it through the 91 source samples. It does not govern following vehicle 324 on occupied lanelets 1750, 1755, and 2168."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1692,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        20,
+        47,
+        55,
+        70,
+        85
+      ],
+      "source_evidence": "DE262 weight-restriction sign 1692 is at about (47.5,-12.9) beside the northeast side-street branch, while ego 332 remains on the main road and reaches no closer than 7.4 m. The source aerial and track show no entry to the signed branch; its restriction cannot determine whether ego follows stopped leader 324."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1693,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        20,
+        47,
+        55,
+        70,
+        85
+      ],
+      "source_evidence": "DE283 no-stopping sign 1693 is colocated with sign 1692 on the northeast side-street branch at about (47.5,-12.8). Ego 332 never enters that branch. Its source stop occurs behind vehicle 324 on the main road and is not a parking or standing maneuver governed by this sign."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1694,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        20,
+        47,
+        55,
+        70,
+        85
+      ],
+      "source_evidence": "DE206 stop sign 1694 at about (54.9,-19.5) refers to Lanelet2 right-of-way relations 2178 and 2179 for the side-street yield approach. Ego 332 occupies main-road lanelets 1750, 1755, and 2168 and never the yield member of either relation. The source aerial places the sign off its approach, so it does not require this ego to stop."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1700,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        0,
+        20,
+        47,
+        55,
+        70,
+        85
+      ],
+      "source_evidence": "DE301 priority sign 1700 at about (38.3,-21.5) is near the main road, but the tested source task is longitudinal following behind leader 324 and no competing priority movement crosses the ego path. Whether it confirms main-road priority cannot change the safe stop-and-restart response to the leader in this window."
+    }
+  ],
+  "reviewed_boundary_way_ids": [
+    1474,
+    1513,
+    1516,
+    1550,
+    1557,
+    1562
+  ],
+  "boundary_and_lane_change_evidence": "Ego 332 follows the same source main-road lane through lanelets 1750, 1755, and 2168. Their boundaries 1474, 1513, 1516, and 1562 are solid markings, while 1550 and 1557 are dashed lane markings. The source aerial shows the ego staying inside its lane with no lateral crossing; the tested action is braking behind leader 324 and later restarting. The lane topology and mapped curb edges remain in the binary. The initially stopped leader is held on expert replay until the source movement onset at step 67 and then runs IDM; the hybrid trace matches all 50 source-close encounter steps before the ego goal terminal at step 77. The leader is ahead, so its source startup delay is not caused by any counterfactual ego action in this window. The scene supports following behavior only under this documented hybrid protocol. The source surface and lane travel were rechecked using the provider projection at steps 0,35,60,83.",
+  "source_surface_steps": [
+    0,
+    25,
+    55,
+    80
+  ],
+  "source_surface_evidence": "The provider-projection aerial uses inD scale factor 12 and zero translation. At source steps 0,35,60,83 the red ego box follows the paved vehicle carriageway between the visible lane markings and curbs. It stays off pedestrian paving, planted areas and raised traffic islands. This correct projection replaces the former fitted factor-10 source overlay.",
+  "interaction_decision_steps": [
+    25,
+    47,
+    55
+  ],
+  "interaction_decision_evidence": "Source vehicle 324 is stopped ahead of ego 332 in the same road lane at steps 25 and 55. The recorded ego stays behind and brakes instead of passing through the occupied lane. After the leader begins moving around source step 67, the ego follows and reaches the recorded goal. This timed stop-and-restart encounter depends on the leader position and is the claimed decision opportunity; the hybrid evaluator trace preserves its close-encounter timing. Task-scope correction: the goal center is 4.42 m behind the stationary leader center, with a 2 m success radius. A collision-free queue approach can therefore finish before the leader restarts. The admitted claim is braking/queue approach, not a mandatory restart response. Further task audit: the direct evaluator permits goal completion at up to 20 m/s. The success region contains a collision-free point before the stationary leader, so the objective does not require even a braking response. This is admitted only as a control ending before the queue.",
+  "goal_interaction_scope": {
+    "leader_track_id": 324,
+    "stationary_leader_sample": 40,
+    "goal_to_stationary_leader_center_m": 4.4215620125273585,
+    "goal_success_radius_m": 2.0,
+    "mandatory_restart": false,
+    "braking_response_required": false,
+    "goal_max_speed_mps": 20.0
+  },
+  "carried_forward_source_review": {
+    "path": "/home/inigo/data/git/repo/student-project/geotransfer-AD-gap/pilot/smart_pilot/r15_e332_f25626_straight/testing/semantic_review_smart_hybrid_startup.json",
+    "sha256": "57a4798ed39b486b0b8ac98858afb07e087f31c5725d4231719fa62f62bcf233",
+    "unchanged_actor_fields": true,
+    "unchanged_rule_and_boundary_inventory": true,
+    "change": "Road boundary orientation/centerlines and directed connectivity corrected; source tracks, physical edges, crossings and applicable rule inventory unchanged. New technical/model evidence is mandatory."
+  }
+}

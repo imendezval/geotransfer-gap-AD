@@ -1,0 +1,226 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, timed cyclist/source-body trajectory, dense legal road sequence and native lane-change permissions",
+  "recording": 1,
+  "ego_track_id": 280,
+  "first_frame": 18833,
+  "eligible_interaction_types": [
+    "cyclist_crossing_after_ego"
+  ],
+  "ineligible_interaction_types": [
+    "mandatory_source_yielding",
+    "mandatory_braking",
+    "cyclist_priority_compliance",
+    "lane_change_rule_compliance"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    279
+  ],
+  "binary_sha256": "66212b7958ccd6feda00a57ffe4d93dab0ce8f3b772b7b1bc1968ce27fbb3790",
+  "rule_audit_sha256": "97ef7400dd991e015e537de34fbfafce289caa4a76a593c7e1bba57009e4aaef",
+  "interaction_source_digest": "c09667022298f894640a005c2680ccc0a317fa8887f609f95698950eacf33763",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "e4eabdca42692cd1000bb82adb09d31281698150a2e5958357ec0bab251d3a79",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows280 proceeding southwest through the paved main-road corridor. Cyclist279 continuously accelerates from3.23m/s at0 to4.73at30 and5.82at48, riding from the southern side across the main-road corridor toward the northern arm. The car passes the shared body corridor before the cyclist, not after it: sampled source bodies overlap at ego30/cyclist48, separated by1.8s. This is an active timed crossing encounter, not observed ego yielding, mandatory braking, a waiting cyclist or a parallel sidewalk pass. Pedestrian268 remains on the western sidewalk and is not the claimed actor.",
+  "interaction_decision_steps": [
+    25,
+    30,
+    35,
+    40,
+    48
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows280 proceeding southwest through the paved main-road corridor. Cyclist279 continuously accelerates from3.23m/s at0 to4.73at30 and5.82at48, riding from the southern side across the main-road corridor toward the northern arm. The car passes the shared body corridor before the cyclist, not after it: sampled source bodies overlap at ego30/cyclist48, separated by1.8s. This is an active timed crossing encounter, not observed ego yielding, mandatory braking, a waiting cyclist or a parallel sidewalk pass. Pedestrian268 remains on the western sidewalk and is not the claimed actor. Closest timed box gap3.464m occurs at35 and all6 source-close frames are preserved. The source goal first entry84 is beyond the crossing corridor, so the bounded task cannot terminate before passing that location. Source ego need not brake for the recorded timing; this scene must not be used as evidence of a mandatory yielding response. Source281 remains present under the uniformly applied progress-covered background-route protocol; no actor is removed or resized to repair its former native-route collision.",
+  "reviewed_boundary_way_ids": [
+    100016,
+    100021,
+    100025,
+    100026,
+    100027,
+    100028,
+    100030,
+    100033,
+    100047,
+    100048,
+    100049,
+    100050,
+    100059,
+    100060,
+    100063,
+    100064,
+    100116,
+    100117,
+    100128,
+    100129,
+    100133,
+    100134,
+    100140,
+    100141,
+    100170,
+    100194,
+    100195,
+    100211,
+    100212,
+    100216,
+    100217,
+    100227,
+    100228,
+    100234,
+    100250,
+    100251,
+    100258,
+    100260,
+    100264,
+    100270,
+    100271
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows280 proceeding southwest through the paved main-road corridor. Cyclist279 continuously accelerates from3.23m/s at0 to4.73at30 and5.82at48, riding from the southern side across the main-road corridor toward the northern arm. The car passes the shared body corridor before the cyclist, not after it: sampled source bodies overlap at ego30/cyclist48, separated by1.8s. This is an active timed crossing encounter, not observed ego yielding, mandatory braking, a waiting cyclist or a parallel sidewalk pass. Pedestrian268 remains on the western sidewalk and is not the claimed actor. The recorded route has a legal leftward transition1044\u21921043 across dashed way100059 at step68.6, after the primary25-48 crossing interval. All901 interpolated centre/direction samples follow connected ordinary-road native following/allowed lateral edges. No solid-boundary or bus-lane crossing is required by the reviewed source route. The complete source body-boundary/overlap audit is clear. This is not a lane-marking compliance benchmark: SMART receives lane/crosswalk geometry, not dashed-versus-solid permission semantics, and its goal is not navigation-conditioned. Later goal/lane-choice errors require the disclosed intent interpretation rather than a geographic rule-transfer claim.",
+  "reviewed_source_lane_changes": [
+    {
+      "source": 1044,
+      "target": 1043,
+      "side": "left",
+      "shared_boundary_way": 100059,
+      "tags": {
+        "subtype": "dashed",
+        "type": "line_thin"
+      },
+      "source_step": 68.60000000000001
+    }
+  ],
+  "source_route_sequence_sha256": "5294efb841405adddccea739bfd39f9f8bd052f19c3feb4fcb9cfb1e7bc5357d",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 1171,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Relation1171 puts ego1085 on the right_of_way side, with the yield obligation assigned to minor-road1128/sign100261. Source280 remains on the main-road through route and never approaches1128. The task does not ask SMART to grant precedence to a protected conflicting movement; cyclist279 is a moving physical crossing actor. No ability to interpret the omitted yield sign is claimed."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 1173,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Relation1173 protects main-road1085/1086 relative to the other movement. Ego begins on1085 and travels southwest through the main-road corridor. Its tested encounter is timed collision avoidance with cyclist279, not a source ego yield or contested legal-priority decision. This interpretation follows source relation roles and route, not distance to a sign."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1140,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Polygon1140 is the opposite-side crossing region visited by279 earlier in its route. Ego280 does not physically contact this polygon; its nearest approach is39-40 while279 is already moving toward the central/northern corridor. The exact source polygon is retained as type8 SMART map geometry; no cyclist precedence is inferred from crosswalk membership."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1141,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Polygon1141 is the adjoining median/approach crossing geometry. Ego has no source box contact and279 stays at least2.08m from this polygon over its source path. It remains represented as verified crosswalk geometry, without treating proximity as a yielding obligation."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1142,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Ego280 crosses polygon1142 at38-43, while cyclist279 is outside it throughout (minimum source distance5.00m). The claimed body-path crossing is in the central junction corridor at ego30/cyclist48, not an occupied zebra-priority event at1142. Its actual polygon reaches binary/type8 SMART tokens."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1159,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Polygon1159 is at the northeast upstream approach. Ego has no body contact and passes nearby4-13;279 never approaches within11m during its full source path. The geometry is retained in actual SMART input, but no active crosswalk yielding task is claimed there."
+    },
+    {
+      "kind": "crosswalk",
+      "source_id": 1160,
+      "resolution": "represented_in_planner",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Ego280 contacts polygon1160 at6-11 near the observed startup boundary. Cyclist279 remains far from it (minimum full-source distance11.72m) and268 is on a distant sidewalk. This retained source polygon is not the post-warmup crossing interaction or a basis for an unrepresented priority claim."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100261,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Relation1171 puts ego1085 on the right_of_way side, with the yield obligation assigned to minor-road1128/sign100261. Source280 remains on the main-road through route and never approaches1128. The task does not ask SMART to grant precedence to a protected conflicting movement; cyclist279 is a moving physical crossing actor. No ability to interpret the omitted yield sign is claimed."
+    },
+    {
+      "kind": "sign",
+      "source_id": 100281,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        35,
+        48,
+        75
+      ],
+      "source_evidence": "Source100281/de301 is on the main-road roadside. Ego follows the main-road movement already assigned right_of_way by1171/1173. No applicable ego yield/stop choice is required for this source task, and no rule-aware interpretation of this sign by SMART is claimed."
+    }
+  ],
+  "parked_overlap_resolutions": [],
+  "limitations": [
+    "Crossing occurs after source ego passage; no mandatory ego response or source-yielding claim.",
+    "SMART has no navigation goal input or explicit lane-change permission feature; lane-rule compliance is outside the admitted interaction scope."
+  ],
+  "reviewed_task_maneuver": "straight_with_lane_change"
+}

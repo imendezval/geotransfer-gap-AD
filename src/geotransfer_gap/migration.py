@@ -13,13 +13,25 @@ from .config import settings
 BASELINE = "migration/legacy_reports.json"
 
 
+def baseline_scenes():
+    recipes = read_json(settings().project / "configs/scenes.json")["scenes"]
+    return [
+        {
+            "name": r["scene_id"],
+            "root": str(settings().artifacts / "oriented_v3" / r["scene_id"]),
+            "binary_sha256": r["binary_sha256"],
+        }
+        for r in recipes
+    ]
+
+
 @lru_cache(maxsize=1)
 def snapshot():
     """Read original evidence from the verified archive, including regression fixtures."""
     out = settings().artifacts / BASELINE
     if out.exists():
         return read_json(out)
-    names = {r["name"] for r in scenes()} | {
+    names = {r["name"] for r in baseline_scenes()} | {
         "r00_e365_f22735",
         "r31_e312_f20353",
         "r20_e416_f26946",
@@ -114,7 +126,7 @@ def compare(root, name):
 
 def carry_review(root):
     """Rebind existing reviewed certificates only after exact substantive equivalence."""
-    root = Path(root)
+    root = Path(root).resolve()
     t = root / "testing"
     name = "semantic_review_smart_hybrid_startup.json"
     old = original(root, name)
@@ -175,7 +187,7 @@ def conversion_check():
 
     results = []
     with tempfile.TemporaryDirectory(prefix="geo_conversion_", dir="/tmp") as folder:
-        for row in scenes():
+        for row in baseline_scenes():
             t = Path(row["root"]) / "testing"
             v = read_json(t / "validation.json")
             out = Path(folder) / row["name"]
@@ -325,7 +337,7 @@ def execution_check():
             }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(one, scenes()))
+        results = list(pool.map(one, baseline_scenes()))
     report = {
         "passed": True,
         "scenes": results,

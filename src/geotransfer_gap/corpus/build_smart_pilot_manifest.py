@@ -1,5 +1,6 @@
 """Build a current, source-independent manifest for a fixed SMART pilot batch."""
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.artifacts import evidence_current
 from geotransfer_gap.validation.scene_contract import contracts_equal
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
@@ -46,13 +47,18 @@ def main():
         action="store_true",
         help="Order interactions before controls, then recording/frame/ego; uses source metadata and review labels only.",
     )
+    ap.add_argument(
+        "--publish-current",
+        action="store_true",
+        help="Publish the admitted selection as the portable current corpus",
+    )
     args = ap.parse_args()
     accepted, ledger = ([], [])
     jobs = json.loads(args.selection.read_text())["jobs"]
     if args.source_order:
 
         def source_order(job):
-            testing = Path(job["root"]) / "testing"
+            testing = resolve_reference(job["root"]) / "testing"
             validation = json.loads((testing / "validation.json").read_text())
             review_path = testing / "semantic_review_smart_hybrid_startup.json"
             review = (
@@ -68,7 +74,7 @@ def main():
 
         jobs = sorted(jobs, key=source_order)
     for job in jobs:
-        root = Path(job["root"]).resolve()
+        root = resolve_reference(job["root"]).resolve()
         t = root / "testing"
         gate_path = t / "admission_smart_hybrid_startup.json"
         if not gate_path.is_file():
@@ -176,6 +182,12 @@ def main():
                     "sha256"
                 ],
             }
+        )
+    if args.publish_current:
+        from geotransfer_gap.artifacts import write_json, portable_manifest
+
+        write_json(
+            settings().artifacts / "corpus/current.json", portable_manifest(accepted)
         )
     summary = {
         "schema_version": 1,

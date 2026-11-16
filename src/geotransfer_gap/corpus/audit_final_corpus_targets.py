@@ -1,5 +1,6 @@
 """Audit prospective composition and source anchors; never fills quotas with controls."""
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
 import argparse
@@ -36,11 +37,12 @@ def main():
     assert sha(anchor_path) == config["source_anchor_manifest_sha256"]
     anchors = json.loads(anchor_path.read_text())["anchors"]
     rows = json.loads(args.manifest.read_text())
-    indexed = {Path(r["root"]).name: r for r in rows}
+    indexed = {resolve_reference(r["root"]).name: r for r in rows}
     retained = all(
         (
-            Path(r["root"]).name in indexed
-            and indexed[Path(r["root"]).name]["binary_sha256"] == r["binary_sha256"]
+            resolve_reference(r["root"]).name in indexed
+            and indexed[resolve_reference(r["root"]).name]["binary_sha256"]
+            == r["binary_sha256"]
             for r in anchors
         )
     )
@@ -52,7 +54,7 @@ def main():
     cycles = []
     details = []
     for row in rows:
-        t = Path(row["root"]) / "testing"
+        t = resolve_reference(row["root"]) / "testing"
         gate = t / f"admission_smart_{row['traffic_protocol']}.json"
         assert (
             sha(gate) == row["admission_sha256"]

@@ -1,5 +1,6 @@
 """Independent native Germany/Vehicle check of conservative lateral permissions."""
 
+from geotransfer_gap.provenance import converter_fingerprint
 from geotransfer_gap.maps import lanelet as map_geometry
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
@@ -116,7 +117,7 @@ def main():
     result = {
         "lane_change_tool_sha256": sha(project_path("source_lane_changes.py")),
         "probe_sha256": sha(Path(__file__)),
-        "converter_sha256": sha(Path(p.__file__)),
+        "converter_sha256": converter_fingerprint(),
         "oracle": "lanelet2==1.2.3 Germany Vehicle left/right and canChangeLane",
         "scope": "Conservative unambiguous dashed-boundary subset; omitted ambiguous/mixed markings remain unsupported. No lateral edges are inserted as IDM successors.",
         "maps": reports,

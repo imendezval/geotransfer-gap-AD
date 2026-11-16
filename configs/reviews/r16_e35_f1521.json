@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, native source rule/marking membership, source stop/restart timing, goal envelope and road-access inventory",
+  "recording": 16,
+  "ego_track_id": 35,
+  "first_frame": 1521,
+  "eligible_interaction_types": [
+    "lead_vehicle_stop_and_restart"
+  ],
+  "ineligible_interaction_types": [
+    "mandatory_source_action_imitation",
+    "side_road_stop_compliance",
+    "priority_gap_acceptance",
+    "unmarked_crossing_right_of_way"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    33
+  ],
+  "binary_sha256": "b0e66005dd27f2c02edc741d1b20274d0f66e8e5ae64cbcc496f76035c1dea1b",
+  "rule_audit_sha256": "06f4be3983eed93f75855d5c1e404f26424913ad266834f5f45c42dd26325773",
+  "interaction_source_digest": "420e7b2a530365c97cfe18fa6aa26f76d18668ce2a15d0099b76842408bdc75b",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "5415218a704682065900b0eefa219dacde5bb248e2d3ffe983e50f20fa209eda",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact. No source actor is cropped or resized to repair the evaluator collision; the generic expert-velocity state correction addresses it.",
+  "interaction_decision_steps": [
+    10,
+    15,
+    25,
+    40,
+    50,
+    60
+  ],
+  "interaction_decision_evidence": "Leader33 remains nearly stopped through20, reaches0.51m/s at30,1.62at40 and3.21at50. Ego35 is stationary through30, then moves0.25at40,1.66at50 and3.25at60. Source closest physical gap1.767m is at15, and the visible restart precedes the follower response. The complete2m goal disk plus any ego orientation is0.282m beyond the stopped33 collision envelope, with source goal first entry81. This excludes the earlier control failure of completing before the queue. The task permits a valid response to the leader rather than prescribing imitation of every source action; independent refreshed fidelity/model checks remain mandatory.",
+  "reviewed_boundary_way_ids": [
+    1493,
+    1597,
+    2082,
+    2083
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact. The tested source route makes no lateral lane change or solid-separator/curb shortcut. All inventoried boundary ways were reviewed; source directed topology and full footprint checks pass.",
+  "rule_resolutions": [
+    {
+      "kind": "sign",
+      "source_id": 1691,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE357 concerns the western minor/dead-end branch. The ego already follows the southeast main road and does not enter that branch. Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1695,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE314 identifies the off-road parking area. The ego task and goal stay in its main-road travel lane. Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1696,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE301 describes main-road priority. The task is downstream straight following of stopped33, not crossing or entering another approach. Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1701,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "DE205 refers to the western yield approach, with source ref_line1708 assigned to2153/2161. Neither is occupied by35: the ego stays on2134/2135 downstream, without a side-entry yield-compliance claim. Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1708,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        50,
+        75
+      ],
+      "source_evidence": "Source dashed thick line1708 is a ref_line in2191/2195 for yield lanes2153/2161, while ego35 occupies2134/2135 downstream of that junction. Its meaning is resolved by role/route membership rather than a distance threshold; it does not impose an unobserved ego stop in this following task. Provider montage10/30/50/75 shows35 stopped in the paved southeast-bound main-road lane behind33/32.33 restarts first;35 then follows along the same lane. Pedestrians38/39 are present farther along the road and remain source expert actors, but no unmarked-crossing priority or causal attribution of the queue stop to a pedestrian is claimed. The ego occupies only road lanelets2134/2135, downstream of the intersection, with no bus-only lane occupancy or source boundary contact."
+    }
+  ]
+}

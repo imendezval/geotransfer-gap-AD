@@ -4,6 +4,7 @@ Conservatively rejects explicit access/participant restrictions and non-road lan
 This supplements manual rule review, rather than interpreting all German rules.
 """
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
 import argparse
@@ -69,7 +70,10 @@ def main():
     ap.add_argument("--manifest", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
-    rows = [audit(Path(r["root"])) for r in json.loads(args.manifest.read_text())]
+    rows = [
+        audit(resolve_reference(r["root"]))
+        for r in json.loads(args.manifest.read_text())
+    ]
     result = {
         "tool_sha256": sha(Path(__file__)),
         "manifest_sha256": sha(args.manifest),

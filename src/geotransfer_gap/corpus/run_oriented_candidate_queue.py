@@ -4,6 +4,7 @@ Never grants research admission. Manual source review and SMART model-input
 proof are separate. Resume skips only records bound to unchanged sources/tools.
 """
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
 import argparse
@@ -360,7 +361,7 @@ def main():
         temporary.write_text(json.dumps(report, indent=2) + "\n")
         temporary.replace(args.ledger)
         print(
-            Path(row["root"]).name,
+            resolve_reference(row["root"]).name,
             row["status"],
             row.get("preserved_actor_ids", []),
             flush=True,

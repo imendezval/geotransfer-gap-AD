@@ -6,6 +6,7 @@ the turn, and the actor ahead throughout the task. Historical tracks are used
 only for this offline review, never supplied to the planner or controller.
 """
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.maps import lanelet as map_geometry
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 import argparse
@@ -268,7 +269,7 @@ def main():
             if any(((row["recording"], row[k]) in occupied for k in ("ego", "actor"))):
                 continue
             flags = row.get("source_unsupported_rule_flags", [])
-            root = Path(row["root"])
+            root = resolve_reference(row["root"])
             rules = json.loads(
                 (root / "testing/rule_applicability_audit.json").read_text()
             )

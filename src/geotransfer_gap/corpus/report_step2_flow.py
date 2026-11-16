@@ -1,5 +1,6 @@
 """Publish candidate attempts by producer version, without pooling obsolete gates."""
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 import collections
 import hashlib
@@ -83,7 +84,7 @@ def main():
     selection = json.loads((A / "step2_expanded_current_selection.json").read_text())
     current = []
     for job in selection["jobs"]:
-        root = Path(job["root"])
+        root = resolve_reference(job["root"])
         p = root / "testing/admission_smart_hybrid_startup.json"
         gate = json.loads(p.read_text())
         current.append(
@@ -119,7 +120,7 @@ def main():
     manifest_path = A / "step2_expanded_current_manifest.json"
     metrics = []
     for row in json.loads(manifest_path.read_text()):
-        t = Path(row["root"]) / "testing"
+        t = resolve_reference(row["root"]) / "testing"
         probe = json.loads((t / "smart_map_transfer_all_actors_probe.json").read_text())
         replay = json.loads((t / "replay_validation.json").read_text())
         interaction = json.loads(

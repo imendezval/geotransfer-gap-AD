@@ -1,5 +1,6 @@
 """Sequential, admission-enforcing SMART diagnostics with isolated scene state."""
 
+from geotransfer_gap.artifacts import resolve_reference
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as digest
 import argparse
@@ -26,7 +27,7 @@ def main():
         OMP_NUM_THREADS=os.environ.get("OMP_NUM_THREADS", "2"),
     )
     for row in rows:
-        root = Path(row["root"]).resolve()
+        root = resolve_reference(row["root"]).resolve()
         traffic = row["traffic_protocol"]
         if traffic not in ("hybrid_startup", "idm"):
             raise ValueError("Unsupported traffic protocol")

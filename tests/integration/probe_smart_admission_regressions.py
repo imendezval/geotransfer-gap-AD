@@ -14,7 +14,7 @@ def main():
     py = __import__("sys").executable
     env = dict(os.environ, MPLCONFIGDIR="/tmp/geotransfer_mpl", OMP_NUM_THREADS="2")
     root = project_path("pilot/oriented_v3/r00_e365_f22735")
-    us = "pilot/probes/us_hybrid_1002fdc9826fc6d1"
+    us = str(project_path("pilot/probes/us_hybrid_1002fdc9826fc6d1"))
     results = []
 
     def gate(r):

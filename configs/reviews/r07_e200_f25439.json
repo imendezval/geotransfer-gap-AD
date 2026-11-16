@@ -1,0 +1,300 @@
+{
+  "schema_version": 2,
+  "review_status": "complete",
+  "decision": "admit",
+  "scope": "recorded_window_and_tested_interaction",
+  "reviewer": "Codex inspected provider montage, native directed memberships, source speeds/body crossing and full physical/rule audit",
+  "recording": 7,
+  "ego_track_id": 200,
+  "first_frame": 25439,
+  "eligible_interaction_types": [
+    "cyclist_crossing_ahead"
+  ],
+  "ineligible_interaction_types": [
+    "cyclist_priority_compliance",
+    "minor_road_yielding",
+    "mandatory_source_braking"
+  ],
+  "interaction_opportunity": true,
+  "interaction_actor_ids": [
+    190
+  ],
+  "binary_sha256": "8ca81c4ae57376fcf92a8e5ab57c424ea81b1e2f5425c1a6343ee55b96500741",
+  "rule_audit_sha256": "bd68d59f246d17c216f9446231eb39d723100feaf99800f22c158f6709d9d7fe",
+  "interaction_source_digest": "83b5871c213c8450424a3bb0bba1e9bc3f3310e570baf6130f999ef5d098960a",
+  "source_image": "rule_review_montage.png",
+  "source_image_sha256": "5e27086f884e3e4c1ddb879350f2f746f730be50dfe132effc560db0fb1c25b7",
+  "source_surface_steps": [
+    10,
+    30,
+    50,
+    75
+  ],
+  "source_surface_evidence": "Provider montage10/30/50/75 shows200 travelling straight southeast on the main road, while190 leaves the northeast minor arm, traverses the ego corridor and turns southeast. Ego remains on paved directed through lanes; no island shortcut or side-arm turn is used. Source200 speed falls6.68m/s at0 to4.25at45, then stays about4m/s. Bicycle190 accelerates from0.4at10 to2.97at39 and3.18at45. No exclusive causal attribution of ego braking to190 is made.",
+  "interaction_decision_steps": [
+    30,
+    38,
+    39,
+    45,
+    50
+  ],
+  "interaction_decision_evidence": "Provider montage10/30/50/75 shows200 travelling straight southeast on the main road, while190 leaves the northeast minor arm, traverses the ego corridor and turns southeast. Ego remains on paved directed through lanes; no island shortcut or side-arm turn is used. Source200 speed falls6.68m/s at0 to4.25at45, then stays about4m/s. Bicycle190 accelerates from0.4at10 to2.97at39 and3.18at45. No exclusive causal attribution of ego braking to190 is made. Oriented source bodies overlap at ego38/cyclist45, a0.7s phase difference, inside the bounded post-warmup task. Closest timed box gap1.993m at39 and all36 source-close frames are preserved. First source goal entry is81, beyond the crossing; the source route cannot terminate upstream of this corridor. This is an emerging cyclist crossing/turning into the road, not a parallel sidewalk pass or an unencoded obligation to grant the cyclist precedence.",
+  "reviewed_boundary_way_ids": [
+    1473,
+    1483,
+    1493,
+    1512,
+    1514,
+    1516,
+    1545,
+    1557,
+    1563,
+    1590,
+    1597,
+    2068,
+    2079,
+    2080,
+    2082,
+    2083,
+    2089,
+    2090,
+    2094,
+    2097,
+    2099,
+    2101,
+    2102,
+    2107,
+    2108,
+    2113,
+    2114,
+    2115,
+    2116
+  ],
+  "boundary_and_lane_change_evidence": "Provider montage10/30/50/75 shows200 travelling straight southeast on the main road, while190 leaves the northeast minor arm, traverses the ego corridor and turns southeast. Ego remains on paved directed through lanes; no island shortcut or side-arm turn is used. Source200 speed falls6.68m/s at0 to4.25at45, then stays about4m/s. Bicycle190 accelerates from0.4at10 to2.97at39 and3.18at45. No exclusive causal attribution of ego braking to190 is made. Complete source ego-box boundary and actor-overlap audits are clear. Source native road polygons cover every sample and connect the occupied start/goal; no lane-change permission, resizing or actor cropping is used.",
+  "rule_resolutions": [
+    {
+      "kind": "regulatory_element",
+      "source_id": 2169,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2169 gives2141 right_of_way and2161 yield. Ego follows1754/1761/2141/2166 southeast; its geometric overlap with2161 at42-51 has heading error at least1.694rad to that minor-arm connector. It does not enter along the yielding2161 approach. Every moving actor has empty protected-lane occupancy in this window. This is not a waiver by sign distance."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2175,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2175 assigns1761 right_of_way and2145 yield, with reference line2126 for that other movement. Ego occupies1761 at13-21 while travelling along the main road; it does not turn from2145. No moving actor has protected-lane occupancy, and cyclist190 approaches from the minor arm rather than a protected oncoming lane."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2176,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2176 assigns2141 right_of_way relative to yielding2153 and reference1708/sign1701. Ego occupies2141 at22-26, aligned within0.007rad of its native centreline. It does not approach on2153; no moving protected actor requires a main-road yield decision."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2177,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2177 gives2141 right_of_way relative to2167. Ego traverses the major-road through lane; spatial membership in overlapping connector2167 is not a source turn from the minor arm. Cyclist190 is never on protected2145/2141/1715 during the window. The tested task is avoidance of a cyclist emerging into the through corridor, not rule-based precedence selection."
+    },
+    {
+      "kind": "regulatory_element",
+      "source_id": 2179,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2179 places1761 on the right_of_way side and2158 on the yield side, with stop1694/ref1698 for2158. Ego is on the southeast through movement, not2158; the source trajectory does not approach that side-arm stop. The stop is not an ego obligation for this task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1691,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1691/de357 is on the southwest side access. The provider overlay and straight southeast source route show no entry into that arm; no dead-end navigation task is tested."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1692,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1692/de262 belongs to the southwest side access alongside1691/1693. Ego remains on the main-road through route; no restricted side-arm access or vehicle-weight choice is required."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1693,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1693/de283 is beside the southwest access with1691/1692. Ego never parks or stops for an access task; its main-road crossing encounter does not require interpreting that roadside restriction."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1694,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2179 places1761 on the right_of_way side and2158 on the yield side, with stop1694/ref1698 for2158. Ego is on the southeast through movement, not2158; the source trajectory does not approach that side-arm stop. The stop is not an ego obligation for this task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1695,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1695/de314 marks parking on the northeast side access. Parked vehicle6 remains on expert replay outside the through route; neither ego parking nor entry to that access is part of the bounded task."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1696,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1696/de301 is on the through-road roadside. The source role inventory places ego on the right_of_way main-road movement, with no moving actor on protected oncoming lanes. No sign-aware precedence choice or ability of SMART to read this sign is claimed."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1700,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1700/de301 is on the through-road upstream roadside. The directed source route is the same southeast main-road movement throughout; cyclist190 emerges from the minor arm, and no priority-token compliance claim is made."
+    },
+    {
+      "kind": "sign",
+      "source_id": 1701,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Relation2169 gives2141 right_of_way and2161 yield. Ego follows1754/1761/2141/2166 southeast; its geometric overlap with2161 at42-51 has heading error at least1.694rad to that minor-arm connector. It does not enter along the yielding2161 approach. Every moving actor has empty protected-lane occupancy in this window. This is not a waiver by sign distance."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1708,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source1708 is the reference line of2169/2176, applying to the yielding2161/2153 approaches. Ego follows the aligned major-road2141/2166 movement; crossing geometric line proximity does not make this its yielding approach. No lateral lane change is required."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2125,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source2125 is the reference line of2174, yielding2140 to2146. Ego source route uses southeast2141/1761 and successors, not the opposite protected/yielding pair2140/2146. It is not an ego approach stop or yield line."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 2126,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source2126 is the reference line of2175, yielding2145 to1761. Ego occupies1761 in the right_of_way direction and continues straight; it does not enter from yielding2145."
+    },
+    {
+      "kind": "omitted_marking",
+      "source_id": 1559,
+      "resolution": "source_supported_irrelevance",
+      "source_steps": [
+        10,
+        30,
+        39,
+        50,
+        75
+      ],
+      "source_evidence": "Source wall1559 belongs to building multipolygon1711 and the adjoining walkway2173. Provider imagery places it beside the southwest building/access. The complete source footprint boundary audit is clear and the straight task does not enter the building or walk surface."
+    }
+  ],
+  "parked_overlap_resolutions": [],
+  "source_directed_membership_review_sha256": "b1b4359fa18acaf8ee6da0c33f0ac28326d52a6412e45ec46471240040cc4f5f",
+  "reviewed_task_maneuver": "straight"
+}
