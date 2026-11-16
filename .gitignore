@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+archive/
+pilot/
+artifacts/
+runs/
+resources
+configs/local.toml
+build/
+dist/
