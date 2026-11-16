@@ -1,0 +1,8 @@
+# Copy to local.toml or set GEOTRANSFER_CONFIG. Relative paths use the project root.
+[paths]
+source = "../data/levelxdata/inD-dataset-v1.1"
+bench = "../behavior-bench"
+artifacts = "artifacts"
+runs = "runs"
+cache = "/tmp/geotransfer-cache"
+weights = "../behavior-bench/weights/SMART_epoch_030.pt"

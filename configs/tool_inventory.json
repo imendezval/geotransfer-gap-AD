@@ -1,0 +1,462 @@
+[
+  {
+    "old": "run_pilot_eval.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/run_pilot_eval.py"
+  },
+  {
+    "old": "probe_counterfactual.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_counterfactual.py"
+  },
+  {
+    "old": "prefilter_semantic_candidates.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/prefilter_semantic_candidates.py"
+  },
+  {
+    "old": "probe_source_route_sequence.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_source_route_sequence.py"
+  },
+  {
+    "old": "background_route_intent.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/runtime/background_route_intent.py"
+  },
+  {
+    "old": "render_overlap_reference.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/visualization/render_overlap_reference.py"
+  },
+  {
+    "old": "freeze_smart_protocol.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/freeze_smart_protocol.py"
+  },
+  {
+    "old": "probe_expert_velocity_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "audit_map_semantics.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_map_semantics.py"
+  },
+  {
+    "old": "render_rule_review.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/visualization/render_rule_review.py"
+  },
+  {
+    "old": "expert_velocity_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "run_smart_manifest.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/run_smart_manifest.py"
+  },
+  {
+    "old": "catalog_cyclist_encounters.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/catalog_cyclist_encounters.py"
+  },
+  {
+    "old": "register_background.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/visualization/register_background.py"
+  },
+  {
+    "old": "probe_source_speed_traffic.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "source_branch_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "build_smart_pilot_manifest.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/build_smart_pilot_manifest.py"
+  },
+  {
+    "old": "coverage_reference_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "validate_replay.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/validate_replay.py"
+  },
+  {
+    "old": "find_turn_candidates.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/find_turn_candidates.py"
+  },
+  {
+    "old": "probe_lanelet_orientation.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_lanelet_orientation.py"
+  },
+  {
+    "old": "probe_startup_departure.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_startup_departure.py"
+  },
+  {
+    "old": "scene_contract.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/scene_contract.py"
+  },
+  {
+    "old": "screen_vru_candidates.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/screen_vru_candidates.py"
+  },
+  {
+    "old": "probe_lead_response.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_lead_response.py"
+  },
+  {
+    "old": "probe_repeat_reset.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_repeat_reset.py"
+  },
+  {
+    "old": "audit_task_interactions.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_task_interactions.py"
+  },
+  {
+    "old": "preflight_source_map.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/preflight_source_map.py"
+  },
+  {
+    "old": "probe_queue_pair_identity.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_queue_pair_identity.py"
+  },
+  {
+    "old": "late_spawn_runtime.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/runtime/late_spawn_runtime.py"
+  },
+  {
+    "old": "report_step2_flow.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/report_step2_flow.py"
+  },
+  {
+    "old": "audit_directed_rule_scope.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_directed_rule_scope.py"
+  },
+  {
+    "old": "validate_parked.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/validate_parked.py"
+  },
+  {
+    "old": "audit_crop.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_crop.py"
+  },
+  {
+    "old": "source_reference_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "probe_traffic_route.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_traffic_route.py"
+  },
+  {
+    "old": "select_third_family.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/select_third_family.py"
+  },
+  {
+    "old": "faithful_smart.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/faithful_smart.py"
+  },
+  {
+    "old": "audit_physical_source.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_physical_source.py"
+  },
+  {
+    "old": "screen_ind_windows.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/screen_ind_windows.py"
+  },
+  {
+    "old": "admit_scene.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/admit_scene.py"
+  },
+  {
+    "old": "probe_map_feature_visibility.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_map_feature_visibility.py"
+  },
+  {
+    "old": "faithful_map.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/faithful_map.py"
+  },
+  {
+    "old": "audit_interaction_fidelity.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_interaction_fidelity.py"
+  },
+  {
+    "old": "full_gate_prefiltered.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/full_gate_prefiltered.py"
+  },
+  {
+    "old": "audit_scene.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_scene.py"
+  },
+  {
+    "old": "admit_smart_scene.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/admit_smart_scene.py"
+  },
+  {
+    "old": "source_guided_traffic.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "probe_hybrid_protocol_parity.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_hybrid_protocol_parity.py"
+  },
+  {
+    "old": "audit_following_scope.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_following_scope.py"
+  },
+  {
+    "old": "run_oriented_candidate_queue.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/run_oriented_candidate_queue.py"
+  },
+  {
+    "old": "probe_task_rule_scope.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_task_rule_scope.py"
+  },
+  {
+    "old": "validate_spawn.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/validate_spawn.py"
+  },
+  {
+    "old": "pilot_ind.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/conversion/pilot_ind.py"
+  },
+  {
+    "old": "probe_source_guided_idm.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "audit_rule_applicability.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_rule_applicability.py"
+  },
+  {
+    "old": "find_vru_candidates.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/find_vru_candidates.py"
+  },
+  {
+    "old": "probe_faithful_smart_closed_loop.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/probe_faithful_smart_closed_loop.py"
+  },
+  {
+    "old": "probe_source_speed_response.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "probe_source_restart_screen.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_source_restart_screen.py"
+  },
+  {
+    "old": "probe_us_reference_parity.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_us_reference_parity.py"
+  },
+  {
+    "old": "probe_hybrid_traffic.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_hybrid_traffic.py"
+  },
+  {
+    "old": "audit_task_rule_scope.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_task_rule_scope.py"
+  },
+  {
+    "old": "probe_faithful_map.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_faithful_map.py"
+  },
+  {
+    "old": "probe_source_route_traffic.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "probe_directed_rule_scope.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_directed_rule_scope.py"
+  },
+  {
+    "old": "audit_final_corpus_targets.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/audit_final_corpus_targets.py"
+  },
+  {
+    "old": "catalog_ind_windows.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/catalog_ind_windows.py"
+  },
+  {
+    "old": "probe_source_speed_us.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "expand_source_phase_queue.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/expand_source_phase_queue.py"
+  },
+  {
+    "old": "probe_source_reentry.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_source_reentry.py"
+  },
+  {
+    "old": "selective_reference_runtime.py",
+    "disposition": "archive",
+    "reason": "Superseded runtime/traffic experiment; exact implementation retained in legacy-v1 archive."
+  },
+  {
+    "old": "source_lane_changes.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/source_lane_changes.py"
+  },
+  {
+    "old": "probe_source_lane_changes.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_source_lane_changes.py"
+  },
+  {
+    "old": "probe_background_route_policy.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_background_route_policy.py"
+  },
+  {
+    "old": "audit_parked_contacts.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_parked_contacts.py"
+  },
+  {
+    "old": "screen_source_restarts.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/screen_source_restarts.py"
+  },
+  {
+    "old": "probe_parked_interaction.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_parked_interaction.py"
+  },
+  {
+    "old": "probe_smart_admission_regressions.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_smart_admission_regressions.py"
+  },
+  {
+    "old": "probe_smart_map_transfer.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/planners/probe_smart_map_transfer.py"
+  },
+  {
+    "old": "hybrid_traffic.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/runtime/hybrid_traffic.py"
+  },
+  {
+    "old": "select_oriented_candidates.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/select_oriented_candidates.py"
+  },
+  {
+    "old": "build_step2_corpus.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/build_step2_corpus.py"
+  },
+  {
+    "old": "audit_goal_reporting.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/audit_goal_reporting.py"
+  },
+  {
+    "old": "screen_source_tasks.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/screen_source_tasks.py"
+  },
+  {
+    "old": "audit_source_route_sequence.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/maps/audit_source_route_sequence.py"
+  },
+  {
+    "old": "audit_corpus_access.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/audit_corpus_access.py"
+  },
+  {
+    "old": "scan_stationary.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/scan_stationary.py"
+  },
+  {
+    "old": "screen_source_interactions.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/corpus/screen_source_interactions.py"
+  },
+  {
+    "old": "probe_eval_replay.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/probe_eval_replay.py"
+  },
+  {
+    "old": "probe_following_scope.py",
+    "disposition": "regression",
+    "replacement": "tests/integration/probe_following_scope.py"
+  },
+  {
+    "old": "trace_eval_lifecycle.py",
+    "disposition": "package",
+    "replacement": "src/geotransfer_gap/validation/trace_eval_lifecycle.py"
+  }
+]
