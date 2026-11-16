@@ -1,0 +1,692 @@
+{
+  "schema_version": 2,
+  "scenes": [
+    {
+      "name": "r00_e321_f21017",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r00_e321_f21017"
+      },
+      "recording": 0,
+      "location": 4,
+      "ego_track_id": 321,
+      "ego_binary_index": 0,
+      "first_frame": 21017,
+      "last_frame": 21242,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "lead_vehicle_constrained_following"
+      ],
+      "interaction_actor_ids": [
+        317
+      ],
+      "moving_track_ids": [
+        315,
+        317,
+        318,
+        319,
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331,
+        332
+      ],
+      "interaction_type_families": [
+        "longitudinal_following"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "363d6a641dbd1b66d1ed5f5589231f50f1b419e797774426f8c49e8a1761a788",
+      "binary_sha256": "6ced7859cde0d5cba698ab8c8d6d0599c6838fa7d192deeddf70bed6de959e8d",
+      "source_tracks_sha256": "d222312f2c87cc492624c09109af0c6688871fa111939c45eba3ea089ccaf32c",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "9cb5e888fba2e0c9359dcd61eb6fc36e54c83bed4ee1c9085007f326b0527f38"
+    },
+    {
+      "name": "r00_e366_f23240",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r00_e366_f23240"
+      },
+      "recording": 0,
+      "location": 4,
+      "ego_track_id": 366,
+      "ego_binary_index": 0,
+      "first_frame": 23240,
+      "last_frame": 23465,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_approach"
+      ],
+      "interaction_actor_ids": [
+        357
+      ],
+      "moving_track_ids": [
+        336,
+        338,
+        351,
+        357,
+        365,
+        366,
+        368,
+        369,
+        370,
+        371,
+        372,
+        373
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "bbbd9a67ff24fa3aa5c4772bc47d23acf8254e280da012d816b8de049b2ab93f",
+      "binary_sha256": "ce93696e6d662a533a6383ec318bd1a7dfb1518f0615e58e98dde668a6160808",
+      "source_tracks_sha256": "d222312f2c87cc492624c09109af0c6688871fa111939c45eba3ea089ccaf32c",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "9cb5e888fba2e0c9359dcd61eb6fc36e54c83bed4ee1c9085007f326b0527f38"
+    },
+    {
+      "name": "r01_e252_f16915",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r01_e252_f16915"
+      },
+      "recording": 1,
+      "location": 4,
+      "ego_track_id": 252,
+      "ego_binary_index": 0,
+      "first_frame": 16915,
+      "last_frame": 17140,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_approach"
+      ],
+      "interaction_actor_ids": [
+        241
+      ],
+      "moving_track_ids": [
+        219,
+        241,
+        249,
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "1f82d20e0e6ad399c6d4ce0822632fbf8e3a91e03f1637c97537d81a1b8f0202",
+      "binary_sha256": "56fa2245b6aa2e216f329392c6ca9bb2627c47def997ee794a32f1001857fab9",
+      "source_tracks_sha256": "3fd60a88de951317a77fd7db2327d9527548eca957d2e0214bb2df3e3b49f0e3",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "f0f2cbfcbafe1172de428183fb7cdc7d1e827e829f63f1aae0cb767c936a98b3"
+    },
+    {
+      "name": "r01_e280_f18833",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r01_e280_f18833"
+      },
+      "recording": 1,
+      "location": 4,
+      "ego_track_id": 280,
+      "ego_binary_index": 0,
+      "first_frame": 18833,
+      "last_frame": 19058,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "cyclist_crossing_after_ego"
+      ],
+      "interaction_actor_ids": [
+        279
+      ],
+      "moving_track_ids": [
+        268,
+        279,
+        280,
+        281,
+        282,
+        283,
+        284
+      ],
+      "interaction_type_families": [
+        "cyclist_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "8c5584310266dc7fba6fde3fe62d4212e2f9db3597ffaf0f75684c0d3c459325",
+      "binary_sha256": "66212b7958ccd6feda00a57ffe4d93dab0ce8f3b772b7b1bc1968ce27fbb3790",
+      "source_tracks_sha256": "3fd60a88de951317a77fd7db2327d9527548eca957d2e0214bb2df3e3b49f0e3",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "f0f2cbfcbafe1172de428183fb7cdc7d1e827e829f63f1aae0cb767c936a98b3"
+    },
+    {
+      "name": "r01_e301_f20017",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r01_e301_f20017"
+      },
+      "recording": 1,
+      "location": 4,
+      "ego_track_id": 301,
+      "ego_binary_index": 0,
+      "first_frame": 20017,
+      "last_frame": 20242,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "lead_vehicle_stop_and_restart"
+      ],
+      "interaction_actor_ids": [
+        300
+      ],
+      "moving_track_ids": [
+        299,
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306
+      ],
+      "interaction_type_families": [
+        "longitudinal_following"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "73275e7e4a5bab74d92b4804b103fbc40aee0e5947ca6f7e42fbce9aef0e8ffa",
+      "binary_sha256": "da11977fb8c475590f7c17b1097b151641d46645e84683f34944924ace16c70e",
+      "source_tracks_sha256": "3fd60a88de951317a77fd7db2327d9527548eca957d2e0214bb2df3e3b49f0e3",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "f0f2cbfcbafe1172de428183fb7cdc7d1e827e829f63f1aae0cb767c936a98b3"
+    },
+    {
+      "name": "r02_e206_f11598",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r02_e206_f11598"
+      },
+      "recording": 2,
+      "location": 4,
+      "ego_track_id": 206,
+      "ego_binary_index": 0,
+      "first_frame": 11598,
+      "last_frame": 11823,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_ahead"
+      ],
+      "interaction_actor_ids": [
+        209
+      ],
+      "moving_track_ids": [
+        199,
+        201,
+        206,
+        207,
+        209,
+        213,
+        214,
+        215,
+        216,
+        217,
+        218
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "d730ba2aebc73e5f1bea8ba1b50af223a5f9d9160609e335ea25566197e5e07b",
+      "binary_sha256": "db72d3b1e5caf88418dc2f606d0547f0346fc34323db514e0dc2e7df572d1d4a",
+      "source_tracks_sha256": "596c6e3d3f961281f0437f82389dcebb8300f60ebbaf6e287da5ba8b395522bf",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "1ac1cebeb92933d043621e9547ac3c778cab354209eb829425460bb229539030"
+    },
+    {
+      "name": "r02_e347_f18595",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r02_e347_f18595"
+      },
+      "recording": 2,
+      "location": 4,
+      "ego_track_id": 347,
+      "ego_binary_index": 0,
+      "first_frame": 18595,
+      "last_frame": 18820,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_ahead"
+      ],
+      "interaction_actor_ids": [
+        330
+      ],
+      "moving_track_ids": [
+        279,
+        330,
+        342,
+        343,
+        344,
+        345,
+        346,
+        347,
+        348,
+        349,
+        350
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "ea47cd8d7f9383a3cb5bc696621237fe75f236fab90d4906248a3cc11e881649",
+      "binary_sha256": "102f79b3d2e2786c0239b35c9e5ae935ec281ec30afa2a18751407d6b0833322",
+      "source_tracks_sha256": "596c6e3d3f961281f0437f82389dcebb8300f60ebbaf6e287da5ba8b395522bf",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "1ac1cebeb92933d043621e9547ac3c778cab354209eb829425460bb229539030"
+    },
+    {
+      "name": "r06_e281_f20211",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r06_e281_f20211"
+      },
+      "recording": 6,
+      "location": 4,
+      "ego_track_id": 281,
+      "ego_binary_index": 0,
+      "first_frame": 20211,
+      "last_frame": 20436,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_approach"
+      ],
+      "interaction_actor_ids": [
+        272
+      ],
+      "moving_track_ids": [
+        270,
+        272,
+        281,
+        282,
+        283,
+        284
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "heldout_location_4",
+      "admission_sha256": "ae8433fd218fbd046ca8df378d143e4177e77f67dfc9953d9b3c2f0bf01741ed",
+      "binary_sha256": "02db1e9161c21cbb1f9327056c970693046fbcb7bbbb743d82383afe2705e891",
+      "source_tracks_sha256": "bc9be2bfd2583cfa8ae90b19810d523da8dbe37e403c9a3dc8feab5ce993b493",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "eb7d0c050f37a21b1f7b0749a2eb0e24e693d5e5727a10000c0c7fa246b987ec"
+    },
+    {
+      "name": "r07_e200_f25439",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r07_e200_f25439"
+      },
+      "recording": 7,
+      "location": 1,
+      "ego_track_id": 200,
+      "ego_binary_index": 0,
+      "first_frame": 25439,
+      "last_frame": 25664,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "cyclist_crossing_ahead"
+      ],
+      "interaction_actor_ids": [
+        190
+      ],
+      "moving_track_ids": [
+        190,
+        198,
+        199,
+        200,
+        201,
+        202
+      ],
+      "interaction_type_families": [
+        "cyclist_crossing"
+      ],
+      "split": "adaptation_recording",
+      "admission_sha256": "e7a23b406c7c57cd253c7c848f72e6062f3c0d5cfaf0618a5095821422f7dcd5",
+      "binary_sha256": "8ca81c4ae57376fcf92a8e5ab57c424ea81b1e2f5425c1a6343ee55b96500741",
+      "source_tracks_sha256": "9ee416b0a52769f6eedf7309c1d04e0c8b08ac0ee62c15b920597a30524e84b2",
+      "source_map_sha256": "c21ba3273e32efeb26afa3db67db9a6053707bb2738bf45190b4988dcf8dbf3c",
+      "source_background_sha256": "d84f63618f765d85be56cf5143312c3c851db184f0b7161d1325d1e60aefbea5"
+    },
+    {
+      "name": "r09_e136_f11030",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r09_e136_f11030"
+      },
+      "recording": 9,
+      "location": 1,
+      "ego_track_id": 136,
+      "ego_binary_index": 0,
+      "first_frame": 11030,
+      "last_frame": 11255,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "cyclist_crossing_ahead"
+      ],
+      "interaction_actor_ids": [
+        133
+      ],
+      "moving_track_ids": [
+        126,
+        128,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138
+      ],
+      "interaction_type_families": [
+        "cyclist_crossing"
+      ],
+      "split": "adaptation_recording",
+      "admission_sha256": "8214e9ffca2925179a2a095bc762d8ce4f509b6e1ebb151b095dcf168305ce41",
+      "binary_sha256": "bedf9dcdf6b9fed339e27e97082bc4ef7a69468ce72f49f701c3a40c2cc515ee",
+      "source_tracks_sha256": "8dc16e187b65428719247876de0115cd30e94db90a7ac3b3c61e4f3959d0ac85",
+      "source_map_sha256": "c21ba3273e32efeb26afa3db67db9a6053707bb2738bf45190b4988dcf8dbf3c",
+      "source_background_sha256": "a967092f5943814a1a4ca67baac20915d7da831c369bf087454ef3ec7a71f26d"
+    },
+    {
+      "name": "r12_e151_f12041",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r12_e151_f12041"
+      },
+      "recording": 12,
+      "location": 1,
+      "ego_track_id": 151,
+      "ego_binary_index": 0,
+      "first_frame": 12041,
+      "last_frame": 12266,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "lead_vehicle_stop_and_restart"
+      ],
+      "interaction_actor_ids": [
+        141
+      ],
+      "moving_track_ids": [
+        121,
+        134,
+        135,
+        137,
+        139,
+        141,
+        143,
+        144,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151
+      ],
+      "interaction_type_families": [
+        "longitudinal_following"
+      ],
+      "split": "adaptation_recording",
+      "admission_sha256": "edc15631ce60cbed4ab74a07bbac1b659455724213955f9afdc4df84b4ae4bd7",
+      "binary_sha256": "a96e81746f2af80f8786dd1ccf44518259c79fbaba892205e7c284a3329d842e",
+      "source_tracks_sha256": "ae1a76863bc3ac0be0f4d0014064debbf5909573d7d5c2205b13010935924b3f",
+      "source_map_sha256": "e6cb0b8218bebbe5953cb1338afd96c63b18fa15f5010e44645623d39d5ce4fe",
+      "source_background_sha256": "2ee670013bfc32e578e7067600ff0c93a5973f36b5df4620bf264425c5d5450e"
+    },
+    {
+      "name": "r16_e35_f1521",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r16_e35_f1521"
+      },
+      "recording": 16,
+      "location": 1,
+      "ego_track_id": 35,
+      "ego_binary_index": 0,
+      "first_frame": 1521,
+      "last_frame": 1746,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "lead_vehicle_stop_and_restart"
+      ],
+      "interaction_actor_ids": [
+        33
+      ],
+      "moving_track_ids": [
+        4,
+        13,
+        14,
+        16,
+        17,
+        18,
+        20,
+        21,
+        27,
+        29,
+        30,
+        32,
+        33,
+        34,
+        35,
+        37,
+        38,
+        39,
+        40,
+        41
+      ],
+      "interaction_type_families": [
+        "longitudinal_following"
+      ],
+      "split": "adaptation_recording",
+      "admission_sha256": "c47927e16938783a341a756e9183b90a21bb83303b6cd163db3484d260f16845",
+      "binary_sha256": "b0e66005dd27f2c02edc741d1b20274d0f66e8e5ae64cbcc496f76035c1dea1b",
+      "source_tracks_sha256": "4a58dbb5e242166e58f7558708b19a7eb49458d8191ca1c087d9156070907534",
+      "source_map_sha256": "e6cb0b8218bebbe5953cb1338afd96c63b18fa15f5010e44645623d39d5ce4fe",
+      "source_background_sha256": "45cc76206be662b6dc58e333ea7983215b48a0f03ce9ebd022d5afbee7abdbf3"
+    },
+    {
+      "name": "r32_e391_f21356",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r32_e391_f21356"
+      },
+      "recording": 32,
+      "location": 3,
+      "ego_track_id": 391,
+      "ego_binary_index": 0,
+      "first_frame": 21356,
+      "last_frame": 21581,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": true,
+      "interaction_types": [
+        "pedestrian_crossing_ahead"
+      ],
+      "interaction_actor_ids": [
+        379
+      ],
+      "moving_track_ids": [
+        379,
+        387,
+        390,
+        391,
+        392,
+        393,
+        394,
+        395,
+        396
+      ],
+      "interaction_type_families": [
+        "pedestrian_crossing"
+      ],
+      "split": "adaptation_recording",
+      "admission_sha256": "ec290ad63c849e74ed538475b2f64e54393bd2bf1a89a2d045d976d57f9c190e",
+      "binary_sha256": "ab437333ae49fbe9f72a6f6ff4b1e84d89f810fc6068930a258ae2cbff8e82f7",
+      "source_tracks_sha256": "df3c829821e99734dc03c252dcb2692661344a1a910bdcc194be7d459a9b33ad",
+      "source_map_sha256": "9e247e704d6024832a3e401d6774071e97bf0ac002a4c1fe95bc9833bb5c792d",
+      "source_background_sha256": "37db571a456ab6de9d72516e0a77c74bad89519fa362a7ef1dd20cffaa566151"
+    },
+    {
+      "name": "r00_e39_f3000",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r00_e39_f3000"
+      },
+      "recording": 0,
+      "location": 4,
+      "ego_track_id": 39,
+      "ego_binary_index": 0,
+      "first_frame": 3000,
+      "last_frame": 3225,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": false,
+      "interaction_types": [
+        "uncontested_turn_with_adjacent_parallel_traffic"
+      ],
+      "interaction_actor_ids": [],
+      "moving_track_ids": [
+        30,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45
+      ],
+      "interaction_type_families": [],
+      "split": "heldout_location_4",
+      "admission_sha256": "1dbe7fcfb0e2f86903f1698aeaf8a363ed9600c2c51ee42f92913c4dc991d23c",
+      "binary_sha256": "55e0e8d2cbbeb9684cb435c7dd7da116e1886737d0c4e437f03d1b7ed8521edf",
+      "source_tracks_sha256": "d222312f2c87cc492624c09109af0c6688871fa111939c45eba3ea089ccaf32c",
+      "source_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973",
+      "source_background_sha256": "9cb5e888fba2e0c9359dcd61eb6fc36e54c83bed4ee1c9085007f326b0527f38"
+    },
+    {
+      "name": "r09_e196_f16232",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r09_e196_f16232"
+      },
+      "recording": 9,
+      "location": 1,
+      "ego_track_id": 196,
+      "ego_binary_index": 0,
+      "first_frame": 16232,
+      "last_frame": 16457,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": false,
+      "interaction_types": [
+        "uncontested_turn_with_nearby_vrus"
+      ],
+      "interaction_actor_ids": [],
+      "moving_track_ids": [
+        186,
+        187,
+        189,
+        191,
+        192,
+        193,
+        194,
+        195,
+        196,
+        197
+      ],
+      "interaction_type_families": [],
+      "split": "adaptation_recording",
+      "admission_sha256": "1ee935fb6c960f8a9c24390fd04e45291b0d3895c497b09f9bb7058f1ad1d7a8",
+      "binary_sha256": "b0dd42439e1d4ca44eea2e30325a29bc05e51ddb77066dbad9eea6fa3c0b46d4",
+      "source_tracks_sha256": "8dc16e187b65428719247876de0115cd30e94db90a7ac3b3c61e4f3959d0ac85",
+      "source_map_sha256": "c21ba3273e32efeb26afa3db67db9a6053707bb2738bf45190b4988dcf8dbf3c",
+      "source_background_sha256": "a967092f5943814a1a4ca67baac20915d7da831c369bf087454ef3ec7a71f26d"
+    },
+    {
+      "name": "r15_e332_f25626",
+      "root": {
+        "root": "artifacts",
+        "path": "oriented_v3/r15_e332_f25626"
+      },
+      "recording": 15,
+      "location": 1,
+      "ego_track_id": 332,
+      "ego_binary_index": 0,
+      "first_frame": 25626,
+      "last_frame": 25851,
+      "planner_protocol": "smart_all_actors_observed_history_dense_map_v4",
+      "traffic_protocol": "hybrid_startup",
+      "interaction_opportunity": false,
+      "interaction_types": [
+        "uncontested_goal_approach_ending_before_queue"
+      ],
+      "interaction_actor_ids": [],
+      "moving_track_ids": [
+        302,
+        312,
+        324,
+        328,
+        329,
+        330,
+        331,
+        332,
+        333,
+        334
+      ],
+      "interaction_type_families": [],
+      "split": "validation_recording",
+      "admission_sha256": "e1b9251a1a1848a8bcb486e1ec0e45e6082f0437101839ce7592d855b8c62488",
+      "binary_sha256": "84258ae1d1522df278aa6fdb737a43c5c4e5a8bc644b3026b8a7161663137be0",
+      "source_tracks_sha256": "ff9f7500b4f4be8816ead4a215ec6a10d9a7b07a303ad47fb58e6a92f32f10a5",
+      "source_map_sha256": "e6cb0b8218bebbe5953cb1338afd96c63b18fa15f5010e44645623d39d5ce4fe",
+      "source_background_sha256": "f80a1b809644803feeb22b54c300e7b8811bfab9ae9799c2bcddedd441036847"
+    }
+  ]
+}

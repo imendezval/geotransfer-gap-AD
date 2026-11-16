@@ -66,3 +66,7 @@ corpus scene is evaluated in a fresh process, preserving state isolation.
 
 The external PufferLib import may create its standard ignored `resources` symlink.
 It is a runtime asset alias, rather than an additional code entrypoint.
+
+The configured `cache` root stores verified archived reference-code checkouts.
+Native compilation and short scene-loader aliases retain their content-keyed
+`/tmp` locations used by the validated runtime.

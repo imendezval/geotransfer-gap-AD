@@ -246,7 +246,7 @@ def legacy_checkout():
     """Restore verified reference code in /tmp, with external dependencies linked."""
     import hashlib
 
-    base = Path("/tmp") / (
+    base = settings().cache / (
         "geotransfer-reference-"
         + sha256(settings().project / "archive/legacy-v1.sha256.json")[:12]
     )

@@ -81,3 +81,9 @@ The inventory maps remaining useful tools such as stationary scans, crop/contact
 checks, goal reporting, turn/VRU searches, lead-response diagnostics and overlap
 rendering to `check tool OLD_STEM ...`. Rejected source-speed/route experiments
 are historical archive material rather than production switches.
+
+`configs/scenes.json` versions the 16 source-window conversion recipes and expected
+binary identities. `configs/reviews/` preserves their existing review records.
+`configs/current_manifest.json` is the versioned portable index for this frozen
+baseline; regenerated admissions require a freshly built manifest. Converted data,
+plots and execution traces remain local ignored artifacts.
