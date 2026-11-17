@@ -1,0 +1,258 @@
+from dataclasses import FrozenInstanceError
+from itertools import product
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from geotransfer_gap import execution
+
+
+CONTROLLERS = ("expert", "idm", "ppo", "smart")
+
+
+def parse_protocol(*options):
+    args = execution.build_parser().parse_args(["--scene", "fixture", *options])
+    return execution.normalize_protocol(args)
+
+
+@pytest.mark.parametrize(
+    "ego,traffic,startup",
+    [
+        (ego, traffic, startup)
+        for ego, traffic in product(CONTROLLERS, repeat=2)
+        for startup in ("immediate", "source_hold")
+        if not (traffic == "expert" and startup == "source_hold")
+    ],
+)
+def test_all_28_new_controller_protocols_are_normalized(ego, traffic, startup):
+    protocol = parse_protocol(
+        "--ego",
+        ego,
+        "--traffic",
+        traffic,
+        "--traffic-startup",
+        startup,
+    )
+
+    assert isinstance(protocol, execution.RunProtocol)
+    assert protocol.selection == "matrix"
+    assert (protocol.ego, protocol.traffic, protocol.traffic_startup) == (
+        ego,
+        traffic,
+        startup,
+    )
+    with pytest.raises(FrozenInstanceError):
+        protocol.ego = "expert"
+
+
+def test_new_pair_startup_defaults_to_immediate():
+    protocol = parse_protocol("--ego", "smart", "--traffic", "idm")
+    assert protocol.traffic_startup == "immediate"
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ("--planner", "smart", "--planner", "expert"),
+        ("--ego", "smart", "--ego", "ppo"),
+        ("--traffic", "idm", "--traffic", "ppo"),
+        ("--traffic-startup", "immediate", "--traffic-startup", "source_hold"),
+    ],
+)
+def test_conflicting_repeated_selectors_are_rejected(options):
+    with pytest.raises(SystemExit):
+        execution.build_parser().parse_args(["--scene", "fixture", *options])
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ("--ego", "ppo"),
+        ("--traffic-startup", "source_hold"),
+        ("--ego", "smart", "--traffic", "hybrid_startup"),
+        ("--ego", "smart", "--traffic", "idm", "--planner", "smart"),
+        ("--ego", "expert", "--traffic", "idm", "--planner", "expert"),
+        ("--ego", "smart", "--traffic", "expert", "--traffic-startup", "source_hold"),
+        ("--planner", "smart", "--traffic", "expert"),
+        ("--planner", "smart", "--traffic", "ppo"),
+        ("--planner", "smart", "--traffic", "smart"),
+        ("--planner", "expert", "--traffic", "idm"),
+        ("--planner", "expert", "--traffic", "hybrid_startup"),
+        ("--planner", "smart", "--traffic-startup", "immediate"),
+        ("--planner", "bb"),
+        ("--planner", "smart", "--bb-args", "--planner.type", "pdm"),
+        ("--planner", "bb", "--diagnostic", "--traffic", "idm"),
+        ("--preset", "smart_hybrid_baseline", "--traffic", "idm"),
+        ("--preset", "smart_hybrid_baseline", "--planner", "expert"),
+        ("--preset", "smart_hybrid_baseline", "--ego", "smart", "--traffic", "idm"),
+    ],
+)
+def test_contradictory_or_unsupported_selection_is_rejected(options):
+    with pytest.raises(ValueError):
+        parse_protocol(*options)
+
+
+def test_legacy_defaults_and_hybrid_alias_keep_legacy_meaning():
+    default = parse_protocol()
+    assert default.selection == "legacy"
+    assert default.legacy_planner == "smart"
+    assert (default.ego, default.traffic, default.traffic_startup) == (
+        "smart",
+        "idm",
+        "source_hold",
+    )
+    assert default.legacy_traffic == "hybrid_startup"
+
+    explicit_alias = parse_protocol("--planner", "smart", "--traffic", "hybrid_startup")
+    assert explicit_alias.legacy_planner == "smart"
+    assert explicit_alias.legacy_traffic == "hybrid_startup"
+    assert (explicit_alias.traffic, explicit_alias.traffic_startup) == (
+        "idm",
+        "source_hold",
+    )
+
+
+def test_legacy_smart_idm_is_immediate_and_expert_remains_full_replay():
+    smart_idm = parse_protocol("--planner", "smart", "--traffic", "idm")
+    assert smart_idm.legacy_planner == "smart"
+    assert (smart_idm.traffic, smart_idm.traffic_startup) == ("idm", "immediate")
+
+    expert = parse_protocol("--planner", "expert")
+    assert expert.legacy_planner == "expert"
+    assert (expert.ego, expert.traffic) == ("expert", "expert")
+
+
+def test_named_baseline_is_exact_legacy_alias():
+    preset = parse_protocol("--preset", "smart_hybrid_baseline")
+    legacy = parse_protocol("--planner", "smart", "--traffic", "hybrid_startup")
+    assert preset.selection == "legacy"
+    assert preset.preset == "smart_hybrid_baseline"
+    assert (
+        preset.legacy_planner,
+        preset.ego,
+        preset.traffic,
+        preset.traffic_startup,
+        preset.legacy_traffic,
+    ) == (
+        legacy.legacy_planner,
+        legacy.ego,
+        legacy.traffic,
+        legacy.traffic_startup,
+        legacy.legacy_traffic,
+    )
+
+
+def test_bb_bridge_preserves_remainder_arguments():
+    protocol = parse_protocol(
+        "--planner",
+        "bb",
+        "--diagnostic",
+        "--bb-args",
+        "--planner.type",
+        "pdm",
+        "--traffic.type",
+        "expert",
+    )
+    assert protocol.selection == "bb"
+    assert protocol.legacy_planner == "bb"
+    assert protocol.diagnostic is True
+    assert protocol.bb_args == ("--planner.type", "pdm", "--traffic.type", "expert")
+
+
+def test_bb_bridge_main_passes_remainder_to_existing_runner(monkeypatch, tmp_path):
+    scene = tmp_path / "scene"
+    scene.mkdir()
+    destination = tmp_path / "run"
+    calls = []
+
+    def create_run(_):
+        destination.mkdir()
+        return destination
+
+    monkeypatch.setattr(execution, "scene_root", lambda _: scene)
+    monkeypatch.setattr(execution, "new_run", create_run)
+    monkeypatch.setattr(execution, "settings", lambda: SimpleNamespace(bench=tmp_path))
+    monkeypatch.setattr(execution, "tool_path", lambda _: tmp_path / "run_pilot_eval.py")
+    monkeypatch.setattr(execution, "reference", lambda _: {"root": "artifacts", "path": "scene"})
+    monkeypatch.setattr(execution.subprocess, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    execution.main(
+        [
+            "--scene",
+            str(scene),
+            "--planner",
+            "bb",
+            "--diagnostic",
+            "--bb-args",
+            "--planner.type",
+            "pdm",
+            "--traffic.type",
+            "expert",
+        ]
+    )
+
+    assert calls[0][0][0][-4:] == [
+        "--planner.type",
+        "pdm",
+        "--traffic.type",
+        "expert",
+    ]
+    assert calls[0][1]["env"]["GEOTRANSFER_ALLOW_UNVALIDATED"] == "1"
+
+
+def test_manifest_selection_and_diagnostic_are_protocol_fields():
+    args = execution.build_parser().parse_args(
+        ["--manifest", "scenes.json", "--planner", "smart", "--diagnostic"]
+    )
+    protocol = execution.normalize_protocol(args)
+    assert protocol.scene is None
+    assert protocol.manifest == Path("scenes.json")
+    assert protocol.diagnostic is True
+
+
+def test_help_describes_new_and_legacy_selectors(capsys):
+    with pytest.raises(SystemExit) as result:
+        execution.main(["--help"])
+    assert result.value.code == 0
+    help_text = capsys.readouterr().out
+    for option in ("--ego", "--traffic", "--traffic-startup", "--preset", "--bb-args"):
+        assert option in help_text
+    assert "smart_hybrid_baseline" in help_text
+
+
+def test_invalid_protocol_does_not_create_run_directory(monkeypatch, tmp_path, capsys):
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
+    scene = Path(__file__).resolve().parents[1] / "artifacts/oriented_v3/r07_e200_f25439"
+
+    with pytest.raises(SystemExit) as result:
+        execution.main(
+            [
+                "--scene",
+                str(scene),
+                "--ego",
+                "smart",
+                "--traffic",
+                "expert",
+                "--traffic-startup",
+                "source_hold",
+            ]
+        )
+
+    assert result.value.code == 2
+    assert "source_hold" in capsys.readouterr().err
+    assert not runs.exists()
+
+
+def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, capsys):
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
+    scene = Path(__file__).resolve().parents[1] / "artifacts/oriented_v3/r07_e200_f25439"
+
+    with pytest.raises(SystemExit) as result:
+        execution.main(["--scene", str(scene), "--ego", "smart", "--traffic", "idm"])
+
+    assert result.value.code == 2
+    assert "not yet integrated" in capsys.readouterr().err
+    assert not runs.exists()
