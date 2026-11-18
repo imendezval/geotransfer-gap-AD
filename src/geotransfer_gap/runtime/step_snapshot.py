@@ -20,7 +20,12 @@ class RemovalReason(str, Enum):
 
 @dataclass(frozen=True)
 class ActorSnapshot:
-    """Copied source identity and native state for one binary actor."""
+    """Copied source identity and native state for one binary actor.
+
+    ``lifetime_generation`` identifies a contiguous source-valid lifetime.
+    ``current_active_slot`` is only this tick's PPO observation-batch slot;
+    its absence does not close a lifetime or advance the generation.
+    """
 
     source_id: SourceActorID
     fixed_binary_index: int
@@ -52,6 +57,12 @@ class ActorSnapshot:
     @property
     def source_valid_presence(self) -> bool:
         return self.source_valid
+
+    @property
+    def replay_owned(self) -> bool:
+        """Whether native state currently assigns this actor to expert replay."""
+        # MOVEMENT_EXPERT in the pinned Drive runtime is mode 2.
+        return self.movement_mode == 2
 
 
 @dataclass(frozen=True)
@@ -115,33 +126,57 @@ class StepSnapshot:
         )
 
     @property
-    def replayed_context_ids(self) -> frozenset[SourceActorID]:
-        """Present active VRUs and marked-expert actors retained as context."""
+    def visible_context_ids(self) -> frozenset[SourceActorID]:
+        """Source-valid, native-present non-ego context, independent of batch slots."""
         return frozenset(
             actor.source_id
             for actor in self.actors
             if actor.source_valid
             and actor.native_present
-            and not actor.controller_eligible
             and not actor.is_ego
         )
 
+    @property
+    def replayed_context_ids(self) -> frozenset[SourceActorID]:
+        """Visible context actors currently owned by expert replay."""
+        visible = self.visible_context_ids
+        return frozenset(
+            actor.source_id
+            for actor in self.actors
+            if actor.source_id in visible and actor.replay_owned
+        )
+
     def actor_for(self, source_id: SourceActorID | ActorKey | int) -> ActorSnapshot:
-        if isinstance(source_id, ActorKey):
-            source_id = source_id.source_id
+        requested_key = source_id if isinstance(source_id, ActorKey) else None
+        if requested_key is not None:
+            source_id = requested_key.source_id
         elif not isinstance(source_id, SourceActorID):
             source_id = SourceActorID(source_id)
         try:
-            return self._actors_by_source_id[source_id]
+            actor = self._actors_by_source_id[source_id]
         except KeyError as exc:
             raise KeyError(f"unknown source actor ID: {int(source_id)}") from exc
+        if requested_key is not None and actor.key != requested_key:
+            raise KeyError(
+                f"stale ActorKey for source actor ID {int(source_id)}: "
+                f"requested generation {requested_key.lifetime_generation}, "
+                f"current generation {actor.lifetime_generation}"
+            )
+        return actor
 
     def slot_for(self, actor: SourceActorID | ActorKey | int) -> int | None:
         """Resolve the current slot for one present lifetime, never a past slot."""
         requested_key = actor if isinstance(actor, ActorKey) else None
-        actor_state = self.actor_for(actor)
-        if requested_key is not None and requested_key != actor_state.key:
-            return None
+        if requested_key is not None:
+            actor_state = self._actors_by_source_id.get(requested_key.source_id)
+            if actor_state is None:
+                raise KeyError(
+                    f"unknown source actor ID: {int(requested_key.source_id)}"
+                )
+            if requested_key != actor_state.key:
+                return None
+        else:
+            actor_state = self.actor_for(actor)
         if (
             not actor_state.source_valid
             or not actor_state.native_present

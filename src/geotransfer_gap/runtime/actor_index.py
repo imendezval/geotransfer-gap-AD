@@ -11,6 +11,23 @@ if TYPE_CHECKING:
     from .step_snapshot import StepSnapshot
 
 
+_REQUIRED_NATIVE_STATE_FIELDS = (
+    "x",
+    "y",
+    "z",
+    "vx",
+    "vy",
+    "heading",
+    "valid",
+    "removed",
+    "stopped",
+    "collision_state",
+    "collided_before_goal",
+    "reached_goal_this_episode",
+    "movement_mode",
+)
+
+
 @dataclass(frozen=True, order=True)
 class SourceActorID:
     """Stable source track ID; never a native batch position."""
@@ -144,7 +161,6 @@ class ActorIndex:
         self._lifetime_open = {source_id: False for source_id in self._source_ids}
         self._permanent_removal = {source_id: None for source_id in self._source_ids}
         self._source_gap_pending = {source_id: False for source_id in self._source_ids}
-        self._gap_return_step = {source_id: None for source_id in self._source_ids}
         self._last_step = -1
 
     def capture_pre_step(self, step: int, state, observations) -> "StepSnapshot":
@@ -167,6 +183,8 @@ class ActorIndex:
 
         if "active_agent_indices" not in state:
             raise ValueError("native state is missing active_agent_indices")
+        if "active_agent_count" not in state:
+            raise ValueError("native state is missing active_agent_count")
         raw_active = state["active_agent_indices"]
         if raw_active is None:
             raw_active = ()
@@ -177,8 +195,12 @@ class ActorIndex:
         ):
             raise ValueError("active entity indices must be integers")
         active_indices = tuple(int(index) for index in active_values)
-        active_count = state.get("active_agent_count")
-        if active_count is not None and int(active_count) != len(active_indices):
+        active_count = state["active_agent_count"]
+        if (
+            isinstance(active_count, bool)
+            or not isinstance(active_count, Integral)
+            or int(active_count) != len(active_indices)
+        ):
             raise ValueError("active_agent_count does not match active_agent_indices")
         if len(set(active_indices)) != len(active_indices):
             raise ValueError("duplicate active entity indices")
@@ -200,7 +222,6 @@ class ActorIndex:
         lifetime_open = self._lifetime_open.copy()
         permanent_removal = self._permanent_removal.copy()
         source_gap_pending = self._source_gap_pending.copy()
-        gap_return_step = self._gap_return_step.copy()
 
         actors = []
         for binary_index, source_id in enumerate(self._source_ids):
@@ -214,20 +235,28 @@ class ActorIndex:
                 )
 
             source_valid = validity[step]
+            missing_fields = tuple(
+                key for key in _REQUIRED_NATIVE_STATE_FIELDS if key not in entity
+            )
+            if missing_fields:
+                raise ValueError(
+                    f"native entity {binary_index} is missing required state fields: "
+                    f"{', '.join(missing_fields)}"
+                )
             try:
                 x = float(entity["x"])
                 y = float(entity["y"])
-                z = float(entity.get("z", 0.0))
-                vx = float(entity.get("vx", 0.0))
-                vy = float(entity.get("vy", 0.0))
-                heading = float(entity.get("heading", 0.0))
-                native_valid = bool(entity.get("valid", True))
-                removed = bool(entity.get("removed", False))
-                stopped = bool(entity.get("stopped", False))
-                collision_state = int(entity.get("collision_state", 0))
-                collided_before_goal = bool(entity.get("collided_before_goal", False))
-                reached_goal = bool(entity.get("reached_goal_this_episode", False))
-                movement_mode = int(entity.get("movement_mode", 2))
+                z = float(entity["z"])
+                vx = float(entity["vx"])
+                vy = float(entity["vy"])
+                heading = float(entity["heading"])
+                native_valid = bool(entity["valid"])
+                removed = bool(entity["removed"])
+                stopped = bool(entity["stopped"])
+                collision_state = int(entity["collision_state"])
+                collided_before_goal = bool(entity["collided_before_goal"])
+                reached_goal = bool(entity["reached_goal_this_episode"])
+                movement_mode = int(entity["movement_mode"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(f"native entity {binary_index} lacks valid state fields") from exc
 
@@ -246,22 +275,14 @@ class ActorIndex:
             if collision_reason is not None:
                 permanent_removal[source_id] = collision_reason
                 source_gap_pending[source_id] = False
-                gap_return_step[source_id] = None
             elif not source_valid:
                 source_gap_pending[source_id] = True
-                gap_return_step[source_id] = None
             elif source_gap_pending[source_id]:
-                if gap_return_step[source_id] is None:
-                    # On the first source-valid pre-step after a gap the native
-                    # actor may still be retired; wait through that birth step.
-                    gap_return_step[source_id] = step
-                elif (
-                    step > gap_return_step[source_id]
-                    and native_present
-                    and not removed
-                ):
+                # A source-gap retirement can leave removed=True after source
+                # validity resumes. That is not a physics removal. The native
+                # C step may already have spawned it before this pre-step.
+                if native_present:
                     source_gap_pending[source_id] = False
-                    gap_return_step[source_id] = None
             elif removed:
                 permanent_removal[source_id] = RemovalReason.NATIVE_REMOVED
 
@@ -346,7 +367,6 @@ class ActorIndex:
         self._lifetime_open = lifetime_open
         self._permanent_removal = permanent_removal
         self._source_gap_pending = source_gap_pending
-        self._gap_return_step = gap_return_step
         self._last_step = step
         return snapshot
 
