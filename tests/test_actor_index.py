@@ -165,6 +165,67 @@ def test_source_gap_retirement_is_temporary_and_reentry_increments_generation():
     assert resumed.slot_for(actor.key) == 1
 
 
+def test_source_gap_return_already_present_on_first_valid_pre_step_is_eligible():
+    objects = [object_record(10), object_record(20, valid=(1, 0, 1, 1))]
+    _, index = scene_index(objects)
+    first = capture(index, 0, [0, 1], entities_for(2))
+    old_key = first.actor_for(SourceActorID(20)).key
+
+    gap_entities = entities_for(2)
+    gap_entities[1].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
+    capture(index, 1, [0, 1], gap_entities)
+
+    # The corrected C runtime may spawn during the step immediately before
+    # this first source-valid pre-step, so the native actor can already exist.
+    returned = capture(index, 2, [0, 1], entities_for(2))
+    actor = returned.actor_for(SourceActorID(20))
+    assert actor.key == ActorKey(SourceActorID(20), 1)
+    assert actor.source_valid and actor.native_present
+    assert actor.controller_eligible
+    assert returned.slot_for(actor.key) == 1
+    assert returned.slot_for(old_key) is None
+
+
+def test_stale_actor_key_is_rejected_by_actor_and_slot_lookup():
+    objects = [object_record(10), object_record(20, valid=(1, 0, 1, 1))]
+    _, index = scene_index(objects)
+    first = capture(index, 0, [0, 1], entities_for(2))
+    stale_key = first.actor_for(SourceActorID(20)).key
+
+    gap_entities = entities_for(2)
+    gap_entities[1].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
+    capture(index, 1, [0, 1], gap_entities)
+    returned = capture(index, 2, [0, 1], entities_for(2))
+
+    assert returned.actor_for(SourceActorID(20)).key == ActorKey(
+        SourceActorID(20), 1
+    )
+    with pytest.raises(KeyError, match="stale ActorKey"):
+        returned.actor_for(stale_key)
+    assert returned.slot_for(stale_key) is None
+
+
+def test_active_batch_slot_absence_is_not_a_physical_lifetime_boundary():
+    objects = [object_record(10), object_record(20), object_record(30)]
+    _, index = scene_index(objects)
+    first = capture(index, 0, [0, 1, 2], entities_for(3))
+    key = first.actor_for(SourceActorID(20)).key
+
+    absent = capture(index, 1, [0, 2], entities_for(3))
+    actor = absent.actor_for(SourceActorID(20))
+    assert actor.current_active_slot is None
+    assert actor.source_valid and actor.native_present
+    assert actor.key == key
+    assert not actor.controller_eligible
+    assert absent.slot_for(key) is None
+
+    restored = capture(index, 2, [2, 1, 0], entities_for(3))
+    actor = restored.actor_for(SourceActorID(20))
+    assert actor.current_active_slot == 1
+    assert actor.key == key
+    assert actor.controller_eligible
+
+
 def test_physics_removal_is_permanent_even_if_native_state_later_looks_present():
     objects = [object_record(10), object_record(20)]
     _, index = scene_index(objects)
@@ -297,6 +358,61 @@ def test_parked_and_vru_actors_remain_context_not_controller_targets():
     )
     assert snapshot.actor_for(SourceActorID(20)).current_active_slot is None
     assert not snapshot.actor_for(SourceActorID(20)).controller_eligible
+
+
+def test_context_presence_is_separate_from_current_replay_ownership():
+    objects = [
+        object_record(10),
+        object_record(20),
+        object_record(30, mark_as_expert=True),
+        object_record(40, actor_type=2),
+    ]
+    _, index = scene_index(objects)
+    entities = entities_for(4)
+    entities[1]["movement_mode"] = 1
+    entities[2]["movement_mode"] = 2
+    entities[3]["movement_mode"] = 2
+    snapshot = capture(index, 0, [0, 2, 3], entities)
+
+    assert snapshot.visible_context_ids == frozenset(
+        {SourceActorID(20), SourceActorID(30), SourceActorID(40)}
+    )
+    assert snapshot.replayed_context_ids == frozenset(
+        {SourceActorID(30), SourceActorID(40)}
+    )
+    # Source/native visibility does not imply a row in the PPO batch.
+    assert snapshot.actor_for(SourceActorID(20)).current_active_slot is None
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "active_agent_count",
+        "valid",
+        "removed",
+        "stopped",
+        "collision_state",
+        "collided_before_goal",
+        "reached_goal_this_episode",
+        "movement_mode",
+    ],
+)
+def test_missing_native_lifecycle_fields_fail_closed(missing_field):
+    objects = [object_record(10), object_record(20)]
+    _, index = scene_index(objects)
+    entities = entities_for(2)
+    state = {
+        "active_agent_indices": [0, 1],
+        "active_agent_count": 2,
+        "entities": entities,
+    }
+    if missing_field == "active_agent_count":
+        state.pop(missing_field)
+    else:
+        entities[1].pop(missing_field)
+
+    with pytest.raises(ValueError, match=missing_field):
+        index.capture_pre_step(0, state, np.zeros((2, 3), dtype=np.float32))
 
 
 def test_duplicate_or_out_of_range_active_indices_fail_closed():
