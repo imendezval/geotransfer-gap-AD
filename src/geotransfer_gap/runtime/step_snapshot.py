@@ -8,6 +8,7 @@ from typing import Mapping
 import numpy as np
 
 from .actor_index import ActorKey, SourceActorID
+from .native_modes import NativeMovementMode
 
 
 class RemovalReason(str, Enum):
@@ -61,8 +62,7 @@ class ActorSnapshot:
     @property
     def replay_owned(self) -> bool:
         """Whether native state currently assigns this actor to expert replay."""
-        # MOVEMENT_EXPERT in the pinned Drive runtime is mode 2.
-        return self.movement_mode == 2
+        return self.movement_mode == NativeMovementMode.EXPERT_REPLAY
 
 
 @dataclass(frozen=True)
