@@ -360,7 +360,9 @@ def main(argv=None):
                     "ego_controller": protocol.ego,
                     "traffic_controller": protocol.traffic,
                     "traffic_startup": protocol.traffic_startup,
-                    "diagnostic_only": protocol.diagnostic,
+                    "diagnostic_only": True,
+                    "diagnostic_requested": protocol.diagnostic,
+                    "research_admission_status": "not_established",
                 }
             )
             write_json(
@@ -371,7 +373,9 @@ def main(argv=None):
                     "ego_controller": protocol.ego,
                     "traffic_controller": protocol.traffic,
                     "traffic_startup": protocol.traffic_startup,
-                    "diagnostic_only": protocol.diagnostic,
+                    "diagnostic_only": True,
+                    "diagnostic_requested": protocol.diagnostic,
+                    "research_admission_status": "not_established",
                     "results": results,
                 },
             )
