@@ -256,3 +256,71 @@ def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, ca
     assert result.value.code == 2
     assert "not yet integrated" in capsys.readouterr().err
     assert not runs.exists()
+
+
+def test_expert_idm_matrix_pair_dispatches_to_episode_worker(monkeypatch, tmp_path):
+    scene = tmp_path / "scene"
+    scene.mkdir()
+    destination = tmp_path / "matrix-run"
+    calls = []
+
+    def create_run(label):
+        assert label == "expert_idm"
+        destination.mkdir()
+        return destination
+
+    monkeypatch.setattr(execution, "scene_root", lambda _: scene)
+    monkeypatch.setattr(execution, "new_run", create_run)
+    monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
+    monkeypatch.setattr(
+        execution.subprocess,
+        "run",
+        lambda cmd, **kwargs: calls.append((cmd, kwargs)),
+    )
+
+    result = execution.main(
+        [
+            "--scene",
+            str(scene),
+            "--ego",
+            "expert",
+            "--traffic",
+            "idm",
+            "--steps",
+            "12",
+        ]
+    )
+
+    assert result == destination
+    assert calls[0][0][1:3] == ["-m", "geotransfer_gap.runtime.episode_worker"]
+    assert "--ego" in calls[0][0] and "expert" in calls[0][0]
+    assert "--traffic" in calls[0][0] and "idm" in calls[0][0]
+    assert calls[0][1]["check"] is True
+    assert (destination / "scene/trace.json").parent.is_dir()
+    assert (destination / "run.json").is_file()
+
+
+def test_source_hold_pair_is_rejected_before_run_directory_creation(
+    monkeypatch, tmp_path, capsys
+):
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
+    scene = Path(__file__).resolve().parents[1] / "artifacts/oriented_v3/r07_e200_f25439"
+
+    with pytest.raises(SystemExit) as result:
+        execution.main(
+            [
+                "--scene",
+                str(scene),
+                "--ego",
+                "expert",
+                "--traffic",
+                "idm",
+                "--traffic-startup",
+                "source_hold",
+            ]
+        )
+
+    assert result.value.code == 2
+    assert "source_hold is not yet integrated" in capsys.readouterr().err
+    assert not runs.exists()

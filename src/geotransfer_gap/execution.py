@@ -294,14 +294,90 @@ def main(argv=None):
     except ValueError as exc:
         ap.error(str(exc))
     if protocol.selection == "matrix":
-        ap.error(
-            "controller-matrix execution is not yet integrated; no run directory was created"
-        )
+        if protocol.traffic_startup != "immediate":
+            ap.error(
+                "controller-matrix source_hold is not yet integrated; "
+                "no run directory was created"
+            )
+        if protocol.ego not in ("expert", "idm") or protocol.traffic not in (
+            "expert",
+            "idm",
+        ):
+            ap.error(
+                f"controller pair {protocol.ego}/{protocol.traffic} is not yet "
+                "integrated; only expert/idm pairs are available; "
+                "no run directory was created"
+            )
+        if not 1 <= protocol.steps <= 91:
+            ap.error("--steps must request 1 through 91 observation frames")
     rows = (
         [{"name": Path(protocol.scene).name, "root": str(scene_root(protocol.scene))}]
         if protocol.scene
         else read_manifest(protocol.manifest)
     )
+
+    if protocol.selection == "matrix":
+        prepared_rows = []
+        for row in rows:
+            root = scene_root(row["root"])
+            if protocol.manifest:
+                expected_hash = row.get("binary_sha256")
+                if (
+                    not expected_hash
+                    or sha256(root / "testing/map_000000.bin") != expected_hash
+                ):
+                    ap.error("Stale manifest binary: " + row["name"])
+            prepared_rows.append({**row, "_resolved_root": root})
+
+        destination = new_run(f"{protocol.ego}_{protocol.traffic}")
+        results = []
+        for row in prepared_rows:
+            root = row["_resolved_root"]
+            folder = destination / row["name"]
+            folder.mkdir()
+            cmd = [
+                sys.executable,
+                "-m",
+                "geotransfer_gap.runtime.episode_worker",
+                "--root",
+                str(root),
+                "--ego",
+                protocol.ego,
+                "--traffic",
+                protocol.traffic,
+                "--steps",
+                str(protocol.steps),
+                "--output",
+                str(folder / "trace.json"),
+            ]
+            with (folder / "execution.log").open("w") as log:
+                subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True)
+            results.append(
+                {
+                    "scene": reference(root),
+                    "name": row["name"],
+                    "output": str(folder),
+                    "ego_controller": protocol.ego,
+                    "traffic_controller": protocol.traffic,
+                    "traffic_startup": protocol.traffic_startup,
+                    "diagnostic_only": protocol.diagnostic,
+                }
+            )
+            write_json(
+                destination / "run.json",
+                {
+                    "schema_version": 3,
+                    "selection": "matrix",
+                    "ego_controller": protocol.ego,
+                    "traffic_controller": protocol.traffic,
+                    "traffic_startup": protocol.traffic_startup,
+                    "diagnostic_only": protocol.diagnostic,
+                    "results": results,
+                },
+            )
+            print(folder, flush=True)
+        return destination
+
     destination = new_run(protocol.legacy_planner)
     results = []
     for row in rows:
