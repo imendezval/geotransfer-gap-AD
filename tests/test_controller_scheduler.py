@@ -442,13 +442,14 @@ def test_declared_controller_rejects_mismatched_intent_before_native_write(
     assert env.step_calls == 0
 
 
-def test_ppo_dynamics_intent_matches_declared_controller():
+@pytest.mark.parametrize("name", ["ppo", " Smart "])
+def test_dynamics_intent_matches_normalized_declared_controller(name):
     binary, state = scene_and_state()
     env = FakeEnv(state)
     binding = FakeBinding(env.events)
     scheduler = EpisodeScheduler(
         binding,
-        FakeNamedController("ego", "ppo", lambda _: DynamicsIntent((0.2, -0.1))),
+        FakeNamedController("ego", name, lambda _: DynamicsIntent((0.2, -0.1))),
         ExpertController("traffic"),
     )
     snapshot = snapshot_at(ActorIndex(binary), env, 10)
@@ -457,6 +458,17 @@ def test_ppo_dynamics_intent_matches_declared_controller():
     assert plan.by_source_id[SourceActorID(100)].intent == DynamicsIntent((0.2, -0.1))
     assert not binding.mode_calls
     assert env.step_calls == 0
+
+
+def test_unsupported_declared_controller_name_fails_closed():
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    with pytest.raises(ValueError, match="unsupported controller name"):
+        EpisodeScheduler(
+            FakeBinding(env.events),
+            FakeNamedController("ego", "not-a-controller", lambda _: ReplayIntent()),
+            ExpertController("traffic"),
+        )
 
 
 def test_declared_controller_cannot_change_intent_type_mid_episode():

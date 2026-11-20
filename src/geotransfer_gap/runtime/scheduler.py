@@ -28,6 +28,24 @@ _INTENT_MODE = MappingProxyType(
         DynamicsIntent: NativeMovementMode.DYNAMICS,
     }
 )
+_CONTROLLER_INTENT = MappingProxyType(
+    {
+        "expert": ReplayIntent,
+        "idm": IDMIntent,
+        "ppo": DynamicsIntent,
+        "smart": DynamicsIntent,
+    }
+)
+
+
+def _normalized_controller_name(controller: Controller) -> str:
+    name = getattr(controller, "name", None)
+    if not isinstance(name, str):
+        raise TypeError("controller name must be a string")
+    normalized = name.strip().lower()
+    if normalized not in _CONTROLLER_INTENT:
+        raise ValueError(f"unsupported controller name: {name!r}")
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -109,6 +127,10 @@ class NativeActionWriter:
         self._binding = binding
         self._initialized_idm_parameters: IDMParameters | None = None
 
+    def reset(self):
+        """Clear episode-local native parameter initialization state."""
+        self._initialized_idm_parameters = None
+
     def apply_and_step(self, env, plan: TickPlan):
         if not plan.advances_simulation:
             raise ValueError("a final observation plan cannot advance the simulator")
@@ -187,10 +209,12 @@ class EpisodeScheduler:
             "ego": ego_controller,
             "traffic": traffic_controller,
         }
+        for controller in self.controllers.values():
+            _normalized_controller_name(controller)
         self.warmup_experts = {
             role: (
                 controller
-                if controller.name == "expert"
+                if _normalized_controller_name(controller) == "expert"
                 else ExpertController(role)
             )
             for role, controller in self.controllers.items()
@@ -198,7 +222,7 @@ class EpisodeScheduler:
         idm_parameters = {
             controller.parameters
             for controller in self.controllers.values()
-            if controller.name == "idm"
+            if _normalized_controller_name(controller) == "idm"
         }
         if len(idm_parameters) > 1:
             raise ValueError(
@@ -216,6 +240,7 @@ class EpisodeScheduler:
                 continue
             controller.reset(episode_info)
             called.add(id(controller))
+        self.writer.reset()
         self._reset = True
 
     def decide(self, snapshot: StepSnapshot, *, advances_simulation: bool) -> TickPlan:
@@ -247,6 +272,8 @@ class EpisodeScheduler:
                     if snapshot.step < 10
                     else self.controllers[role]
                 )
+                effective_name = _normalized_controller_name(controller)
+                expected_intent_type = _CONTROLLER_INTENT[effective_name]
                 returned = controller.act(snapshot, role_targets[role])
                 if not isinstance(returned, Mapping):
                     raise TypeError(f"{role} controller must return a mapping of intents")
@@ -261,8 +288,11 @@ class EpisodeScheduler:
                 for key, intent in returned.items():
                     actor = snapshot.actor_for(key)
                     self._authorize(snapshot, actor, role)
-                    if not isinstance(intent, (ReplayIntent, IDMIntent, DynamicsIntent)):
-                        raise TypeError(f"{role} controller returned an unsupported intent")
+                    if type(intent) is not expected_intent_type:
+                        raise TypeError(
+                            f"{role} declared controller {effective_name!r} must return "
+                            f"{expected_intent_type.__name__}, got {type(intent).__name__}"
+                        )
                     if key in decisions:
                         raise ValueError(f"multiple controllers own actor key {key}")
                     decisions[key] = intent
@@ -292,9 +322,9 @@ class EpisodeScheduler:
                 effective_owner = (
                     "warmup_replay"
                     if snapshot.step < 10
-                    else f"{role}:{controller.name}"
+                    else f"{role}:{_normalized_controller_name(controller)}"
                 )
-                declared_controller = controller.name
+                declared_controller = _normalized_controller_name(controller)
             else:
                 role = "context"
                 slot = actor.current_active_slot
