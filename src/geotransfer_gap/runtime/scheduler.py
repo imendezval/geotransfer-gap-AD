@@ -18,7 +18,7 @@ from geotransfer_gap.planners.controller_api import (
 from geotransfer_gap.planners.expert_controller import ExpertController
 from geotransfer_gap.runtime.actor_index import ActorKey, SourceActorID
 from geotransfer_gap.runtime.native_modes import NativeMovementMode
-from geotransfer_gap.runtime.step_snapshot import StepSnapshot
+from geotransfer_gap.runtime.step_snapshot import RemovalReason, StepSnapshot
 
 
 _INTENT_MODE = MappingProxyType(
@@ -231,34 +231,79 @@ class EpisodeScheduler:
             )
         self.idm_parameters = next(iter(idm_parameters), None)
         self.writer = NativeActionWriter(binding)
+        self._observed_lifetimes: set[ActorKey] = set()
+        self._retired_lifetimes: set[ActorKey] = set()
         self._reset = False
 
     def reset(self, episode_info: Mapping[str, object]):
-        called = set()
-        for controller in (*self.controllers.values(), *self.warmup_experts.values()):
-            if id(controller) in called:
-                continue
+        for controller in self._controller_instances():
             controller.reset(episode_info)
-            called.add(id(controller))
         self.writer.reset()
+        self._observed_lifetimes.clear()
+        self._retired_lifetimes.clear()
         self._reset = True
+
+    def _controller_instances(self):
+        instances = []
+        seen = set()
+        for role in ("ego", "traffic"):
+            for controller in (self.controllers[role], self.warmup_experts[role]):
+                if id(controller) in seen:
+                    continue
+                seen.add(id(controller))
+                instances.append(controller)
+        return tuple(instances)
+
+    @staticmethod
+    def _retirement_reason(actor, previous_key: ActorKey) -> str | None:
+        if actor.permanently_removed:
+            if actor.removal_reason is RemovalReason.NONE:
+                raise ValueError(
+                    f"permanently removed actor {int(actor.source_id)} has no removal reason"
+                )
+            return actor.removal_reason.value
+        if not actor.source_valid or actor.source_gap_pending:
+            return RemovalReason.SOURCE_GAP.value
+        if actor.key != previous_key:
+            # ActorIndex increments this generation only after a source-valid gap.
+            return RemovalReason.SOURCE_GAP.value
+        return None
+
+    def _retire_ended_lifetimes(self, snapshot: StepSnapshot):
+        notifications = []
+        for key in sorted(self._observed_lifetimes):
+            if key in self._retired_lifetimes:
+                continue
+            actor = snapshot.actor_for(key.source_id)
+            reason = self._retirement_reason(actor, key)
+            if reason is not None:
+                notifications.append((key, reason))
+
+        controllers = self._controller_instances()
+        for key, reason in notifications:
+            self._retired_lifetimes.add(key)
+            self._observed_lifetimes.discard(key)
+            for controller in controllers:
+                controller.retire(key, reason)
 
     def decide(self, snapshot: StepSnapshot, *, advances_simulation: bool) -> TickPlan:
         if not self._reset:
             self.reset({})
 
+        # Retirement is delivered before observers can see a later generation.
+        self._retire_ended_lifetimes(snapshot)
         visible_targets = frozenset(
             actor.key
             for actor in snapshot.actors
             if actor.key is not None and actor.source_valid and actor.native_present
         )
-        observed_ids = set()
-        for role in ("ego", "traffic"):
-            for controller in (self.controllers[role], self.warmup_experts[role]):
-                if id(controller) in observed_ids:
-                    continue
-                controller.observe(snapshot, visible_targets)
-                observed_ids.add(id(controller))
+        for controller in self._controller_instances():
+            controller.observe(snapshot, visible_targets)
+        self._observed_lifetimes.update(
+            actor.key
+            for actor in snapshot.actors
+            if actor.key is not None and actor.source_valid and actor.native_present
+        )
 
         role_targets = {
             "ego": self._eligible_targets(snapshot, "ego"),

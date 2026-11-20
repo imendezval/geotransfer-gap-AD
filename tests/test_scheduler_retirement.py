@@ -1,19 +1,35 @@
 import numpy as np
 import pytest
 
-from geotransfer_gap.planners.controller_api import IDMIntent, ReplayIntent
+from geotransfer_gap.planners.controller_api import IDMIntent, IDMParameters, ReplayIntent
 from geotransfer_gap.runtime.actor_index import ActorIndex, ActorKey, SourceActorID
 from geotransfer_gap.runtime.scheduler import EpisodeScheduler
 
 
-def fixture():
+def fixture(source_gaps=None):
     valid = np.ones(91, dtype=np.int32)
+    source_gaps = source_gaps or {}
     binary = {
         "sdc_track_index": 1,
         "objects": [
-            {"id": 100, "type": 1, "traj_valid": valid.copy(), "mark_as_expert": 0},
-            {"id": 200, "type": 1, "traj_valid": valid.copy(), "mark_as_expert": 0},
-            {"id": 300, "type": 2, "traj_valid": valid.copy(), "mark_as_expert": 0},
+            {
+                "id": 100,
+                "type": 1,
+                "traj_valid": mask_with_gaps(valid, source_gaps.get(100, ())),
+                "mark_as_expert": 0,
+            },
+            {
+                "id": 200,
+                "type": 1,
+                "traj_valid": mask_with_gaps(valid, source_gaps.get(200, ())),
+                "mark_as_expert": 0,
+            },
+            {
+                "id": 300,
+                "type": 2,
+                "traj_valid": mask_with_gaps(valid, source_gaps.get(300, ())),
+                "mark_as_expert": 0,
+            },
         ],
     }
     entities = [
@@ -41,6 +57,12 @@ def fixture():
         "entities": entities,
     }
     return binary, state
+
+
+def mask_with_gaps(valid, gaps):
+    mask = valid.copy()
+    mask[list(gaps)] = 0
+    return mask
 
 
 class Env:
@@ -73,7 +95,9 @@ class SpyController:
     def __init__(self, role, name, events):
         self.role = role
         self.name = name
+        self.parameters = IDMParameters()
         self.events = events
+        self.retirements = []
 
     def reset(self, episode_info):
         self.events.append(("reset", self.role))
@@ -87,6 +111,7 @@ class SpyController:
         return {key: intent for key in eligible_targets}
 
     def retire(self, actor, reason):
+        self.retirements.append((actor, reason))
         self.events.append(("retire", self.role, actor, reason))
 
 
@@ -100,21 +125,11 @@ def capture(index, env, step):
     return index.capture_pre_step(step, env.state, env.observations)
 
 
-def scheduler_for(state):
-    events = []
-    ego = SpyController("ego", "expert", events)
-    traffic = SpyController("traffic", "expert", events)
-    scheduler = EpisodeScheduler(Binding(), ego, traffic)
-    env = Env(state)
-    index = ActorIndex(fixture()[0])
-    return scheduler, index, env, events, (ego, traffic)
-
-
 @pytest.mark.parametrize(
     "return_kind", ["native_retired_then_active", "immediately_active"]
 )
 def test_source_gap_retires_old_key_once_before_new_generation_observation(return_kind):
-    binary, state = fixture()
+    binary, state = fixture({100: [1]})
     events = []
     ego = SpyController("ego", "expert", events)
     traffic = SpyController("traffic", "expert", events)
@@ -126,13 +141,11 @@ def test_source_gap_retires_old_key_once_before_new_generation_observation(retur
     scheduler.decide(capture(index, env, 0), advances_simulation=True)
     events.clear()
 
-    binary["objects"][0]["traj_valid"][1] = 0
     state["entities"][0].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
     set_active(env, [1, 2])
     gap = capture(index, env, 1)
     scheduler.decide(gap, advances_simulation=True)
 
-    binary["objects"][0]["traj_valid"][2] = 1
     if return_kind == "immediately_active":
         state["entities"][0].update(valid=1, x=10.0, y=2.0, removed=False)
         set_active(env, [1, 0, 2])
@@ -211,8 +224,7 @@ def test_permanent_removal_notifies_exactly_once(
 
 
 def test_birth_reordering_and_active_slot_loss_do_not_retire_lifetime():
-    binary, state = fixture()
-    binary["objects"][0]["traj_valid"][:2] = 0
+    binary, state = fixture({100: [0]})
     state["entities"][0].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
     state["active_agent_indices"] = [1, 2]
     state["active_agent_count"] = 2
@@ -227,7 +239,6 @@ def test_birth_reordering_and_active_slot_loss_do_not_retire_lifetime():
     index = ActorIndex(binary)
     scheduler.decide(capture(index, env, 0), advances_simulation=True)
 
-    binary["objects"][0]["traj_valid"][1] = 1
     state["entities"][0].update(valid=1, x=10.0, y=2.0, removed=False)
     set_active(env, [1, 0, 2])
     born = capture(index, env, 1)
@@ -248,7 +259,7 @@ def test_birth_reordering_and_active_slot_loss_do_not_retire_lifetime():
 
 
 def test_context_only_vru_is_retired_for_each_distinct_observer():
-    binary, state = fixture()
+    binary, state = fixture({300: [1]})
     events = []
     ego = SpyController("ego", "expert", events)
     traffic = SpyController("traffic", "expert", events)
@@ -261,7 +272,6 @@ def test_context_only_vru_is_retired_for_each_distinct_observer():
     scheduler.decide(first, advances_simulation=True)
     assert all(vru_key in event[3] for event in events if event[0] == "observe")
     events.clear()
-    binary["objects"][2]["traj_valid"][1] = 0
     state["entities"][2].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
     set_active(env, [0, 1])
 
@@ -272,6 +282,60 @@ def test_context_only_vru_is_retired_for_each_distinct_observer():
     ]
     first_observe = next(i for i, event in enumerate(events) if event[0] == "observe")
     assert all(i < first_observe for i, event in enumerate(events) if event[0] == "retire")
+
+
+def test_distinct_warmup_adapter_receives_retirement_once(monkeypatch):
+    import geotransfer_gap.runtime.scheduler as scheduler_module
+
+    binary, state = fixture({100: [1]})
+    events = []
+    warmup_instances = []
+
+    class WarmupSpy(SpyController):
+        def __init__(self, role):
+            super().__init__(role, "expert", events)
+            warmup_instances.append(self)
+
+    monkeypatch.setattr(scheduler_module, "ExpertController", WarmupSpy)
+    ego = SpyController("ego", "idm", events)
+    traffic = SpyController("traffic", "expert", events)
+    scheduler = EpisodeScheduler(Binding(), ego, traffic)
+    env = Env(state)
+    index = ActorIndex(binary)
+    key = ActorKey(SourceActorID(100), 0)
+    scheduler.decide(capture(index, env, 0), advances_simulation=True)
+    events.clear()
+
+    state["entities"][0].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
+    set_active(env, [1, 2])
+    scheduler.decide(capture(index, env, 1), advances_simulation=True)
+
+    assert len(warmup_instances) == 1
+    assert [event for event in events if event[0] == "retire"] == [
+        ("retire", "ego", key, "source_gap"),
+        ("retire", "ego", key, "source_gap"),
+        ("retire", "traffic", key, "source_gap"),
+    ]
+    assert ego.retirements == [(key, "source_gap")]
+    assert traffic.retirements == [(key, "source_gap")]
+    assert warmup_instances[0].retirements == [(key, "source_gap")]
+
+
+def test_horizon_end_without_lifecycle_termination_does_not_retire():
+    binary, state = fixture()
+    events = []
+    scheduler = EpisodeScheduler(
+        Binding(),
+        SpyController("ego", "expert", events),
+        SpyController("traffic", "expert", events),
+    )
+    env = Env(state)
+    index = ActorIndex(binary)
+    scheduler.decide(capture(index, env, 0), advances_simulation=True)
+    events.clear()
+
+    scheduler.decide(capture(index, env, 1), advances_simulation=False)
+    assert not [event for event in events if event[0] == "retire"]
 
 
 def test_terminal_removal_retires_before_final_observe_without_advancing():
@@ -306,7 +370,7 @@ def test_terminal_removal_retires_before_final_observe_without_advancing():
 
 
 def test_reset_does_not_carry_retirement_notifications_between_episodes():
-    binary, state = fixture()
+    binary, state = fixture({100: [1]})
     events = []
     ego = SpyController("ego", "expert", events)
     traffic = SpyController("traffic", "expert", events)
@@ -316,7 +380,6 @@ def test_reset_does_not_carry_retirement_notifications_between_episodes():
 
     def retire_traffic_actor():
         scheduler.decide(capture(index, env, 0), advances_simulation=True)
-        binary["objects"][0]["traj_valid"][1] = 0
         state["entities"][0].update(valid=0, x=-10000.0, y=-10000.0, removed=True)
         set_active(env, [1, 2])
         scheduler.decide(capture(index, env, 1), advances_simulation=True)
@@ -324,8 +387,7 @@ def test_reset_does_not_carry_retirement_notifications_between_episodes():
     retire_traffic_actor()
     scheduler.reset({"episode": 2})
     index.reset_episode()
-    binary["objects"][0]["traj_valid"][:] = 1
-    _, state = fixture()
+    _, state = fixture({100: [1]})
     env.state = state
     env.observations = np.zeros((3, 4), dtype=np.float32)
     retire_traffic_actor()
