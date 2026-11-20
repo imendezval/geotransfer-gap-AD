@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from geotransfer_gap.planners.controller_api import IDMIntent, IDMParameters, ReplayIntent
+from geotransfer_gap.planners.controller_api import (
+    DynamicsIntent,
+    IDMIntent,
+    IDMParameters,
+    ReplayIntent,
+)
 from geotransfer_gap.planners.expert_controller import ExpertController
 from geotransfer_gap.planners.idm_controller import IDMController
 from geotransfer_gap.runtime.actor_index import ActorIndex, ActorKey, SourceActorID
@@ -375,3 +380,155 @@ def test_late_birth_receives_its_role_mode_on_first_present_tick():
     assert state["entities"][1]["movement_mode"] == 1
     assert state["entities"][0]["movement_mode"] == 2
     assert env.step_calls == 11
+
+
+class FakeNamedController:
+    def __init__(self, role, name, intent_factory):
+        self.role = role
+        self.name = name
+        self.parameters = IDMParameters()
+        self.intent_factory = intent_factory
+        self.calls = 0
+
+    def reset(self, episode_info):
+        return None
+
+    def observe(self, snapshot, visible_targets):
+        return None
+
+    def act(self, snapshot, eligible_targets):
+        self.calls += 1
+        return {
+            key: self.intent_factory(self.calls)
+            for key in eligible_targets
+        }
+
+    def retire(self, actor, reason):
+        return None
+
+
+@pytest.mark.parametrize(
+    "role,name,intent_factory",
+    [
+        ("ego", "ppo", lambda _: IDMIntent()),
+        ("traffic", "ppo", lambda _: IDMIntent()),
+        ("ego", "idm", lambda _: DynamicsIntent((0.2, -0.1))),
+        ("traffic", "idm", lambda _: DynamicsIntent((0.2, -0.1))),
+        ("ego", "expert", lambda _: DynamicsIntent((0.2, -0.1))),
+        ("traffic", "expert", lambda _: DynamicsIntent((0.2, -0.1))),
+    ],
+)
+def test_declared_controller_rejects_mismatched_intent_before_native_write(
+    role, name, intent_factory
+):
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    invalid = FakeNamedController(role, name, intent_factory)
+    valid_role = "traffic" if role == "ego" else "ego"
+    valid = ExpertController(valid_role)
+    scheduler = EpisodeScheduler(
+        binding,
+        invalid if role == "ego" else valid,
+        invalid if role == "traffic" else valid,
+    )
+    snapshot = snapshot_at(ActorIndex(binary), env, 10)
+
+    with pytest.raises(TypeError, match="declared controller"):
+        scheduler.decide(snapshot, advances_simulation=True)
+
+    assert not binding.mode_calls
+    assert not binding.idm_parameters
+    assert env.step_calls == 0
+
+
+def test_ppo_dynamics_intent_matches_declared_controller():
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    scheduler = EpisodeScheduler(
+        binding,
+        FakeNamedController("ego", "ppo", lambda _: DynamicsIntent((0.2, -0.1))),
+        ExpertController("traffic"),
+    )
+    snapshot = snapshot_at(ActorIndex(binary), env, 10)
+
+    plan = scheduler.decide(snapshot, advances_simulation=True)
+    assert plan.by_source_id[SourceActorID(100)].intent == DynamicsIntent((0.2, -0.1))
+    assert not binding.mode_calls
+    assert env.step_calls == 0
+
+
+def test_declared_controller_cannot_change_intent_type_mid_episode():
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    scheduler = EpisodeScheduler(
+        binding,
+        FakeNamedController(
+            "ego",
+            "ppo",
+            lambda call: DynamicsIntent((0.2, -0.1))
+            if call == 1
+            else IDMIntent(),
+        ),
+        ExpertController("traffic"),
+    )
+    index = ActorIndex(binary)
+    first = snapshot_at(index, env, 10)
+    second = index.capture_pre_step(11, env.get_state()[0], env.observations)
+
+    scheduler.decide(first, advances_simulation=True)
+    with pytest.raises(TypeError, match="declared controller"):
+        scheduler.decide(second, advances_simulation=True)
+    assert not binding.mode_calls
+    assert env.step_calls == 0
+
+
+def test_warmup_override_allows_future_nonexpert_controller_to_replay():
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    scheduler = EpisodeScheduler(
+        binding,
+        FakeNamedController("ego", "ppo", lambda _: IDMIntent()),
+        FakeNamedController("traffic", "smart", lambda _: IDMIntent()),
+    )
+    snapshot = snapshot_at(ActorIndex(binary), env, 9)
+
+    plan = scheduler.decide(snapshot, advances_simulation=True)
+    assert all(
+        assignment.intent is None
+        or isinstance(assignment.intent, ReplayIntent)
+        for assignment in plan.assignments
+    )
+
+
+def test_scheduler_reset_reinitializes_global_idm_parameters_per_episode():
+    binary, state = scene_and_state()
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    scheduler = EpisodeScheduler(binding, ExpertController("ego"), IDMController("traffic"))
+    index = ActorIndex(binary)
+
+    def execute_episode():
+        for step in range(11):
+            snapshot = index.capture_pre_step(step, env.get_state()[0], env.observations)
+            scheduler.advance(
+                env,
+                scheduler.decide(snapshot, advances_simulation=True),
+            )
+
+    execute_episode()
+    assert len(binding.idm_parameters) == 1
+
+    # Model env.reset() and ActorIndex.reset_episode() at the fresh episode boundary.
+    index.reset_episode()
+    _, env.state = scene_and_state()
+    env.observations = np.zeros((env.state["active_agent_count"], 4), dtype=np.float32)
+    env.step_calls = 0
+    scheduler.reset({"episode": 2})
+    execute_episode()
+
+    assert len(binding.idm_parameters) == 2
+    assert binding.idm_parameters == [(1.0, 1.5, 1.0, 2.0)] * 2
