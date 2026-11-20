@@ -1,5 +1,6 @@
 from dataclasses import FrozenInstanceError
 from itertools import product
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -258,7 +259,13 @@ def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, ca
     assert not runs.exists()
 
 
-def test_expert_idm_matrix_pair_dispatches_to_episode_worker(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "selection,diagnostic_requested",
+    [("scene", False), ("scene", True), ("manifest", False)],
+)
+def test_matrix_run_metadata_never_claims_research_admission(
+    monkeypatch, tmp_path, selection, diagnostic_requested
+):
     scene = tmp_path / "scene"
     scene.mkdir()
     destination = tmp_path / "matrix-run"
@@ -272,23 +279,30 @@ def test_expert_idm_matrix_pair_dispatches_to_episode_worker(monkeypatch, tmp_pa
     monkeypatch.setattr(execution, "scene_root", lambda _: scene)
     monkeypatch.setattr(execution, "new_run", create_run)
     monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
+    monkeypatch.setattr(execution, "sha256", lambda _: "binary-hash")
+    if selection == "manifest":
+        monkeypatch.setattr(
+            execution,
+            "read_manifest",
+            lambda _: [
+                {"name": "scene", "root": str(scene), "binary_sha256": "binary-hash"}
+            ],
+        )
     monkeypatch.setattr(
         execution.subprocess,
         "run",
         lambda cmd, **kwargs: calls.append((cmd, kwargs)),
     )
 
+    options = (
+        ["--scene", str(scene)]
+        if selection == "scene"
+        else ["--manifest", str(tmp_path / "manifest.json")]
+    )
+    if diagnostic_requested:
+        options.append("--diagnostic")
     result = execution.main(
-        [
-            "--scene",
-            str(scene),
-            "--ego",
-            "expert",
-            "--traffic",
-            "idm",
-            "--steps",
-            "12",
-        ]
+        options + ["--ego", "expert", "--traffic", "idm", "--steps", "12"]
     )
 
     assert result == destination
@@ -298,6 +312,39 @@ def test_expert_idm_matrix_pair_dispatches_to_episode_worker(monkeypatch, tmp_pa
     assert calls[0][1]["check"] is True
     assert (destination / "scene/trace.json").parent.is_dir()
     assert (destination / "run.json").is_file()
+    run_record = json.loads((destination / "run.json").read_text())
+    row = run_record["results"][0]
+    assert run_record["diagnostic_only"] is True
+    assert row["diagnostic_only"] is True
+    assert run_record["diagnostic_requested"] is diagnostic_requested
+    assert row["diagnostic_requested"] is diagnostic_requested
+    assert run_record["research_admission_status"] == "not_established"
+    assert row["research_admission_status"] == "not_established"
+
+
+def test_legacy_expert_selector_still_uses_legacy_replay_path(monkeypatch, tmp_path):
+    scene = tmp_path / "scene"
+    scene.mkdir()
+    destination = tmp_path / "expert-run"
+    replay_calls = []
+
+    def create_run(label):
+        assert label == "expert"
+        destination.mkdir()
+        return destination
+
+    monkeypatch.setattr(execution, "scene_root", lambda _: scene)
+    monkeypatch.setattr(execution, "new_run", create_run)
+    monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
+    monkeypatch.setattr(execution, "replay", lambda root, output: replay_calls.append((root, output)))
+
+    execution.main(["--scene", str(scene), "--planner", "expert"])
+
+    assert replay_calls == [(scene, destination / "scene/trace.json")]
+    record = json.loads((destination / "run.json").read_text())
+    assert record["schema_version"] == 2
+    assert "selection" not in record
+    assert record["results"][0]["diagnostic_only"] is True
 
 
 def test_source_hold_pair_is_rejected_before_run_directory_creation(
