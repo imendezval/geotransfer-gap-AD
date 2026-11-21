@@ -187,6 +187,9 @@ def test_source_gap_retires_old_key_once_before_new_generation_observation(retur
         (2, False, True, "offroad"),
         (0, False, True, "native_removed"),
         (0, True, True, "collision"),
+        (1, False, False, "collision"),
+        (2, False, False, "offroad"),
+        (0, True, False, "collision"),
     ],
 )
 def test_permanent_removal_notifies_exactly_once(
@@ -213,14 +216,23 @@ def test_permanent_removal_notifies_exactly_once(
         collision_state=collision_state,
         collided_before_goal=collided_before_goal,
     )
-    set_active(env, [1, 2])
-    scheduler.decide(capture(index, env, 1), advances_simulation=True)
-    scheduler.decide(capture(index, env, 2), advances_simulation=True)
+    if removed:
+        set_active(env, [1, 2])
+    for step in (1, 2):
+        snapshot = capture(index, env, step)
+        actor = snapshot.actor_for(key)
+        assert actor.source_valid and actor.permanently_removed
+        assert actor.native_present is (not removed)
+        scheduler.decide(snapshot, advances_simulation=True)
+        assert key not in scheduler._observed_lifetimes
 
     assert [event for event in events if event[0] == "retire"] == [
         ("retire", "ego", key, reason),
         ("retire", "traffic", key, reason),
     ]
+    observed = [event for event in events if event[0] == "observe"]
+    assert len(observed) == 4
+    assert all(key not in event[3] for event in observed)
 
 
 def test_birth_reordering_and_active_slot_loss_do_not_retire_lifetime():
