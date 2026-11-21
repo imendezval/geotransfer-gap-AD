@@ -87,7 +87,13 @@ def build_policy(checkpoint):
 def observation_tensor(row):
     if row.shape != (OBS_WIDTH,):
         raise ValueError("PPO observation must have width 1151")
-    tensor = torch.tensor(row, dtype=torch.float32).unsqueeze(0)
+    return _observation_batch(row[None, :])
+
+
+def _observation_batch(rows):
+    if rows.ndim != 2 or rows.shape[1] != OBS_WIDTH or not len(rows):
+        raise ValueError("PPO observation batch must have rows of width 1151")
+    tensor = torch.tensor(rows, dtype=torch.float32)
     if not torch.isfinite(tensor).all():
         raise ValueError("PPO observation must be finite")
     categories = tensor[:, 7 + 31 * 8 + 6 :: 7]
@@ -119,12 +125,35 @@ class PPOPolicy:
     def infer(self, row, state):
         inputs = observation_tensor(row)
         if state is None:
-            state = {name: torch.zeros((1, HIDDEN_SIZE)) for name in ("lstm_h", "lstm_c")}
+            state = self._initial_state()
+        actions, logits, value = self._forward(inputs, state)
+        return actions[0], state, logits, value
+
+    @staticmethod
+    def _initial_state():
+        return {name: torch.zeros((1, HIDDEN_SIZE)) for name in ("lstm_h", "lstm_c")}
+
+    @torch.inference_mode()
+    def infer_batch(self, rows, states):
+        """Run ordered rows together and return independent per-row h/c."""
+        inputs = _observation_batch(rows)
+        if len(states) != len(inputs):
+            raise ValueError("PPO requires one recurrent state per observation row")
+        initial = self._initial_state()
+        names = tuple(initial)
+        state = {name: torch.cat([(previous or initial)[name] for previous in states])
+                 for name in names}
+        actions, logits, value = self._forward(inputs, state)
+        updated = [{name: state[name][i:i + 1].clone() for name in names}
+                   for i in range(len(inputs))]
+        return actions, updated, logits, value
+
+    def _forward(self, inputs, state):
         (logits,), value = self.model.forward_eval(inputs, state)
-        if logits.shape != (1, ACTION_COUNT) or not torch.isfinite(logits).all():
+        if logits.shape != (len(inputs), ACTION_COUNT) or not torch.isfinite(logits).all():
             raise ValueError("PPO inference must produce 91 finite joint logits")
-        index = int(logits.argmax(dim=-1).item())
-        return self.decode(index), state, logits, value
+        actions = [self.decode(index) for index in logits.argmax(dim=-1).tolist()]
+        return actions, logits, value
 
 
 def load_pinned_ego_policy(env):

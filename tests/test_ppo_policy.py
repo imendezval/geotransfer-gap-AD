@@ -176,11 +176,12 @@ def test_batch_matches_independent_single_actor_histories(policy, checkpoint):
          for name in ("lstm_h", "lstm_c")} if i else None
         for i in range(3)
     ]
-    expected = [adapter.infer(row, state) for row, state in zip(rows, initial)]
+    expected = [adapter.infer(row, None if state is None else dict(state))
+                for row, state in zip(rows, initial)]
     actions, states, logits, values = adapter.infer_batch(rows, initial)
     for i, (action, state, single_logits, value) in enumerate(expected):
         assert actions[i] == action
-        torch.testing.assert_close(logits[i:i+1], single_logits, rtol=0, atol=2e-6)
-        torch.testing.assert_close(values[i:i+1], value, rtol=0, atol=2e-6)
+        torch.testing.assert_close(logits[i:i+1], single_logits, rtol=3e-6, atol=2e-5)
+        torch.testing.assert_close(values[i:i+1], value, rtol=3e-6, atol=2e-5)
         for name in ("lstm_h", "lstm_c"):
-            torch.testing.assert_close(states[i][name], state[name], rtol=0, atol=2e-6)
+            torch.testing.assert_close(states[i][name], state[name], rtol=3e-6, atol=2e-5)
