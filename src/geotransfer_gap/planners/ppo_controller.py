@@ -1,54 +1,72 @@
-"""Single-ego PPO adapter using the scheduler's immutable pre-step frames."""
+"""Role-scoped PPO inference over immutable pre-step observations."""
 
-from geotransfer_gap.planners.controller_api import DynamicsIntent
+from geotransfer_gap.planners.controller_api import ControllerRole, DynamicsIntent
 
 
 class PPOController:
     name = "ppo"
-    role = "ego"
 
-    def __init__(self, policy):
+    def __init__(self, policy, *, role: ControllerRole = "ego"):
+        if role not in ("ego", "traffic"):
+            raise ValueError(f"unsupported PPO role: {role}")
         self.policy = policy
+        self.role = role
         self.reset({})
 
     def reset(self, episode_info):
         self._ego_key = None
-        self._state = None
-        self._action = None
+        self._states = {}
+        self._actions = {}
         self._last_step = -1
 
-    def observe(self, snapshot, visible_targets):
+    def _targets(self, snapshot):
+        if self.role == "traffic":
+            return [snapshot.actor_for(source_id)
+                    for source_id in sorted(snapshot.eligible_present_vehicle_ids)]
+
         ego = snapshot.actor_for(snapshot.ego_id)
-        self._action = None
         if ego.permanently_removed or ego.removed or not ego.native_present:
-            # The worker records this terminal frame without advancing.
-            return
-        key = ego.key
-        slot = snapshot.slot_for(key) if key is not None else None
+            return []
+        return [ego]
+
+    def observe(self, snapshot, visible_targets):
+        self._actions.clear()
+        actors = self._targets(snapshot)
+        keys = [actor.key for actor in actors]
+        slots = [snapshot.slot_for(key) if key is not None else None for key in keys]
+        continuing = set(self._states)
         if (
-            key not in visible_targets
-            or slot is None
-            or not ego.controller_eligible
-            or (self._ego_key is not None and self._ego_key != key)
-            or snapshot.step != self._last_step + 1
+            snapshot.step != self._last_step + 1
+            or any(slot is None for slot in slots)
+            or not set(keys) <= visible_targets
+            or any(not actor.controller_eligible for actor in actors)
+            or (self.role == "traffic" and not continuing <= set(keys))
+            or (self.role == "ego" and keys and self._ego_key not in (None, keys[0]))
         ):
-            raise ValueError(f"PPO ego observation discontinuity at step {snapshot.step}")
-        action, state, _, _ = self.policy.infer(snapshot.observation[slot], self._state)
-        self._action = DynamicsIntent(action)
-        self._ego_key = key
-        self._state = state
+            raise ValueError(f"PPO {self.role} observation discontinuity at step {snapshot.step}")
+
+        if keys:
+            if self.role == "ego":
+                key, = keys
+                action, state, _, _ = self.policy.infer(
+                    snapshot.observation[slots[0]], self._states.get(key)
+                )
+                self._ego_key = key
+                actions, states = [action], [state]
+            else:
+                actions, states, _, _ = self.policy.infer_batch(
+                    snapshot.observation[slots], [self._states.get(key) for key in keys]
+                )
+            self._actions = {key: DynamicsIntent(action)
+                             for key, action in zip(keys, actions, strict=True)}
+            self._states = dict(zip(keys, states, strict=True))
         self._last_step = snapshot.step
 
     def act(self, snapshot, eligible_targets):
-        if (
-            self._action is None
-            or snapshot.step != self._last_step
-            or eligible_targets != {self._ego_key}
-        ):
-            raise ValueError(f"PPO ego has no matching cached action at step {snapshot.step}")
-        return {self._ego_key: self._action}
+        if snapshot.step != self._last_step or eligible_targets != self._actions.keys():
+            raise ValueError(f"PPO {self.role} has no matching cached action at step {snapshot.step}")
+        return dict(self._actions)
 
     def retire(self, actor, reason):
-        if actor == self._ego_key:
-            self._state = None
-            self._action = None
+        self._states.pop(actor, None)
+        self._actions.pop(actor, None)

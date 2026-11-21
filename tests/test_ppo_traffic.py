@@ -78,7 +78,7 @@ def test_traffic_lifetimes_warmup_and_reset(status):
             assert len(policy.batches[-1]) == 1
             assert actors[SourceActorID(301)].intent.kind == "replay"
     assert len(policy.batches) == len(policy.calls) == 13
-    assert policy.calls[1] == (101, 100)
+    assert policy.calls[1] == (101, 1)
     assert policy.batches[6][-1] == (307, None)
     for _ in range(2):
         index.reset_episode()

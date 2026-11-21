@@ -35,7 +35,7 @@ def test_warmup_takes_observations_once_and_act_uses_cache():
         plan = scheduler.decide(snapshot, advances_simulation=True)
         actor = plan.by_source_id[snapshot.ego_id]
         assert actor.slot == indices.index(1)
-        assert ego._state == step + 1
+        assert ego._states == {actor.key: step + 1}
         assert actor.intent.kind == ("replay" if step < 10 else "dynamics")
         if step >= 10:
             assert actor.intent.action == (0.25, -0.5)
@@ -45,7 +45,7 @@ def test_warmup_takes_observations_once_and_act_uses_cache():
     native["entities"][1].update(removed=True, collision_state=1)
     terminal = index.capture_pre_step(12, native, obs)
     scheduler.decide(terminal, advances_simulation=False)
-    assert ego._state is None and ego._action is None and len(policy.calls) == 12
+    assert not ego._states and not ego._actions and len(policy.calls) == 12
     with pytest.raises(ValueError, match="cached action"):
         ego.act(terminal, {key})
     scheduler.reset({})
@@ -107,7 +107,7 @@ def test_native_present_ego_retires_and_ends_episode(
                 assert not actor.controller_eligible and snapshot.slot_for(actor.key) is None
                 assert actor.key not in live_keys
                 assert retirements == [(actor.key, reason.value)]
-                assert self._state is None and self._action is None
+                assert not self._states and not self._actions
                 terminal_keys.append(actor.key)
             super().observe(snapshot, live_keys)
 
@@ -137,7 +137,7 @@ def test_native_present_ego_retires_and_ends_episode(
     assert report["observation_frames"] == terminal_step + 1
     assert report["transitions"] == env.step_calls == len(policy.calls) == terminal_step
     assert env.events[-1][0] == "step"
-    assert len(terminal_keys) == 1 and ego._state is None and ego._action is None
+    assert len(terminal_keys) == 1 and not ego._states and not ego._actions
     terminal = report["frames"][-1]
     assert not terminal["transition_applied"]
     assert not terminal["state"]["removed"]
