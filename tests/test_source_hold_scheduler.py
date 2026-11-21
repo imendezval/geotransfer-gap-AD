@@ -56,7 +56,8 @@ def test_source_hold_late_birth_gaps_and_release(controller, gap, first_control)
         if not released:
             np.testing.assert_array_equal(applied[target.slot], [0, 0])
         if controller == "ppo" and step == first_control:
-            assert ppo.batches[-1][0][1] is not None if gap != slice(16,19) else ppo.batches[-1][0][1] is None
+            prior = ppo.batches[-1][0][1]
+            assert (prior is None) == (first_control == 19)
     assert env.step_calls == 21
     if controller == "ppo":
         assert len(ppo.batches) == 21
@@ -84,3 +85,32 @@ def test_no_release_terminal_status(final, status):
     }
     assert scheduler.startup_record(snapshot.actor_for(301), final, False)["startup_status"] == "not_scheduled"
     assert scheduler.startup_record(snapshot.actor_for(302), final, False)["startup_status"] == "exempt"
+
+
+@pytest.mark.parametrize("kind", ["ppo", "smart"])
+def test_permanent_retirement_during_hold_prevents_release(kind):
+    binary, native = scenario()
+    index = ActorIndex(binary)
+    traffic = (PPOController(BatchSpy(), role="traffic") if kind == "ppo"
+               else SMARTController(Planner(), "traffic"))
+    scheduler = EpisodeScheduler(FakeBinding(), ExpertController("ego"), traffic,
+                                 startup=StartupPolicy("source_hold", 91, {1:17}))
+    env = FakeEnv(native)
+    for step in range(18):
+        if step == 15:
+            native["entities"][1].update(collision_state=1, collided_before_goal=True)
+        snapshot = capture(index, native, binary, step, [0, 1, 2, 3, 4])
+        plan = scheduler.decide(snapshot, advances_simulation=step != 17)
+        if step != 17:
+            scheduler.advance(env, plan)
+    actor = snapshot.actor_for(200)
+    assert actor.native_present and actor.permanently_removed
+    assert plan.by_source_id[actor.source_id].role == "context"
+    assert scheduler.startup_record(actor, 17, False) == {
+        "scheduled_release_step": 17, "actual_release_step": None,
+        "startup_status": "scheduled_not_released",
+    }
+    if kind == "ppo":
+        assert actor.key not in traffic._states
+    else:
+        assert not traffic.planner.history.valid[1].any()
