@@ -20,7 +20,7 @@ class PPOController:
     def observe(self, snapshot, visible_targets):
         ego = snapshot.actor_for(snapshot.ego_id)
         self._action = None
-        if ego.removed or not ego.native_present:
+        if ego.permanently_removed or ego.removed or not ego.native_present:
             # The worker records this terminal frame without advancing.
             return
         key = ego.key

@@ -47,10 +47,13 @@ def run_episode(
         state = native[0] if isinstance(native, list) else native
         snapshot = index.capture_pre_step(step, state, env.observations)
         ego = snapshot.actor_for(snapshot.ego_id)
-        terminal = ego.removed or not ego.native_present
-        if terminal:
-            terminal_reason = "ego_removed" if ego.removed else "ego_absent"
-        advances = not terminal and step < steps - 1
+        if ego.removed:
+            terminal_reason = "ego_removed"
+        elif not ego.native_present:
+            terminal_reason = "ego_absent"
+        elif ego.permanently_removed:
+            terminal_reason = f"ego_{ego.removal_reason.value}"
+        advances = terminal_reason is None and step < steps - 1
         plan = scheduler.decide(snapshot, advances_simulation=advances)
         # Drive's state serializer can expose fields backed by buffers that the
         # next native step mutates. Capture the trace frame before the single
@@ -70,7 +73,7 @@ def run_episode(
                 "transition_applied": advances,
             }
         )
-        if terminal:
+        if terminal_reason is not None:
             break
 
     return {

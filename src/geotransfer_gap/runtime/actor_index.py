@@ -267,10 +267,11 @@ class ActorIndex:
                 and y != -10000.0
             )
             collision_reason = None
-            if collided_before_goal or collision_state == 1:
-                collision_reason = RemovalReason.COLLISION
-            elif collision_state == 2:
+            # Native Drive sets the history flag for off-road events too.
+            if collision_state == 2:
                 collision_reason = RemovalReason.OFFROAD
+            elif collision_state == 1 or collided_before_goal:
+                collision_reason = RemovalReason.COLLISION
 
             if collision_reason is not None:
                 permanent_removal[source_id] = collision_reason
