@@ -14,10 +14,10 @@ class Planner:
 
         self.config = SimpleNamespace(repredict_interval=5, num_historical_steps=11)
         self.history = SimpleNamespace(
-            position=np.zeros((5, 32, 2), dtype=np.float32),
-            heading=np.zeros((5, 32), dtype=np.float32),
-            velocity=np.zeros((5, 32, 2), dtype=np.float32),
-            valid=np.zeros((5, 32), dtype=bool),
+            position=np.zeros((5, 120, 2), dtype=np.float32),
+            heading=np.zeros((5, 120), dtype=np.float32),
+            velocity=np.zeros((5, 120, 2), dtype=np.float32),
+            valid=np.zeros((5, 120), dtype=bool),
             num_steps=0,
             num_agents=5,
         )
