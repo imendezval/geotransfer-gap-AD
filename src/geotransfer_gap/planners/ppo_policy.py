@@ -125,3 +125,58 @@ class PPOPolicy:
             raise ValueError("PPO inference must produce 91 finite joint logits")
         index = int(logits.argmax(dim=-1).item())
         return self.decode(index), state, logits, value
+
+
+def load_pinned_ego_policy(env):
+    """Validate the production inputs and return policy and run provenance."""
+    import subprocess
+
+    from geotransfer_gap.artifacts import sha256
+    from geotransfer_gap.config import settings
+
+    validate_native_env(env)
+    bench = settings().bench
+    head = subprocess.check_output(["git", "-C", str(bench), "rev-parse", "HEAD"],
+                                   text=True).strip()
+    if head != "805fe04c6977b60c41c92c31f1a5211fbd704f44":
+        raise ValueError(f"PPO requires the pinned BehaviorBench revision, got {head}")
+    path = bench / "weights/simple_ppo.pt"
+    digest = sha256(path)
+    if digest != "50a9a580cca905fc3dae47b5847b4edf408de3b7fe7517bd4f3a781fa140e3b3":
+        raise ValueError(f"PPO checkpoint SHA-256 differs from the audited weights: {digest}")
+    ini_digest = sha256(env.ini_file)
+    if ini_digest != "afdf157a7b809e31700a49f977c46a7a4913c7e73546a5803d8635a9ae1f5e4e":
+        raise ValueError("PPO requires the audited native evaluation INI")
+    torch.set_num_threads(1)
+    torch.manual_seed(0)
+    policy = PPOPolicy(path)
+    return policy, {
+        "behaviorbench_commit": head,
+        "checkpoint": str(path),
+        "checkpoint_sha256": digest,
+        "evaluation_ini_sha256": ini_digest,
+        "architecture": "Drive(64,256) + LSTMWrapper(256,256)",
+        "checkpoint_keys": len(policy.model.state_dict()),
+        "trainable_scalars": sum(p.numel() for p in policy.model.parameters()),
+        "observation": {"dtype": "float32", "width": OBS_WIDTH, **_LAYOUT, **_FLAGS},
+        "information_access": (
+            "Current native actor state, static road geometry and simulator navigation "
+            "goal. German navigation goals use the final valid source position. "
+            "Actor future arrays and background IDM route points are not model inputs."
+        ),
+        "action": {
+            "selection": "argmax of 91 joint logits, acceleration-major",
+            "normalized_acceleration_grid": policy.accel.tolist(),
+            "normalized_steering_grid": policy.steer.tolist(),
+            "native_scale": {"acceleration_m_s2": 4, "steering_rad": 1},
+            "native_dt_s": 0.1,
+        },
+        "device": "cpu",
+        "torch_version": str(torch.__version__),
+        "torch_threads": torch.get_num_threads(),
+        "seed": 0,
+        "recurrent_shape": [1, HIDDEN_SIZE],
+        "warmup": "Observe frames 0-9 with zero initial h/c and apply expert replay; PPO takes over at transition 10.",
+        "research_admission_status": "not_established",
+        "diagnostic_only": True,
+    }

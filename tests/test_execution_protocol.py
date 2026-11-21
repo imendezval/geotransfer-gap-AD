@@ -246,13 +246,14 @@ def test_invalid_protocol_does_not_create_run_directory(monkeypatch, tmp_path, c
     assert not runs.exists()
 
 
-def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, capsys):
+@pytest.mark.parametrize("ego,traffic", [("smart", "idm"), ("idm", "ppo"), ("ppo", "smart")])
+def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, capsys, ego, traffic):
     runs = tmp_path / "runs"
     monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
     scene = Path(__file__).resolve().parents[1] / "artifacts/oriented_v3/r07_e200_f25439"
 
     with pytest.raises(SystemExit) as result:
-        execution.main(["--scene", str(scene), "--ego", "smart", "--traffic", "idm"])
+        execution.main(["--scene", str(scene), "--ego", ego, "--traffic", traffic])
 
     assert result.value.code == 2
     assert "not yet integrated" in capsys.readouterr().err
@@ -263,8 +264,9 @@ def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, ca
     "selection,diagnostic_requested",
     [("scene", False), ("scene", True), ("manifest", False)],
 )
+@pytest.mark.parametrize("ego,traffic", [("expert", "idm"), ("ppo", "expert"), ("ppo", "idm")])
 def test_matrix_run_metadata_never_claims_research_admission(
-    monkeypatch, tmp_path, selection, diagnostic_requested
+    monkeypatch, tmp_path, selection, diagnostic_requested, ego, traffic
 ):
     scene = tmp_path / "scene"
     scene.mkdir()
@@ -272,7 +274,7 @@ def test_matrix_run_metadata_never_claims_research_admission(
     calls = []
 
     def create_run(label):
-        assert label == "expert_idm"
+        assert label == f"{ego}_{traffic}"
         destination.mkdir()
         return destination
 
@@ -302,13 +304,14 @@ def test_matrix_run_metadata_never_claims_research_admission(
     if diagnostic_requested:
         options.append("--diagnostic")
     result = execution.main(
-        options + ["--ego", "expert", "--traffic", "idm", "--steps", "12"]
+        options + ["--ego", ego, "--traffic", traffic, "--steps", "12"]
     )
 
     assert result == destination
     assert calls[0][0][1:3] == ["-m", "geotransfer_gap.runtime.episode_worker"]
-    assert "--ego" in calls[0][0] and "expert" in calls[0][0]
-    assert "--traffic" in calls[0][0] and "idm" in calls[0][0]
+    command = calls[0][0]
+    assert command[command.index("--ego") + 1] == ego
+    assert command[command.index("--traffic") + 1] == traffic
     assert calls[0][1]["check"] is True
     assert (destination / "scene/trace.json").parent.is_dir()
     assert (destination / "run.json").is_file()

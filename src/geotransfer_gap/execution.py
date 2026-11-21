@@ -299,13 +299,13 @@ def main(argv=None):
                 "controller-matrix source_hold is not yet integrated; "
                 "no run directory was created"
             )
-        if protocol.ego not in ("expert", "idm") or protocol.traffic not in (
+        if protocol.ego not in ("expert", "idm", "ppo") or protocol.traffic not in (
             "expert",
             "idm",
         ):
             ap.error(
                 f"controller pair {protocol.ego}/{protocol.traffic} is not yet "
-                "integrated; only expert/idm pairs are available; "
+                "integrated; traffic supports expert/idm and ego supports expert/idm/ppo; "
                 "no run directory was created"
             )
         if not 1 <= protocol.steps <= 91:

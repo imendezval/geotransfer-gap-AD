@@ -1,4 +1,4 @@
-"""Fresh-process entry point for one immediate expert/IDM controller pair."""
+"""Fresh-process entry point for one supported immediate controller pair."""
 
 import argparse
 from pathlib import Path
@@ -101,7 +101,7 @@ def run_episode(
 def build_parser():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--ego", choices=("expert", "idm"), required=True)
+    parser.add_argument("--ego", choices=("expert", "idm", "ppo"), required=True)
     parser.add_argument("--traffic", choices=("expert", "idm"), required=True)
     parser.add_argument("--steps", type=int, default=91)
     parser.add_argument("--output", type=Path, required=True)
@@ -132,6 +132,16 @@ def main(argv=None):
 
     env = evaluation_env(root)
     try:
+        provenance = None
+        if args.ego == "ppo":
+            from geotransfer_gap.planners.ppo_controller import PPOController
+            from geotransfer_gap.planners.ppo_policy import load_pinned_ego_policy
+
+            policy, provenance = load_pinned_ego_policy(env)
+            ego_controller = PPOController(policy)
+        else:
+            ego_controller = (ExpertController("ego") if args.ego == "expert"
+                              else IDMController("ego"))
         # Drive initializes the native vector during construction but exposes
         # ``tick`` only after reset(); keep this in lockstep with the legacy
         # replay runner's reset boundary.
@@ -140,9 +150,7 @@ def main(argv=None):
             env,
             binary,
             binding,
-            ExpertController("ego")
-            if args.ego == "expert"
-            else IDMController("ego"),
+            ego_controller,
             ExpertController("traffic")
             if args.traffic == "expert"
             else IDMController("traffic"),
@@ -154,6 +162,8 @@ def main(argv=None):
     finally:
         env.close()
     write_json(args.output, report)
+    if provenance is not None:
+        write_json(args.output.with_name("ppo_provenance.json"), provenance)
     print(args.output.resolve(), flush=True)
     return args.output
 
