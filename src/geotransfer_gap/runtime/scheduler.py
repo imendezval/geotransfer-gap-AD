@@ -292,18 +292,18 @@ class EpisodeScheduler:
 
         # Retirement is delivered before observers can see a later generation.
         self._retire_ended_lifetimes(snapshot)
-        visible_targets = frozenset(
+        live_keys = frozenset(
             actor.key
             for actor in snapshot.actors
-            if actor.key is not None and actor.source_valid and actor.native_present
+            if actor.key is not None
+            and actor.source_valid
+            and actor.native_present
+            and not actor.permanently_removed
+            and actor.key not in self._retired_lifetimes
         )
         for controller in self._controller_instances():
-            controller.observe(snapshot, visible_targets)
-        self._observed_lifetimes.update(
-            actor.key
-            for actor in snapshot.actors
-            if actor.key is not None and actor.source_valid and actor.native_present
-        )
+            controller.observe(snapshot, live_keys)
+        self._observed_lifetimes.update(live_keys)
 
         role_targets = {
             "ego": self._eligible_targets(snapshot, "ego"),
