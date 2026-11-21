@@ -162,3 +162,25 @@ def test_all_joint_action_indices_against_independent_grid(policy):
     for invalid in (-1, 91):
         with pytest.raises(ValueError, match="out of range"):
             adapter.decode(invalid)
+
+
+def test_batch_matches_independent_single_actor_histories(policy, checkpoint):
+    from geotransfer_gap.planners.ppo_policy import PPOPolicy
+
+    adapter = PPOPolicy(settings().bench / "weights/simple_ppo.pt")
+    rng = np.random.default_rng(0)
+    rows = rng.normal(size=(3, 1151)).astype(np.float32)
+    rows[:, 261::7] = rng.integers(0, 7, size=(3, 128))
+    initial = [
+        {name: torch.full((1, 256), float(i) / 10)
+         for name in ("lstm_h", "lstm_c")} if i else None
+        for i in range(3)
+    ]
+    expected = [adapter.infer(row, state) for row, state in zip(rows, initial)]
+    actions, states, logits, values = adapter.infer_batch(rows, initial)
+    for i, (action, state, single_logits, value) in enumerate(expected):
+        assert actions[i] == action
+        torch.testing.assert_close(logits[i:i+1], single_logits, rtol=0, atol=2e-6)
+        torch.testing.assert_close(values[i:i+1], value, rtol=0, atol=2e-6)
+        for name in ("lstm_h", "lstm_c"):
+            torch.testing.assert_close(states[i][name], state[name], rtol=0, atol=2e-6)
