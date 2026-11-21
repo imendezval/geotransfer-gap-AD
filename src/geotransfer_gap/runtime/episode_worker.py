@@ -104,8 +104,8 @@ def run_episode(
 def build_parser():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--ego", choices=("expert", "idm", "ppo"), required=True)
-    parser.add_argument("--traffic", choices=("expert", "idm", "ppo"), required=True)
+    parser.add_argument("--ego", choices=("expert", "idm", "ppo", "smart"), required=True)
+    parser.add_argument("--traffic", choices=("expert", "idm", "ppo", "smart"), required=True)
     parser.add_argument("--steps", type=int, default=91)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -166,16 +166,24 @@ def main(argv=None):
 
             policy, provenance = load_pinned_ego_policy(env)
             factories["ppo"] = lambda role: PPOController(policy, role=role)
+        if "smart" in (args.ego, args.traffic):
+            from geotransfer_gap.planners.smart_controller import load_smart_controller
+
+            factories["smart"] = lambda role: load_smart_controller(
+                env, binary["sdc_track_index"], role
+            )
         # Drive initializes the native vector during construction but exposes
         # ``tick`` only after reset(); keep this in lockstep with the legacy
         # replay runner's reset boundary.
         env.reset()
+        ego_controller = factories[args.ego]("ego")
+        traffic_controller = factories[args.traffic]("traffic")
         report = run_episode(
             env,
             binary,
             binding,
-            factories[args.ego]("ego"),
-            factories[args.traffic]("traffic"),
+            ego_controller,
+            traffic_controller,
             steps=args.steps,
             runtime=runtime,
             scene_reference=reference(root),
@@ -188,6 +196,27 @@ def main(argv=None):
         if args.traffic == "ppo":
             provenance["traffic_ppo"] = _traffic_ppo_provenance(report, provenance["observation"])
         write_json(args.output.with_name("ppo_provenance.json"), provenance)
+    smart_roles = {
+        controller.role: controller.refreshes
+        for controller in (ego_controller, traffic_controller)
+        if controller.name == "smart"
+    }
+    if smart_roles:
+        from geotransfer_gap.config import settings
+        from geotransfer_gap.planners.protocol import input_paths
+
+        write_json(args.output.with_name("smart_provenance.json"), {
+            "checkpoint_sha256": sha256(settings().weights),
+            "input_hashes": {name: sha256(path) for name, path in input_paths().items()},
+            "binary_sha256": report["binary_sha256"],
+            "seed": 0,
+            "device": "cpu",
+            "greedy": True,
+            "diagnostic_only": True,
+            "research_admission_status": "not_established",
+            "information_access": "Static map, observed joint histories and observed-birth velocity",
+            "refreshes": smart_roles,
+        })
     print(args.output.resolve(), flush=True)
     return args.output
 
