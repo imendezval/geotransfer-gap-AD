@@ -294,11 +294,6 @@ def main(argv=None):
     except ValueError as exc:
         ap.error(str(exc))
     if protocol.selection == "matrix":
-        if protocol.traffic_startup != "immediate":
-            ap.error(
-                "controller-matrix source_hold is not yet integrated; "
-                "no run directory was created"
-            )
         if not 1 <= protocol.steps <= 91:
             ap.error("--steps must request 1 through 91 observation frames")
     rows = (
@@ -341,6 +336,8 @@ def main(argv=None):
                 "--output",
                 str(folder / "trace.json"),
             ]
+            if protocol.traffic_startup == "source_hold":
+                cmd += ["--traffic-startup", protocol.traffic_startup]
             with (folder / "execution.log").open("w") as log:
                 subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True)
             results.append(

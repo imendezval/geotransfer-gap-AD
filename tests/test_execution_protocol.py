@@ -336,27 +336,25 @@ def test_legacy_expert_selector_still_uses_legacy_replay_path(monkeypatch, tmp_p
     assert record["results"][0]["diagnostic_only"] is True
 
 
-def test_source_hold_pair_is_rejected_before_run_directory_creation(
-    monkeypatch, tmp_path, capsys
-):
-    runs = tmp_path / "runs"
-    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
-    scene = Path(__file__).resolve().parents[1] / "artifacts/oriented_v3/r07_e200_f25439"
+@pytest.mark.parametrize("ego,traffic", list(product(CONTROLLERS, ("idm", "ppo", "smart"))))
+def test_source_hold_pairs_reach_worker_as_diagnostic(monkeypatch, tmp_path, ego, traffic):
+    scene = tmp_path / "scene"
+    scene.mkdir()
+    out = tmp_path / "run"
+    calls = []
 
-    with pytest.raises(SystemExit) as result:
-        execution.main(
-            [
-                "--scene",
-                str(scene),
-                "--ego",
-                "expert",
-                "--traffic",
-                "idm",
-                "--traffic-startup",
-                "source_hold",
-            ]
-        )
+    def new_run(label):
+        out.mkdir()
+        return out
 
-    assert result.value.code == 2
-    assert "source_hold is not yet integrated" in capsys.readouterr().err
-    assert not runs.exists()
+    monkeypatch.setattr(execution, "scene_root", lambda _: scene)
+    monkeypatch.setattr(execution, "new_run", new_run)
+    monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
+    monkeypatch.setattr(execution.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+    execution.main(["--scene", str(scene), "--ego", ego, "--traffic", traffic,
+                    "--traffic-startup", "source_hold"])
+    command, = calls
+    assert command[command.index("--traffic-startup") + 1] == "source_hold"
+    record = json.loads((out / "run.json").read_text())["results"][0]
+    assert record["traffic_startup"] == "source_hold"
+    assert record["diagnostic_only"] and record["research_admission_status"] == "not_established"

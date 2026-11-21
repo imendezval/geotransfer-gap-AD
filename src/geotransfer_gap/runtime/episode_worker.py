@@ -1,14 +1,15 @@
-"""Fresh-process entry point for one supported immediate controller pair."""
+"""Fresh-process entry point for a supported controller pair."""
 
 import argparse
 from pathlib import Path
 
-from geotransfer_gap.artifacts import reference, sha256, write_json
+from geotransfer_gap.artifacts import read_json, reference, sha256, write_json
 from geotransfer_gap.config import ensure_bench
 from geotransfer_gap.planners.expert_controller import ExpertController
 from geotransfer_gap.planners.idm_controller import IDMController
 from geotransfer_gap.runtime.actor_index import ActorIndex
 from geotransfer_gap.runtime.scheduler import EpisodeScheduler
+from geotransfer_gap.runtime.startup_policy import StartupPolicy, source_hold_policy
 
 
 def run_episode(
@@ -23,6 +24,7 @@ def run_episode(
     scene_reference=None,
     binary_sha256=None,
     frame_fn=None,
+    startup=None,
 ):
     """Capture each pre-step frame and advance at most ``steps - 1`` times."""
     if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 91:
@@ -31,7 +33,7 @@ def run_episode(
         from .session import frame as frame_fn
 
     index = ActorIndex(binary)
-    scheduler = EpisodeScheduler(binding, ego_controller, traffic_controller)
+    scheduler = EpisodeScheduler(binding, ego_controller, traffic_controller, startup=startup)
     scheduler.reset(
         {
             "ego_binary_index": int(binary["sdc_track_index"]),
@@ -62,14 +64,19 @@ def run_episode(
         if advances:
             scheduler.advance(env, plan)
             transitions += 1
+        actors = []
+        for assignment in plan.assignments:
+            record = assignment.trace_record(applied=advances)
+            if scheduler.startup.mode == "source_hold":
+                record.update(scheduler.startup_record(
+                    snapshot.actor_for(assignment.source_id), step, advances,
+                ))
+            actors.append(record)
         frames.append(
             {
                 "step": step,
                 "state": state_frame,
-                "actors": [
-                    assignment.trace_record(applied=advances)
-                    for assignment in plan.assignments
-                ],
+                "actors": actors,
                 "transition_applied": advances,
             }
         )
@@ -81,7 +88,7 @@ def run_episode(
         "planner": "controller_matrix",
         "ego_controller": ego_controller.name,
         "traffic_controller": traffic_controller.name,
-        "traffic_startup": "immediate",
+        "traffic_startup": scheduler.startup.mode,
         "warmup_replay_frames": 10,
         "steps_semantics": "observation_frames",
         "requested_observation_frames": steps,
@@ -106,6 +113,7 @@ def build_parser():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--ego", choices=("expert", "idm", "ppo", "smart"), required=True)
     parser.add_argument("--traffic", choices=("expert", "idm", "ppo", "smart"), required=True)
+    parser.add_argument("--traffic-startup", choices=("immediate", "source_hold"), default="immediate")
     parser.add_argument("--steps", type=int, default=91)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -138,6 +146,8 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     if not 1 <= args.steps <= 91:
         raise SystemExit("--steps must request 1 through 91 observation frames")
+    if args.traffic_startup == "source_hold" and args.traffic == "expert":
+        raise SystemExit("source_hold requires non-expert traffic")
 
     ensure_bench()
     from geotransfer_gap.runtime import late_spawn_runtime
@@ -147,6 +157,16 @@ def main(argv=None):
     root = args.root.resolve()
     binary_path = root / "testing/map_000000.bin"
     binary = read_binary_scenario(str(binary_path))
+    startup = StartupPolicy()
+    source = None
+    if args.traffic_startup == "source_hold":
+        sources = sorted((root / "testing").glob("ind_*.json"))
+        if len(sources) != 1:
+            raise SystemExit(f"source_hold requires exactly one authoritative source JSON in {root / 'testing'}")
+        source, = sources
+        startup = source_hold_policy(read_json(source), binary)
+        if args.steps > startup.window:
+            raise SystemExit("source_hold steps exceed the authoritative source window")
     runtime = late_spawn_runtime.load()
     # Load the corrected extension before importing the package's binding
     # attribute; an earlier import would stay attached to the stock module even
@@ -188,9 +208,24 @@ def main(argv=None):
             runtime=runtime,
             scene_reference=reference(root),
             binary_sha256=sha256(binary_path),
+            startup=startup,
         )
     finally:
         env.close()
+    if source is not None:
+        report["startup_policy"] = {
+            "source": reference(source),
+            "source_sha256": sha256(source),
+            "window_observations": startup.window,
+            "release_schedule": [
+                {"binary_index": index, "source_id": int(binary["objects"][index]["id"]),
+                 "step": step}
+                for index, step in sorted(startup.releases.items())
+            ],
+            "information_access": "Release timing uses recorded future source motion. The schedule is scheduler input only.",
+            "diagnostic_only": True,
+            "research_admission_status": "not_established",
+        }
     write_json(args.output, report)
     if provenance is not None:
         if args.traffic == "ppo":
