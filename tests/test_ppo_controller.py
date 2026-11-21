@@ -4,8 +4,10 @@ import pytest
 from geotransfer_gap.planners.expert_controller import ExpertController
 from geotransfer_gap.planners.ppo_controller import PPOController
 from geotransfer_gap.runtime.actor_index import ActorIndex
+from geotransfer_gap.runtime.episode_worker import run_episode
 from geotransfer_gap.runtime.scheduler import EpisodeScheduler
-from test_controller_scheduler import FakeBinding, scene_and_state
+from geotransfer_gap.runtime.step_snapshot import RemovalReason
+from test_controller_scheduler import FakeBinding, FakeEnv, scene_and_state
 
 
 class CountingPolicy:
@@ -67,3 +69,77 @@ def test_live_ego_without_slot_fails_closed():
     with pytest.raises(ValueError, match="discontinuity at step 1"):
         scheduler.decide(snapshot, advances_simulation=True)
     assert len(policy.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "collision_state,history,reason",
+    [
+        (1, True, RemovalReason.COLLISION),
+        (2, True, RemovalReason.OFFROAD),
+        (0, True, RemovalReason.COLLISION),
+    ],
+)
+@pytest.mark.parametrize("terminal_step", [1, 11])
+def test_native_present_ego_retires_and_ends_episode(
+    collision_state, history, reason, terminal_step
+):
+    binary, state = scene_and_state()
+    binary["sdc_track_index"] = 1
+    native_ego = state["entities"][1]
+    env = FakeEnv(state)
+    binding = FakeBinding(env.events)
+    policy = CountingPolicy()
+    retirements = []
+    terminal_keys = []
+
+    class SpyPPO(PPOController):
+        def retire(self, actor, reason):
+            retirements.append((actor, reason))
+            super().retire(actor, reason)
+
+        def observe(self, snapshot, live_keys):
+            if snapshot.step == terminal_step:
+                actor = snapshot.actor_for(snapshot.ego_id)
+                # STOP_AGENT leaves a source-valid actor in the active slot.
+                assert actor.source_valid and actor.native_present and not actor.removed
+                assert actor.permanently_removed and actor.removal_reason is reason
+                assert actor.current_active_slot == 1
+                assert not actor.controller_eligible and snapshot.slot_for(actor.key) is None
+                assert actor.key not in live_keys
+                assert retirements == [(actor.key, reason.value)]
+                assert self._state is None and self._action is None
+                terminal_keys.append(actor.key)
+            super().observe(snapshot, live_keys)
+
+    native_step = env.step
+
+    def step(actions):
+        native_step(actions)
+        if env.step_calls == terminal_step:
+            native_ego.update(
+                collision_state=collision_state,
+                collided_before_goal=history,
+                stopped=True,
+            )
+
+    env.step = step
+    ego = SpyPPO(policy)
+    report = run_episode(
+        env, binary, binding, ego, ExpertController("traffic"),
+        steps=terminal_step + 2,
+        frame_fn=lambda state, _, tick: {
+            "step": tick,
+            "removed": state["entities"][1]["removed"],
+            "collision_state": state["entities"][1]["collision_state"],
+        },
+    )
+    assert report["terminal_reason"] == f"ego_{reason.value}"
+    assert report["observation_frames"] == terminal_step + 1
+    assert report["transitions"] == env.step_calls == len(policy.calls) == terminal_step
+    assert env.events[-1][0] == "step"
+    assert len(terminal_keys) == 1 and ego._state is None and ego._action is None
+    terminal = report["frames"][-1]
+    assert not terminal["transition_applied"]
+    assert not terminal["state"]["removed"]
+    assert terminal["state"]["collision_state"] == collision_state
+    assert all(actor["action"] is None for actor in terminal["actors"])
