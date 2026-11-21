@@ -246,7 +246,7 @@ def test_invalid_protocol_does_not_create_run_directory(monkeypatch, tmp_path, c
     assert not runs.exists()
 
 
-@pytest.mark.parametrize("ego,traffic", [("smart", "idm"), ("idm", "ppo"), ("ppo", "smart")])
+@pytest.mark.parametrize("ego,traffic", [("smart", "idm"), ("smart", "ppo"), ("ppo", "smart")])
 def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, capsys, ego, traffic):
     runs = tmp_path / "runs"
     monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
@@ -264,7 +264,7 @@ def test_valid_new_pair_is_not_routed_to_legacy_runner(monkeypatch, tmp_path, ca
     "selection,diagnostic_requested",
     [("scene", False), ("scene", True), ("manifest", False)],
 )
-@pytest.mark.parametrize("ego,traffic", [("expert", "idm"), ("ppo", "expert"), ("ppo", "idm")])
+@pytest.mark.parametrize("ego,traffic", [("expert", "idm"), ("ppo", "expert"), ("ppo", "idm"), ("expert", "ppo"), ("idm", "ppo"), ("ppo", "ppo")])
 def test_matrix_run_metadata_never_claims_research_admission(
     monkeypatch, tmp_path, selection, diagnostic_requested, ego, traffic
 ):

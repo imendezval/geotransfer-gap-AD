@@ -302,10 +302,11 @@ def main(argv=None):
         if protocol.ego not in ("expert", "idm", "ppo") or protocol.traffic not in (
             "expert",
             "idm",
+            "ppo",
         ):
             ap.error(
                 f"controller pair {protocol.ego}/{protocol.traffic} is not yet "
-                "integrated; traffic supports expert/idm and ego supports expert/idm/ppo; "
+                "integrated; both roles support expert/idm/ppo; "
                 "no run directory was created"
             )
         if not 1 <= protocol.steps <= 91:
