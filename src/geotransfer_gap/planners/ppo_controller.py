@@ -63,9 +63,13 @@ class PPOController:
         self._last_step = snapshot.step
 
     def act(self, snapshot, eligible_targets):
-        if snapshot.step != self._last_step or eligible_targets != self._actions.keys():
+        if (
+            snapshot.step != self._last_step
+            or not eligible_targets <= self._actions.keys()
+            or (self.role == "ego" and eligible_targets != self._actions.keys())
+        ):
             raise ValueError(f"PPO {self.role} has no matching cached action at step {snapshot.step}")
-        return dict(self._actions)
+        return {key: action for key, action in self._actions.items() if key in eligible_targets}
 
     def retire(self, actor, reason):
         self._states.pop(actor, None)

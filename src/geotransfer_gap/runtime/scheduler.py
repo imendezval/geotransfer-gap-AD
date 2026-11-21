@@ -16,8 +16,9 @@ from geotransfer_gap.planners.controller_api import (
     DynamicsIntent,
 )
 from geotransfer_gap.planners.expert_controller import ExpertController
-from geotransfer_gap.runtime.actor_index import ActorKey, SourceActorID
+from geotransfer_gap.runtime.actor_index import ActorIndex, ActorKey, SourceActorID
 from geotransfer_gap.runtime.native_modes import NativeMovementMode
+from geotransfer_gap.runtime.startup_policy import StartupPolicy
 from geotransfer_gap.runtime.step_snapshot import RemovalReason, StepSnapshot
 
 
@@ -200,7 +201,8 @@ class NativeActionWriter:
 class EpisodeScheduler:
     """Resolve roles from one immutable pre-action frame and advance once."""
 
-    def __init__(self, binding, ego_controller: Controller, traffic_controller: Controller):
+    def __init__(self, binding, ego_controller: Controller, traffic_controller: Controller,
+                 *, startup: StartupPolicy | None = None):
         if ego_controller.role != "ego":
             raise ValueError("ego controller must declare role='ego'")
         if traffic_controller.role != "traffic":
@@ -211,6 +213,10 @@ class EpisodeScheduler:
         }
         for controller in self.controllers.values():
             _normalized_controller_name(controller)
+        self.startup = startup or StartupPolicy()
+        if self.startup.mode == "source_hold" and traffic_controller.name == "expert":
+            raise ValueError("source_hold requires non-expert traffic")
+        self._release_steps: dict[ActorKey, int] = {}
         self.warmup_experts = {
             role: (
                 controller
@@ -241,6 +247,7 @@ class EpisodeScheduler:
         self.writer.reset()
         self._observed_lifetimes.clear()
         self._retired_lifetimes.clear()
+        self._release_steps.clear()
         self._reset = True
 
     def _controller_instances(self):
@@ -309,8 +316,15 @@ class EpisodeScheduler:
             "ego": self._eligible_targets(snapshot, "ego"),
             "traffic": self._eligible_targets(snapshot, "traffic"),
         }
+        held = frozenset(
+            key for key in role_targets["traffic"]
+            if snapshot.step >= 10
+            and self.startup.held(snapshot.actor_for(key).fixed_binary_index, snapshot.step)
+        )
+        role_targets["traffic"] -= held
         decisions = {}
         if advances_simulation:
+            decisions.update(dict.fromkeys(held, ReplayIntent()))
             for role in ("ego", "traffic"):
                 controller = (
                     self.warmup_experts[role]
@@ -367,6 +381,8 @@ class EpisodeScheduler:
                 effective_owner = (
                     "warmup_replay"
                     if snapshot.step < 10
+                    else "source_hold_replay"
+                    if actor.key in held
                     else f"{role}:{_normalized_controller_name(controller)}"
                 )
                 declared_controller = _normalized_controller_name(controller)
@@ -426,7 +442,31 @@ class EpisodeScheduler:
 
     def advance(self, env, plan: TickPlan):
         """Apply the completed plan through one writer and one native step."""
-        return self.writer.apply_and_step(env, plan)
+        actions = self.writer.apply_and_step(env, plan)
+        if self.startup.mode == "source_hold":
+            for a in plan.assignments:
+                if (a.role == "traffic" and a.binary_index in self.startup.releases
+                        and a.native_mode != NativeMovementMode.EXPERT_REPLAY):
+                    self._release_steps.setdefault(a.key, plan.snapshot.step)
+        return actions
+
+    def startup_record(self, actor, step, advances):
+        scheduled = self.startup.releases.get(actor.fixed_binary_index)
+        actual = self._release_steps.get(actor.key)
+        if actor.is_ego or actor.marked_expert or actor.actor_type != ActorIndex.VEHICLE_TYPE:
+            status = "exempt"
+        elif scheduled is None:
+            status = "not_scheduled"
+        elif actual is not None:
+            status = "released"
+        elif scheduled == self.startup.window and step + 1 == self.startup.window:
+            status = "held_through_window"
+        elif not advances:
+            status = "scheduled_not_released"
+        else:
+            status = "scheduled"
+        return {"scheduled_release_step": scheduled, "actual_release_step": actual,
+                "startup_status": status}
 
     @staticmethod
     def _eligible_targets(snapshot: StepSnapshot, role: str) -> frozenset[ActorKey]:
