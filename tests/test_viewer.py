@@ -153,9 +153,14 @@ def saved_campaign(tmp_path, matrix_bundle):
 
     root, folder, report, _ = matrix_bundle
     campaign = tmp_path / "campaign"
+    from shutil import copytree
+
+    folder = copytree(folder, campaign / "single/expert_idm_source_hold" / root.name / "runs/old" / root.name)
     files = {kind: {"path": name, "sha256": sha256(folder / name)}
              for kind, name in (("trace", "trace.json"), ("provenance", "verification.json"))}
-    write_json(campaign / "campaign.json", {"inventory": {"scenes": [
+    write_json(campaign / "campaign.json", {
+        "batch": [{"selectors": ["--manifest", str(campaign / "manifests/source_hold.json")]}],
+        "inventory": {"scenes": [
         {"name": root.name, "root": report["scene"]},
     ]}})
     write_json(campaign / "verification_matrix.json", {"slots": [
@@ -234,3 +239,24 @@ def test_campaign_gallery_cannot_follow_page_symlink_into_evidence(tmp_path, sav
         viewer.main(["--campaign", str(campaign), "--output", str(gallery)])
     assert "outside the saved campaign" in capsys.readouterr().err
     assert report.read_bytes() == before
+
+
+def test_relocated_campaign_uses_only_archive_evidence(tmp_path, saved_campaign):
+    from shutil import copytree
+
+    from geotransfer_gap.artifacts import read_json, write_json
+    from geotransfer_gap.visualization.campaign_gallery import render_campaign
+
+    campaign, folder = saved_campaign
+    original = render_campaign(campaign, tmp_path / "original")
+    moved = copytree(campaign, tmp_path / "relocated")
+    (folder / "trace.json").unlink()
+    relocated = render_campaign(moved, tmp_path / "new-gallery")
+    marker = '#pair=expert%20%2F%20idm%20%2F%20source_hold'
+    assert marker in original.read_text() and marker in relocated.read_text()
+    matrix = moved / "verification_matrix.json"
+    report = read_json(matrix)
+    report["slots"][0]["single"]["directory"] = str(tmp_path / "escape" / folder.name)
+    write_json(matrix, report)
+    with pytest.raises(ValueError, match="outside|escapes"):
+        render_campaign(moved, tmp_path / "unsafe-gallery")

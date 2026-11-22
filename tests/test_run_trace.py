@@ -201,3 +201,20 @@ def test_release_schedule_is_recomputed_from_authoritative_inputs(tmp_path, monk
     report["startup_policy"]["release_schedule"][0]["step"] = 19
     with pytest.raises(ValueError, match="release schedule"):
         run_trace._validate_startup(report, {"source_hold": source_input}, tmp_path, binary)
+
+
+def test_rejects_altered_startup_display_status():
+    report = trace()
+    report["traffic_startup"] = "source_hold"
+    report["startup_policy"] = {"window_observations": 91, "release_schedule": []}
+    binary = {"sdc_track_index": 0, "objects": [
+        {"id": 41, "type": 1}, {"id": 2, "type": 3},
+    ]}
+    for frame in report["frames"]:
+        for actor in frame["actors"]:
+            actor.update(scheduled_release_step=None, actual_release_step=None, startup_status="exempt")
+    evidence = lifecycle(report)
+    validate_trace(report, evidence, binary)
+    report["frames"][-1]["actors"][-1]["startup_status"] = "released"
+    with pytest.raises(ValueError, match="startup status"):
+        validate_trace(report, evidence, binary)
