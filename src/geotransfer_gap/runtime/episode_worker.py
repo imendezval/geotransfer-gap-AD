@@ -13,6 +13,21 @@ from geotransfer_gap.runtime.startup_policy import StartupPolicy
 from geotransfer_gap.runtime.matrix_inputs import binary_path, load_binary, load_source_hold
 
 
+def prepare_scene_alias(root):
+    """Handle concurrent first use without changing the admitted session code."""
+    from .session import short_alias
+
+    root = Path(root).resolve()
+    try:
+        alias = short_alias(root)
+    except FileExistsError:
+        # A concurrent worker may have created the link after the existence check.
+        alias = short_alias(root)
+    if not alias.is_symlink() or alias.resolve() != root:
+        raise RuntimeError(f"Unexpected scene alias: {alias}")
+    return alias
+
+
 def run_episode(
     env,
     binary,
@@ -181,6 +196,7 @@ def main(argv=None):
 
     np.random.seed(0)
     lifecycle = []
+    prepare_scene_alias(root)
     env = evaluation_env(root)
     native_settings = {
         "ini": env.ini_file, "dynamics_model": env.dynamics_model,
