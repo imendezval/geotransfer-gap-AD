@@ -27,3 +27,18 @@ def test_goal_evidence_uses_native_pre_step_slot(award, collision, terminal, cau
     assert result["raw_reached_goal"] is False
     assert result["native_goal_awards"] == ([{"transition_from_tick": 8, "observed_at_tick": 9,
                                             "active_slot": 1, "raw_count": 1.0}] if award else [])
+
+
+def test_campaign_outcome_keeps_raw_flag_separate_from_native_award():
+    from geotransfer_gap.matrix_campaign import _driving_outcome
+
+    trace = {"terminal_reason": "ego_removed", "transitions": 1, "ego_binary_index": 0,
+             "requested_observation_frames": 91, "observation_frames": 2, "frames": [
+        {"state": {"actors": [{"binary_index": 0, "collision_state": 0, "present": False,
+                               "removed": True, "reached_goal": False}]}}
+    ]}
+    assert _driving_outcome(trace)["native_goal_award_observed"] is None
+    outcome = _driving_outcome(trace, {"native_goal_awards": [{}], "terminal_cause": "goal_award"})
+    assert outcome["native_goal_award_observed"] is True
+    assert outcome["reached_goal"] is False
+    assert outcome["terminal_cause"] == "goal_award"
