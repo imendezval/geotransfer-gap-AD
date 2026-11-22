@@ -188,7 +188,8 @@ def _run_queue(args):
     previous = (
         json.loads(args.ledger.read_text()) if args.ledger.exists() else {"results": []}
     )
-    rows = previous["results"]
+    rows = [dict(item, status="interrupted") if item.get("status") == "running" else item
+            for item in previous["results"]]
     sources = {recording: source_fingerprints(recording) for recording in {r["recording"] for r in jobs}}
 
     def reusable(row):
@@ -204,12 +205,13 @@ def _run_queue(args):
     )
     scene_locks = {scene_key(row): threading.Lock() for row in jobs}
 
+    def root_for(row):
+        return (project_path("pilot/oriented_v3")
+                / f"r{row['recording']:02d}_e{row['ego']}_f{row['first_frame']}")
+
     def run(row):
         with scene_locks[scene_key(row)]:
-            root = (
-                project_path("pilot/oriented_v3")
-                / f"r{row['recording']:02d}_e{row['ego']}_f{row['first_frame']}"
-            )
+            root = root_for(row)
             root.mkdir(parents=True, exist_ok=True)
             with (root / ".candidate_queue.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
@@ -230,8 +232,8 @@ def _run_queue(args):
 
     def run_scene(row):
         row = dict(row)
-        rec, ego, first = (row["recording"], row["ego"], row["first_frame"])
-        root = project_path("pilot/oriented_v3") / f"r{rec:02d}_e{ego}_f{first}"
+        rec, ego, first = scene_key(row)
+        root = root_for(row)
         t = root / "testing"
         root.mkdir(parents=True, exist_ok=True)
         row.update(root=str(root), screen_fingerprints=fingerprints,
@@ -413,15 +415,7 @@ def _run_queue(args):
     }
     attempted = 0
 
-    def record(row):
-        nonlocal rows, attempted
-        retain_previous(row, rows)
-        rows = [item for item in rows if not same_producer_record(item, row)] + [row]
-        if row.get("technical_admitted") and (
-            row.get("candidate_actor_fidelity") or {}
-        ).get("preserved_for_claimed_interaction"):
-            faithful.add(task_key(row))
-        attempted += 1
+    def persist():
         report = {
             "schema_version": 2,
             "selection_sha256": sha(args.selection),
@@ -430,6 +424,28 @@ def _run_queue(args):
             "results": rows,
         }
         write_json(args.ledger, report)
+
+    def begin(batch):
+        nonlocal rows
+        for job in batch:
+            row = dict(job, root=str(root_for(job)), status="running",
+                       screen_fingerprints=fingerprints, source_fingerprints=sources[job["recording"]])
+            retain_previous(row, rows)
+            rows = [item for item in rows if not same_producer_record(item, row)] + [row]
+        if batch:
+            persist()
+
+    def record(row):
+        nonlocal rows, attempted
+        active, = (item for item in rows if same_producer_record(item, row))
+        row["attempt_history"] = active["attempt_history"]
+        rows = [item for item in rows if not same_producer_record(item, row)] + [row]
+        if row.get("technical_admitted") and (
+            row.get("candidate_actor_fidelity") or {}
+        ).get("preserved_for_claimed_interaction"):
+            faithful.add(task_key(row))
+        attempted += 1
+        persist()
         print(
             resolve_reference(row["root"]).name,
             row["status"],
@@ -439,7 +455,9 @@ def _run_queue(args):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         if not args.one_faithful_window_per_task:
-            for row in pool.map(run, remaining[: args.limit]):
+            batch = remaining[: args.limit]
+            begin(batch)
+            for row in pool.map(run, batch):
                 record(row)
         else:
             while remaining and attempted < args.limit:
@@ -464,6 +482,7 @@ def _run_queue(args):
                 remaining = later
                 if not batch:
                     break
+                begin(batch)
                 for row in pool.map(run, batch):
                     record(row)
     print(
