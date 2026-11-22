@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from geotransfer_gap.config import settings
 from geotransfer_gap.artifacts import write_json
 
@@ -15,6 +16,25 @@ def main(argv=None):
     ap = argparse.ArgumentParser(__doc__)
     ap.add_argument("--skip-admission", action="store_true")
     args = ap.parse_args(argv)
+    cfg = settings()
+    destination = cfg.runs / "checks"
+    destination.mkdir(parents=True, exist_ok=True)
+    env = dict(
+        os.environ,
+        MPLCONFIGDIR=os.environ.get("MPLCONFIGDIR", "/tmp/geotransfer_mpl"),
+        OMP_NUM_THREADS="2",
+    )
+    with TemporaryDirectory(prefix="check-artifacts-", dir=destination) as scratch:
+        artifacts = Path(scratch)
+        # Dereference input aliases. Hard links would let a regression rewrite
+        # live evidence through a scratch path.
+        subprocess.run(["cp", "-RL", "--reflink=auto", str(cfg.artifacts) + "/.",
+                        str(artifacts)], check=True)
+        env["GEOTRANSFER_ARTIFACTS"] = str(artifacts)
+        _run_checks(args, destination, env, cfg.project, artifacts)
+
+
+def _run_checks(args, destination, env, project, artifacts):
     checks = [
         "orientation",
         "lane-changes",
@@ -29,19 +49,12 @@ def main(argv=None):
     ]
     if not args.skip_admission:
         checks += ["admission"]
-    destination = settings().runs / "checks"
-    destination.mkdir(parents=True, exist_ok=True)
-    env = dict(
-        os.environ,
-        MPLCONFIGDIR=os.environ.get("MPLCONFIGDIR", "/tmp/geotransfer_mpl"),
-        OMP_NUM_THREADS="2",
-    )
     results = []
     for check in checks:
         with (destination / (check + ".log")).open("w") as log:
             proc = subprocess.run(
                 [sys.executable, "-m", "geotransfer_gap", "check", check],
-                cwd=settings().project,
+                cwd=project,
                 env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -54,22 +67,22 @@ def main(argv=None):
     for check, extra in [
         (
             "reentry",
-            ["--root", str(settings().artifacts / "probes/us_hybrid_1002fdc9826fc6d1")],
+            ["--root", str(artifacts / "probes/us_hybrid_1002fdc9826fc6d1")],
         ),
         (
             "startup",
             [
                 "--root",
-                str(settings().artifacts / "oriented_v3/r32_e391_f21356"),
+                str(artifacts / "oriented_v3/r32_e391_f21356"),
                 "--output-root",
-                str(settings().artifacts / "probes/startup_regression"),
+                str(artifacts / "probes/startup_regression"),
             ],
         ),
     ]:
         with (destination / (check + ".log")).open("w") as log:
             proc = subprocess.run(
                 [sys.executable, "-m", "geotransfer_gap", "check", check, *extra],
-                cwd=settings().project,
+                cwd=project,
                 env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
