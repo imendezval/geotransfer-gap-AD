@@ -34,3 +34,28 @@ def test_publication_writer_failure_does_not_replace_current(tmp_path, monkeypat
     with pytest.raises(KeyboardInterrupt):
         builder.publish_current(path, manifest("b"), digest)
     assert sha256(path) == digest
+
+
+@pytest.mark.parametrize("has_gate", [False, True])
+def test_publication_does_not_replace_current_when_selected_evidence_is_missing_or_stale(
+        tmp_path, monkeypatch, has_gate):
+    import sys
+
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(tmp_path))
+    current = tmp_path / "corpus/current.json"
+    write_json(current, manifest("a", "b"))
+    digest = sha256(current)
+    scene = tmp_path / "candidate"
+    (scene / "testing").mkdir(parents=True)
+    if has_gate:
+        write_json(scene / "testing/admission_smart_hybrid_startup.json", {"contract": {"old": True}})
+        monkeypatch.setattr(builder.scene_contract, "build", lambda *args: {"new": True})
+    selection = tmp_path / "selection.json"
+    write_json(selection, {"jobs": [{"root": str(scene), "role": "control"}]})
+    monkeypatch.setattr(sys, "argv", ["builder", "--selection", str(selection),
+                                    "--output-prefix", str(tmp_path / "preview"), "--publish-current",
+                                    "--expected-current-sha256", digest])
+    with pytest.raises(ValueError, match="stale or missing"):
+        builder.main()
+    assert sha256(current) == digest
+    assert (tmp_path / "preview_summary.json").is_file()
