@@ -1,29 +1,150 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><title>GeoTransfer playback</title>
-<style>body{font:15px system-ui;margin:20px;background:#f3f5f8;color:#182331}header,nav{margin-bottom:14px}button,select{padding:7px;margin-right:8px}input{width:45%}main{display:flex;gap:12px;flex-wrap:wrap}section{flex:1;min-width:320px;max-width:700px;background:white;padding:10px;border-radius:8px}canvas{width:100%;height:auto}pre{white-space:pre-wrap;font-size:12px}small{display:block;max-width:1100px;margin-top:10px}</style>
-<header><h1 id="title"></h1><small id="notice"></small></header>
-<nav><button id="play">Play</button><input id="time" aria-label="Time" type="range" min="0" max="90" value="0"><span id="clock"></span><label><input type="checkbox" id="aerial" style="width:auto" checked>Aerial</label></nav>
-<main><section><h2>Source recording</h2><canvas id="left" width="700" height="600"></canvas></section><section><h2><select id="mode" aria-label="Comparison view"><option value="converted">Converted scene</option></select></h2><canvas id="right" width="700" height="600"></canvas><p id="events"></p></section></main>
-<small>Red: ego. Blue: vehicles. Green: pedestrians/cyclists. Boxes follow supplied or explicitly estimated dimensions. Playback uses metres and a synchronized 0.1 s timeline; source samples are interpolated from the 25 Hz recording.</small>
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoTransfer playback</title>
+<style>
+body{font:15px system-ui;margin:20px;background:#f3f5f8;color:#182331}
+header,nav{margin-bottom:14px}button,select{padding:7px;margin-right:8px}
+#time{width:min(45vw,34rem)}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:12px}
+section{min-width:0;background:white;padding:10px;border-radius:8px}
+canvas{width:100%;height:auto}pre{white-space:pre-wrap;font-size:12px}
+small{display:block;margin:8px 0}.state{min-height:2.5em}.scroll{overflow:auto;max-height:20rem}
+table{border-collapse:collapse;width:100%;font-size:.82rem;text-align:left}
+th,td{padding:.45rem;border-bottom:1px solid #d2d9e3;vertical-align:top}
+th{position:sticky;top:0;background:#edf2f8}.ego{font-weight:bold}h1,h2{margin:0 0 .5rem}
+</style>
+<header><h1 id="title"></h1><small id="notice"></small><p id="limitations"></p></header>
+<nav>
+  <button id="play">Play</button><input id="time" aria-label="Step" type="range" min="0" value="0">
+  <output id="clock"></output>
+  <label><input type="checkbox" id="aerial" checked> Aerial</label>
+</nav>
+<main>
+  <section><h2><select id="baseline" aria-label="Reference trajectory"></select></h2>
+    <p class="state" id="left-status"></p><canvas id="left" width="700" height="560"></canvas></section>
+  <section><h2><select id="mode" aria-label="Comparison view"></select></h2>
+    <p class="state" id="right-status"></p><canvas id="right" width="700" height="560"></canvas></section>
+</main>
+<p id="difference" aria-live="polite"></p>
+<label>Actor details for <select id="details-for" aria-label="Actor details panel">
+  <option value="right">Comparison</option><option value="left">Reference</option>
+</select></label>
+<p id="events" aria-live="polite"></p>
+<div class="scroll"><table>
+  <thead><tr><th>Source ID / binary / lifetime</th><th>Declared / effective movement owner</th>
+  <th>Native / applied mode</th><th>Applied action</th><th>Scheduled / actual release</th>
+  <th>Events</th></tr></thead><tbody id="actors"></tbody>
+</table></div>
+<small>Red denotes ego, blue vehicles and green other road users. Position differences compare the ego at a shared recorded step in metres.</small>
 <details><summary>Provenance and interpretation limits</summary><pre id="provenance"></pre></details>
 <script>
 const D=__DATA__;
-document.getElementById('title').textContent=D.scene;document.getElementById('notice').textContent=D.provenance.notice;
-document.getElementById('provenance').textContent=JSON.stringify({source:D.provenance,runs:D.runs.map(r=>r.provenance)},null,2);
-const slider=document.getElementById('time'),mode=document.getElementById('mode'),img=new Image();
-D.runs.forEach((r,i)=>{const o=document.createElement('option');o.value=i;o.textContent=r.name+' evaluator rollout';mode.appendChild(o)});
-let timer=null;const points=D.source.flatMap(f=>f.actors.filter(a=>a.id===D.ego_id&&a.present));
-const xmin=Math.min(...points.map(p=>p.x))-25,xmax=Math.max(...points.map(p=>p.x))+25,ymin=Math.min(...points.map(p=>p.y))-25,ymax=Math.max(...points.map(p=>p.y))+25;
-const scale=Math.min(680/(xmax-xmin),580/(ymax-ymin)),X=x=>10+(x-xmin)*scale,Y=y=>590-(y-ymin)*scale;
-function draw(id,frame){const c=document.getElementById(id).getContext('2d');c.clearRect(0,0,700,600);c.fillStyle='#f8fafc';c.fillRect(0,0,700,600);
- const reg=D.registration;if(img.complete&&img.naturalWidth&&document.getElementById('aerial').checked){c.globalAlpha=.8;c.drawImage(img,X(reg.local_x_at_image_x0_m),Y(reg.local_y_at_image_y0_m),img.width*reg.pixel_scale_m*scale,img.height*reg.pixel_scale_m*scale);c.globalAlpha=1}
- for(const road of D.roads){const pts=road.geometry;if(!pts||!pts.length)continue;c.beginPath();pts.forEach((p,i)=>i?c.lineTo(X(p.x),Y(p.y)):c.moveTo(X(p.x),Y(p.y)));c.strokeStyle=road.type==='crosswalk'?'#dbb600':'#727c89';c.lineWidth=road.type==='lane'?.7:1.5;c.stroke()}
- c.strokeStyle='#d52f35';c.beginPath();points.forEach((p,i)=>i?c.lineTo(X(p.x),Y(p.y)):c.moveTo(X(p.x),Y(p.y)));c.stroke();c.fillStyle='#ae1d92';c.fillRect(X(D.goal.x)-4,Y(D.goal.y)-4,8,8);
- if(!frame){c.fillStyle='#333';c.fillText('Run ended; no further observed state',20,25);return}
- for(const a of frame.actors){if(!a.present)continue;const ego=a.id===D.ego_id,vehicle=a.type===1||a.type==='vehicle';c.save();c.translate(X(a.x),Y(a.y));c.rotate(-a.heading);c.strokeStyle=ego?'#d52f35':vehicle?'#087fd0':'#00803d';c.lineWidth=ego?3:1.5;c.strokeRect(-a.length*scale/2,-a.width*scale/2,a.length*scale,a.width*scale);c.beginPath();c.moveTo(0,0);c.lineTo(a.length*scale/2,0);c.stroke();c.restore();c.fillStyle='#101820';c.fillText(String(a.id),X(a.x)+4,Y(a.y)-4)}
+const el=id=>document.getElementById(id), known=value=>value ?? 'not recorded';
+el('title').textContent=D.scene;
+el('notice').textContent=D.provenance.notice;
+el('limitations').textContent=D.limitations.join(' · ');
+el('provenance').textContent=JSON.stringify({source:D.provenance,runs:D.runs.map(r=>r.provenance)},null,2);
+const choices=[];
+if(D.source.length)choices.push({name:'Source recording',frames:D.source,ego_id:D.ego_id});
+if(D.converted.length)choices.push({name:'Converted scene',frames:D.converted,ego_id:D.ego_id});
+choices.push(...D.runs);
+if(!choices.length)choices.push({name:'No recorded actor states',frames:[]});
+const slider=el('time'),reference=el('baseline'),mode=el('mode'),img=new Image();
+for(const select of [reference,mode]){
+ choices.forEach((r,i)=>select.add(new Option(r.name,i)));
 }
-function update(){const t=+slider.value;document.getElementById('clock').textContent=(t*.1).toFixed(1)+' s';draw('left',D.source[t]);const run=mode.value==='converted'?null:D.runs[+mode.value];
- let frame=run?run.frames.find(f=>f.step===t):D.converted[t];draw('right',frame);
- document.getElementById('events').textContent=frame?frame.actors.filter(a=>a.collision_state||a.removed||a.reached_goal).map(a=>a.id+': '+(a.collision_state?'collision/off-road':a.reached_goal?'goal':'removed')).join('; '):'Rollout ended';}
-slider.oninput=update;mode.onchange=update;document.getElementById('aerial').onchange=update;document.getElementById('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;document.getElementById('play').textContent='Play'}else{document.getElementById('play').textContent='Pause';timer=setInterval(()=>{slider.value=(+slider.value+1)%91;update()},100)}};
-img.onload=update;img.src=D.image;update();
-</script></html>
+mode.value=choices.length>1?'1':'0';
+el('aerial').disabled=!D.image;
+slider.max=Math.max(0,...choices.flatMap(r=>r.frames.map(f=>f.step)));
+const ego=(run,frame)=>frame?.actors.find(a=>a.id===run.ego_id&&a.present);
+const position=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);
+let points=choices.flatMap(r=>r.frames.map(f=>ego(r,f))).filter(position);
+if(!points.length)points=choices.flatMap(r=>r.frames.flatMap(f=>f.actors.filter(a=>a.present&&position(a))));
+function limits(key){let min=Infinity,max=-Infinity;for(const p of points){min=Math.min(min,p[key]);max=Math.max(max,p[key]);}return points.length?[min-25,max+25]:[-25,25];}
+const [xmin,xmax]=limits('x'),[ymin,ymax]=limits('y');
+const scale=Math.min(680/(xmax-xmin),540/(ymax-ymin));
+const X=x=>350+(x-(xmin+xmax)/2)*scale,Y=y=>280-(y-(ymin+ymax)/2)*scale;
+function draw(id,run,frame){
+ const c=el(id).getContext('2d');c.fillStyle='#f8fafc';c.fillRect(0,0,700,560);
+ const reg=D.registration;
+ if(reg&&img.complete&&img.naturalWidth&&el('aerial').checked){
+  c.globalAlpha=.8;c.drawImage(img,X(reg.local_x_at_image_x0_m),Y(reg.local_y_at_image_y0_m),img.width*reg.pixel_scale_m*scale,img.height*reg.pixel_scale_m*scale);c.globalAlpha=1;
+ }
+ for(const road of D.roads){
+  const pts=road.geometry;if(!pts?.length)continue;
+  c.beginPath();pts.forEach((p,i)=>i?c.lineTo(X(p.x),Y(p.y)):c.moveTo(X(p.x),Y(p.y)));
+  c.strokeStyle=road.type==='crosswalk'?'#aa8700':'#727c89';c.lineWidth=road.type==='lane'?.7:1.5;c.stroke();
+ }
+ c.strokeStyle='#d52f35';c.lineWidth=1;c.beginPath();let connected=false;
+ for(const f of run.frames){
+  const p=ego(run,f);if(!position(p)){connected=false;continue;}
+  if(connected)c.lineTo(X(p.x),Y(p.y));else c.moveTo(X(p.x),Y(p.y));connected=true;
+ }
+ c.stroke();
+ if(D.goal){c.fillStyle='#ae1d92';c.fillRect(X(D.goal.x)-4,Y(D.goal.y)-4,8,8);}
+ if(!frame){c.fillStyle='#333';c.fillText('No recorded state at this step',20,25);return;}
+ for(const a of frame.actors){
+  if(!a.present||!position(a))continue;
+  const isEgo=a.id===run.ego_id,vehicle=a.type===1||a.type==='vehicle';
+  c.save();c.translate(X(a.x),Y(a.y));c.strokeStyle=isEgo?'#d52f35':vehicle?'#087fd0':'#00803d';c.lineWidth=isEgo?3:1.5;
+  if([a.length,a.width,a.heading].every(Number.isFinite)){
+   c.rotate(-a.heading);c.strokeRect(-a.length*scale/2,-a.width*scale/2,a.length*scale,a.width*scale);
+   c.beginPath();c.moveTo(0,0);c.lineTo(a.length*scale/2,0);c.stroke();
+  }else{c.beginPath();c.arc(0,0,3,0,2*Math.PI);c.stroke();}
+  c.restore();c.fillStyle='#101820';c.fillText(String(a.id),X(a.x)+4,Y(a.y)-4);
+ }
+}
+const modeName=value=>({0:'dynamics',1:'IDM',2:'expert replay'})[value] ?? known(value);
+function showStatus(id,run,frame){
+ if(!run.config){el(id).textContent=frame?'Recorded source state':'No recorded state';return;}
+ const cfg=run.config,terminal=run.frames.at(-1)?.step;
+ const admission=run.original_source_admission?.status;
+ el(id).textContent=[
+  'Ego '+known(cfg.ego)+' · traffic '+known(cfg.traffic)+' · startup '+known(cfg.startup),
+  'Diagnostic only: '+known(run.diagnostic_only)+' · pair admission: '+known(run.research_admission)+
+  ' · original admission: '+known(admission),
+  frame?'Step '+frame.step+' · time '+(frame.time_s==null?'not recorded':frame.time_s.toFixed(1)+' s')+
+      (frame.transition_applied===false?' · no transition':''):'No recorded state',
+  'Terminal: '+known(run.terminal_reason)+(terminal!=null?' · last step '+terminal:'')
+ ].join(' | ');
+}
+function showActors(run,frame){
+ const body=el('actors');body.replaceChildren();
+ el('events').textContent=frame?frame.actors.flatMap(a=>(a.events||[]).map(e=>a.id+' '+e)).join(' · ')||'No recorded events at this step':'No recorded actor states at this step';
+ for(const a of frame?.actors ?? []){
+  const row=body.insertRow();if(a.id===run.ego_id)row.className='ego';
+  const applied=a.applied_movement_mode==null && frame.transition_applied===false?'no transition':modeName(a.applied_movement_mode);
+  const release=a.startup_status?.replaceAll('_',' ');
+  const actual=a.actual_release_step==null&&a.scheduled_release_step!=null?'not released':known(a.actual_release_step);
+  const values=[
+   [a.id,known(a.binary_index),known(a.lifetime_generation)].join(' / '),
+   known(a.declared_controller)+' / '+(a.owner_label??'not recorded'),
+   modeName(a.pre_step_native_movement_mode??a.movement_mode)+' / '+applied,
+   a.action==null?(frame.transition_applied===false?'no transition':'not recorded'):'['+a.action.join(', ')+']',
+   known(a.scheduled_release_step)+' / '+actual+(release?' · '+release:''),
+   (a.events||[]).join(' · ')
+  ];
+  for(const value of values)row.insertCell().textContent=value;
+ }
+}
+function update(){
+ const tick=+slider.value,left=choices[+reference.value],right=choices[+mode.value];
+ const a=left.frames.find(f=>f.step===tick),b=right.frames.find(f=>f.step===tick);
+ const time=b?.time_s??a?.time_s;
+ el('clock').textContent='Step '+tick+(time==null?'':' · '+time.toFixed(1)+' s');
+ draw('left',left,a);draw('right',right,b);showStatus('left-status',left,a);showStatus('right-status',right,b);
+ const p=ego(left,a),q=ego(right,b);
+ el('difference').textContent=position(p)&&position(q)?'Ego position difference '+Math.hypot(q.x-p.x,q.y-p.y).toFixed(3)+' m':'Ego position comparison unavailable at this step';
+ if(el('details-for').value==='left')showActors(left,a);else showActors(right,b);
+}
+let timer=null;
+for(const id of ['time','baseline','mode','details-for','aerial'])el(id).addEventListener('input',update);
+el('play').onclick=()=>{
+ if(timer){clearInterval(timer);timer=null;el('play').textContent='Play';}
+ else{el('play').textContent='Pause';timer=setInterval(()=>{slider.value=(+slider.value+1)%(+slider.max+1);update();},100);}
+};
+if(D.image){img.onload=update;img.src=D.image;}
+update();
+</script>
+</html>
