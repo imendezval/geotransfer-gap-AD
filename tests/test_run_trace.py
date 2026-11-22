@@ -93,3 +93,12 @@ def test_missing_or_invalid_model_provenance_and_admission_claims_fail(tmp_path)
         validate_claims({"diagnostic_only": True, "controller_pair_research_admission": "not_established",
                          "task_preservation": "not_assessed",
                          "original_source_admission": {"status": "recorded"}})
+
+
+def test_native_state_mismatch_identifies_lifetime():
+    expected = trace()
+    actual = deepcopy(expected)
+    actual["frames"][1]["state"]["actors"][0]["x"] += 1
+    mismatch = compare({"trace": expected}, {"trace": actual})
+    assert mismatch["source_id"] == 41 and mismatch["lifetime"] == 0
+    assert mismatch["tick"] == 1 and mismatch["field"] == "trace.frames.state.actors.x"

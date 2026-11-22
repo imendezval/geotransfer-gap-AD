@@ -110,3 +110,11 @@ execute_batch(Path(sys.argv[1]), {"steps": 12},
         fcntl.flock(lock, fcntl.LOCK_EX)
     continued = execute(tmp_path, [row("killed")], PASS, resume=True)
     assert [a["status"] for a in continued["results"][0]["attempts"]] == ["interrupted", "passed"]
+
+
+def test_resume_checks_existing_passed_evidence_without_rerunning(tmp_path):
+    execute(tmp_path, [row("done")], PASS)
+    (tmp_path / "done/trace.json").write_text("tampered")
+    with pytest.raises((ValueError, OSError), match="passed evidence"):
+        execute(tmp_path, [row("done")], PASS, resume=True)
+    assert not (tmp_path / "done/attempt-0002").exists()
