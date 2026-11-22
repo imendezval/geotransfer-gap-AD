@@ -4,6 +4,7 @@ import argparse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import fcntl
+from hashlib import sha256 as hash_bytes
 from importlib.metadata import distribution
 import math
 from pathlib import Path
@@ -101,13 +102,23 @@ def fingerprint_environment():
     if runtime["runtime_source_sha256"] != RUNTIME_DIGEST:
         raise ValueError("unexpected corrected native runtime digest")
     packages = {}
-    for name in ("numpy", "torch"):
+    for name, filenames in {
+        "numpy": ("_multiarray_umath",),
+        "torch": ("_C.cpython", "libtorch_cpu.so", "libtorch_python.so"),
+    }.items():
         package = distribution(name)
         record = package.read_text("RECORD")
         if record is None:
             raise ValueError(f"{name} distribution has no RECORD")
-        from hashlib import sha256 as hash_bytes
-        packages[name] = {"version": package.version, "record_sha256": hash_bytes(record.encode()).hexdigest()}
+        critical = {
+            str(file): sha256(package.locate_file(file))
+            for file in package.files if str(file).endswith(".so")
+            and file.name.startswith(filenames) and str(file).startswith(name + "/")
+        }
+        if len(critical) != len(filenames):
+            raise ValueError(f"{name} distribution lacks expected native library fingerprints")
+        packages[name] = {"version": package.version,
+                          "record_sha256": hash_bytes(record.encode()).hexdigest(), "libraries": critical}
     return {
         "commit": _git(cfg.project, "rev-parse", "HEAD"),
         "tree": _git(cfg.project, "rev-parse", "HEAD^{tree}"),
@@ -211,7 +222,9 @@ def execute(root, phase, jobs):
                     print(f"{phase}: {i}/{len(pending)} CLI jobs complete", flush=True)
 
 
-def _job_results(root, jobs):
+def _job_results(root, inventory, jobs):
+    scenes = {s["name"]: s for s in inventory["scenes"]}
+    slots = {s["slot_id"]: s for s in inventory["slots"]}
     results = {}
     for job in jobs:
         folder = root / job["path"]
@@ -246,6 +259,15 @@ def _job_results(root, jobs):
                     record.update(status="failed", failure=attempt.get("classification"))
             if record["status"] == "passed":
                 try:
+                    expected = slots[slot]
+                    scene = scenes[expected["scene"]]
+                    inputs = dict(scene["inputs"])
+                    if expected["startup"] == "immediate":
+                        inputs.pop("source_hold", None)
+                    if (row["scene"] != scene["root"] or row["inputs"] != inputs or row["steps"] != 91
+                            or (row["ego_controller"], row["traffic_controller"], row["traffic_startup"])
+                               != (expected["ego"], expected["traffic"], expected["startup"])):
+                        raise ValueError("attempt scene, inputs or protocol differs from the campaign freeze")
                     latest = Path(record["attempts"][-1]["record"])
                     data = read_json(latest)
                     if data["status"] != "passed" or data["exit_code"] != 0 or data["slot_id"] != slot:
@@ -320,7 +342,7 @@ def _report_rows(root, inventory, single, batch):
 
 def report(root):
     manifest = _assert_frozen(root)
-    single, batch = (_job_results(root, manifest[key]) for key in ("single", "batch"))
+    single, batch = (_job_results(root, manifest["inventory"], manifest[key]) for key in ("single", "batch"))
     rows = list(_report_rows(root, manifest["inventory"], single, batch))
     counts = aggregate(rows)
     totals = counts["total"]
