@@ -12,7 +12,7 @@ import sys
 
 from geotransfer_gap.artifacts import read_json, reference, resolve_reference, sha256, write_json
 from geotransfer_gap.config import settings
-from geotransfer_gap.runtime.matrix_inputs import fingerprint
+from geotransfer_gap.runtime.matrix_inputs import fingerprint, load_binary
 from geotransfer_gap.runtime.native_modes import NativeMovementMode as Mode
 
 BB_COMMIT = "805fe04c6977b60c41c92c31f1a5211fbd704f44"
@@ -57,16 +57,27 @@ def original_admission(scene):
             if row["root"] != scene:
                 continue
             gate = resolve_reference(scene) / "testing/admission_smart_hybrid_startup.json"
-            if (gate.is_file() and sha256(gate) == row["admission_sha256"]
-                    and read_json(gate).get("research_admitted") is True):
-                return {"status": "recorded", "protocol": "SMART/hybrid_startup",
-                        "evidence": fingerprint(gate)}
+            if gate.is_file() and sha256(gate) == row["admission_sha256"]:
+                original = read_json(gate)
+                files = original["contract"]["files"]
+                evidence = [files[key] for key in ("scene_binary", "scene_json", "scene_manifest")]
+                if original.get("research_admitted") is True and all(
+                    resolve_reference(item["reference"]).is_file()
+                    and sha256(resolve_reference(item["reference"])) == item["sha256"]
+                    for item in evidence
+                ):
+                    return {"status": "recorded", "protocol": "SMART/hybrid_startup",
+                            "evidence": fingerprint(gate)}
     return {"status": "not_recorded"}
+
+
+def code_fingerprints():
+    source = Path(__file__).resolve().parents[1]
+    return {str(path.relative_to(source)): sha256(path) for path in sorted(source.rglob("*.py"))}
 
 
 def run_provenance(report, lifecycle, env_settings, binary_file, source):
     cfg = settings()
-    software = Path(__file__).resolve().parents[1]
     return {
         "schema_version": 1, "scene": report["scene"],
         "ego": report["ego_controller"], "traffic": report["traffic_controller"],
@@ -86,10 +97,7 @@ def run_provenance(report, lifecycle, env_settings, binary_file, source):
             "runtime_binary_sha256": sha256(report["runtime"]["runtime_binary"]),
             "evaluation_ini": fingerprint(Path(env_settings["ini"]).resolve()),
             "python": sys.version.split()[0], "numpy": version("numpy"), "torch": version("torch"),
-            "code_sha256": {
-                str(path.relative_to(software)): sha256(path)
-                for path in sorted(software.rglob("*.py"))
-            },
+            "code_sha256": code_fingerprints(),
         },
         "determinism": {
             "device": "cpu", "native_reset_seed": 0, "numpy_seed": 0,
@@ -126,7 +134,7 @@ def _actors_by_id(rows, field, label):
     return result
 
 
-def validate_trace(trace, lifecycle=None):
+def validate_trace(trace, lifecycle=None, binary=None):
     frames = trace["frames"]
     requested = trace["requested_observation_frames"]
     reason = trace["terminal_reason"]
@@ -142,7 +150,13 @@ def validate_trace(trace, lifecycle=None):
     if lifecycle is not None and len(lifecycle) != len(frames):
         raise ValueError("incomplete lifecycle observation trace")
     previous = {}
-    scene_actors = None
+    scene_actors = ({int(obj["id"]): index for index, obj in enumerate(binary["objects"])}
+                    if binary is not None else None)
+    if binary is not None and trace["ego_binary_index"] != binary["sdc_track_index"]:
+        raise ValueError("ego binary index does not match the scene")
+    schedule = {row["binary_index"]: row["step"]
+                for row in trace.get("startup_policy", {}).get("release_schedule", [])}
+    releases = {}
     for tick, frame in enumerate(frames):
         advances = tick < len(frames) - 1
         if (frame["step"] != tick or frame["state"]["step"] != tick
@@ -196,6 +210,11 @@ def validate_trace(trace, lifecycle=None):
                 if info["binary_index"] != actor["binary_index"] or info["lifetime_generation"] != generation:
                     raise ValueError(f"lifecycle identity mismatch at step {tick}, actor {sid}")
                 live = info["source_valid"] and info["native_present"] and not info["permanently_removed"]
+                expected_role = ("ego" if actor["binary_index"] == trace["ego_binary_index"] else "traffic"
+                                 ) if info["controller_eligible"] else "context"
+                if assignment["role"] != expected_role:
+                    raise ValueError(f"unexpected controller ownership at step {tick}, actor {sid}")
+                _validate_ownership(trace, assignment, tick, advances, schedule, releases)
             if live and generation is not None:
                 key = (sid, generation)
                 if previous.get(key) is not None and previous[key] != pre:
@@ -204,6 +223,46 @@ def validate_trace(trace, lifecycle=None):
         if slots != set(range(len(slots))):
             raise ValueError(f"incomplete active slots at step {tick}")
         previous = current
+
+    if lifecycle is not None:
+        ego_id = next(sid for sid, index in scene_actors.items() if index == trace["ego_binary_index"])
+        final, = [row for row in lifecycle[-1]["actors"] if row["source_id"] == ego_id]
+        terminal = state[ego_id]
+        actual_reason = ("ego_removed" if terminal["removed"] else
+                         "ego_absent" if not final["native_present"] else
+                         f"ego_{final['removal_reason']}" if final["permanently_removed"] else "horizon")
+        if reason != actual_reason:
+            raise ValueError("terminal reason does not match the last native ego observation")
+
+
+def _validate_ownership(trace, actor, tick, advances, schedule, releases):
+    sid, index, role = actor["source_id"], actor["binary_index"], actor["role"]
+    declared = trace[f"{role}_controller"] if role != "context" else None
+    if actor["declared_controller"] != declared:
+        raise ValueError(f"unexpected declared controller at step {tick}, actor {sid}")
+    scheduled = schedule.get(index)
+    held = role == "traffic" and scheduled is not None and tick < scheduled
+    if role == "context":
+        owner, mode = None, Mode.EXPERT_REPLAY
+    elif tick < 10 or held:
+        owner = "warmup_replay" if tick < 10 else "source_hold_replay"
+        mode = Mode.EXPERT_REPLAY
+    else:
+        owner = f"{role}:{declared}"
+        mode = {"expert": Mode.EXPERT_REPLAY, "idm": Mode.IDM,
+                "ppo": Mode.DYNAMICS, "smart": Mode.DYNAMICS}[declared]
+    if ((owner is not None and actor["effective_owner"] != owner)
+            or (advances and actor["slot"] is not None and actor["applied_movement_mode"] != mode)
+            or (mode != Mode.DYNAMICS and actor.get("action") not in (None, [0, 0]))):
+        raise ValueError(f"invalid effective owner or controller action at step {tick}, actor {sid}")
+    if trace["traffic_startup"] == "source_hold":
+        key = (sid, actor["lifetime_generation"])
+        if role == "traffic" and scheduled is not None and advances and mode != Mode.EXPERT_REPLAY:
+            releases.setdefault(key, tick)
+        if ("scheduled_release_step" not in actor or "actual_release_step" not in actor
+                or actor["scheduled_release_step"] != scheduled
+                or actor["actual_release_step"] != releases.get(key)):
+            raise ValueError(f"invalid hold/release record at step {tick}, actor {sid}")
 
 
 def _digest(value, label):
@@ -280,6 +339,7 @@ def validate_run(folder, row):
     software = provenance["software"]
     if (software["behaviorbench_commit"] != BB_COMMIT or software["behaviorbench_dirty"]
             or software["runtime_source_digest"] != RUNTIME_DIGEST
+            or software["code_sha256"] != code_fingerprints()
             or trace["runtime"]["runtime_source_sha256"] != RUNTIME_DIGEST
             or software["runtime_binary_sha256"] != sha256(trace["runtime"]["runtime_binary"])):
         raise ValueError("worker did not use the pinned corrected native runtime")
@@ -294,7 +354,8 @@ def validate_run(folder, row):
         raise ValueError("worker did not use the pinned CPU/classic dynamics configuration")
     if trace.get("startup_policy") != provenance["source_hold_prior"]:
         raise ValueError("startup policy provenance is inconsistent")
-    validate_trace(trace, provenance["lifecycle"])
+    binary = load_binary(resolve_reference(row["scene"]))
+    validate_trace(trace, provenance["lifecycle"], binary)
     models = validate_models(folder, row["ego_controller"], row["traffic_controller"])
     if ("smart" in models and models["smart"]["binary_sha256"] != trace["binary_sha256"]):
         raise ValueError("SMART evidence names a different scene binary")
@@ -322,6 +383,9 @@ def canonical(bundle):
     trace = result["trace"]
     for frame in trace["frames"]:
         frame["actors"].sort(key=lambda row: (row["source_id"], row["lifetime_generation"] or 0))
+        generations = {row["source_id"]: row["lifetime_generation"] for row in frame["actors"]}
+        for actor in frame["state"]["actors"]:
+            actor["lifetime_generation"] = generations.get(actor["id"])
         frame["state"]["actors"].sort(key=lambda row: row["id"])
     runtime = trace.get("runtime")
     if runtime and "runtime_binary" in runtime:

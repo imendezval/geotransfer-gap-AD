@@ -136,7 +136,7 @@ def execute_batch(destination, protocol, rows, command_for, verify, *, resume=Fa
     destination = Path(destination).resolve()
     names = [row["name"] for row in rows]
     if (not rows or len(set(names)) != len(names)
-            or any(not name or Path(name).name != name or name.startswith(".") for name in names)):
+            or any(not name or Path(name).name != name or (name.startswith(".") or name == "run.json") for name in names)):
         raise ValueError("batch requires unique safe scene names")
     if len({row["slot_id"] for row in rows}) != len(rows):
         raise ValueError("batch slot IDs must be unique")
@@ -160,7 +160,16 @@ def execute_batch(destination, protocol, rows, command_for, verify, *, resume=Fa
                     or expected != rows or ledger["environment"] != environment or ledger["cwd"] != cwd):
                 raise ValueError("resume requires matching protocol, inputs and worker environment")
             for row in ledger["results"]:
-                if row["status"] == "running":
+                if row["status"] == "passed":
+                    record_path = destination / row["attempts"][-1]["record"]
+                    try:
+                        attempt = read_json(record_path)
+                        if (attempt["status"] != "passed"
+                                or verify(record_path.parent, row) != attempt["evidence"]):
+                            raise ValueError("validation record has changed")
+                    except Exception as exc:
+                        raise ValueError(f"passed evidence cannot be revalidated for {row['name']}: {exc}") from exc
+                elif row["status"] == "running":
                     record_path = destination / row["attempts"][-1]["record"]
                     attempt = read_json(record_path)
                     if attempt["status"] != "running":

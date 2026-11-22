@@ -309,7 +309,9 @@ def _run_matrix(protocol, rows, resume):
     expected = []
     for row in rows:
         root = scene_root(row["root"])
-        name = row["name"] if protocol.manifest else root.name
+        name = root.name
+        if protocol.manifest and row["name"] != name:
+            raise ValueError(f"manifest scene name does not match its root: {row['name']}")
         expected_hash = row.get("binary_sha256")
         if protocol.manifest and not expected_hash:
             raise ValueError(f"Missing manifest binary hash: {name}")
