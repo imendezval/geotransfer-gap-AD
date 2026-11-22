@@ -11,7 +11,6 @@ from geotransfer_gap.config import settings
 from geotransfer_gap.artifacts import (
     scene_root,
     read_json,
-    write_json,
     sha256,
     reference,
     read_manifest,
@@ -190,24 +189,58 @@ def binary_roads(root):
     ]
 
 
-def view_payload(root, traces=()):
+def _check_playback_hashes(trace, verification, expected):
+    attempt_path = trace.with_name("attempt.json")
+    if attempt_path.is_file():
+        attempt = read_json(attempt_path)
+        recorded = (attempt.get("evidence") or {}).get("files")
+        if attempt.get("status") == "passed" and not recorded:
+            raise ValueError(f"Passed attempt has no playback hashes: {attempt_path}")
+        if recorded is not None:
+            if expected is not None and any(expected.get(kind) != recorded.get(kind)
+                                            for kind in ("trace", "provenance")):
+                raise ValueError(f"Campaign and attempt playback hashes disagree: {attempt_path}")
+            expected = recorded
+    if expected is not None:
+        for kind, path in (("trace", trace), ("provenance", verification)):
+            entry = expected.get(kind, {})
+            if (entry.get("path") != path.name or not path.is_file()
+                    or sha256(path) != entry.get("sha256")):
+                raise ValueError(f"Playback hash or file differs from saved evidence: {path}")
+
+
+def _load_playback(path, digest, expected):
+    verification = path.with_name("verification.json")
+    _check_playback_hashes(path, verification, expected)
+    report = read_json(path)
+    if report["binary_sha256"] != digest:
+        raise ValueError("Trace binary differs from viewed scene")
+    evidence = read_json(verification) if verification.is_file() else None
+    if evidence is not None:
+        fields = (("scene", "scene"), ("ego", "ego_controller"), ("traffic", "traffic_controller"),
+                  ("startup", "traffic_startup"), ("driving_outcome", "terminal_reason"))
+        if (report["planner"] != "controller_matrix"
+                or evidence.get("inputs", {}).get("binary", {}).get("sha256") != digest
+                or any(evidence.get(sidecar) != report.get(trace) for sidecar, trace in fields)
+                or ("lifecycle" in evidence and [row["step"] for row in evidence["lifecycle"]]
+                    != [frame["step"] for frame in report["frames"]])):
+            raise ValueError(f"Verification sidecar differs from viewed trace: {verification}")
+    diagnostic_path = path.with_name("diagnostic.json")
+    diagnostic = read_json(diagnostic_path) if diagnostic_path.is_file() else None
+    if diagnostic is not None:
+        if diagnostic.get("binary_sha256") != digest:
+            raise ValueError("Diagnostic binary differs from viewed scene")
+        if ("traffic_protocol" in diagnostic and "traffic_protocol" in report
+                and diagnostic["traffic_protocol"] != report["traffic_protocol"]):
+            raise ValueError("Diagnostic traffic protocol differs from viewed trace")
+    return normalize_trace(report, evidence, diagnostic)
+
+
+def view_payload(root, traces=(), *, files_by_trace=None):
     t = root / "testing"
     digest = sha256(t / "map_000000.bin")
-    runs = []
-    for path in traces:
-        report = read_json(path)
-        if report["binary_sha256"] != digest:
-            raise ValueError("Trace binary differs from viewed scene")
-        verification_path = path.with_name("verification.json")
-        evidence = read_json(verification_path) if verification_path.is_file() else None
-        if evidence and (evidence.get("inputs", {}).get("binary", {}).get("sha256") != digest
-                         or evidence.get("scene") != report.get("scene")):
-            raise ValueError("Verification sidecar differs from viewed trace")
-        diagnostic_path = path.with_name("diagnostic.json")
-        diagnostic = read_json(diagnostic_path) if diagnostic_path.is_file() else None
-        if diagnostic and diagnostic.get("binary_sha256") != digest:
-            raise ValueError("Diagnostic binary differs from viewed scene")
-        runs.append(normalize_trace(report, evidence, diagnostic))
+    files_by_trace = files_by_trace or {}
+    runs = [_load_playback(path, digest, files_by_trace.get(path)) for path in traces]
 
     source_hash = registration = image = goal = None
     limitations = []
@@ -256,8 +289,8 @@ def view_payload(root, traces=()):
     )
 
 
-def build(root, output, traces=()):
-    payload = view_payload(scene_root(str(root)), traces)
+def build(root, output, traces=(), *, files_by_trace=None):
+    payload = view_payload(scene_root(str(root)), traces, files_by_trace=files_by_trace)
     encoded = json.dumps(payload, allow_nan=False).replace("</", "<\\/")
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
