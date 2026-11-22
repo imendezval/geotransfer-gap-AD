@@ -31,7 +31,9 @@ def main(argv=None):
         # live evidence through a scratch path.
         subprocess.run(["cp", "-RL", "--reflink=auto", str(cfg.artifacts) + "/.",
                         str(artifacts)], check=True)
-        env["GEOTRANSFER_ARTIFACTS"] = str(artifacts)
+        # Keep the configured logical root. Historical evidence contains
+        # absolute references, which must resolve to the same scratch mount.
+        env["GEOTRANSFER_ARTIFACTS"] = str(cfg.artifacts)
         cfg.cache.mkdir(parents=True, exist_ok=True)
         env["GEOTRANSFER_CHECK_SANDBOX"] = json.dumps(_sandbox(cfg.artifacts, artifacts, cfg.cache))
         _run_checks(args, destination, env, cfg.project, artifacts)
@@ -62,6 +64,7 @@ def _run_checks(args, destination, env, project, artifacts):
     if not args.skip_admission:
         checks += ["admission"]
     sandbox = json.loads(env.pop("GEOTRANSFER_CHECK_SANDBOX"))
+    artifacts = Path(env["GEOTRANSFER_ARTIFACTS"])
     results = []
     for check in checks:
         with (destination / (check + ".log")).open("w") as log:

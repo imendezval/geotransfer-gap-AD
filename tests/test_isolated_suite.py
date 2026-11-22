@@ -18,7 +18,7 @@ def test_suite_isolates_fixture_writes(tmp_path, monkeypatch, error):
 
     def checks(args, destination, env, project, artifacts):
         scratch_paths.append(artifacts)
-        assert Path(env["GEOTRANSFER_ARTIFACTS"]) == artifacts != tree
+        assert Path(env["GEOTRANSFER_ARTIFACTS"]) == tree != artifacts
         (artifacts / review.name).write_text("negative fixture")
         if error is not None:
             raise error
