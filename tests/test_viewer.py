@@ -212,3 +212,25 @@ def test_blocked_campaign_configuration_explains_missing_evidence(tmp_path, save
                      "--output", str(tmp_path / "blocked.html")])
     assert "missing authoritative example" in capsys.readouterr().err
     assert not (tmp_path / "blocked.html").exists()
+
+
+def test_default_campaign_selection_keeps_full_gallery_intact(tmp_path, monkeypatch, saved_campaign):
+    campaign, _ = saved_campaign
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(tmp_path / "runs"))
+    full = viewer.main(["--campaign", str(campaign)])
+    scene = viewer.main(["--campaign", str(campaign), "--scene", "scene", "--ego", "expert"])
+    assert full.parent / "scene.html" != scene
+    assert full.is_file() and scene.is_file()
+
+
+def test_campaign_gallery_cannot_follow_page_symlink_into_evidence(tmp_path, saved_campaign, capsys):
+    campaign, _ = saved_campaign
+    gallery = tmp_path / "gallery"
+    gallery.mkdir()
+    report = campaign / "verification_matrix.json"
+    before = report.read_bytes()
+    (gallery / "scene.html").symlink_to(report)
+    with pytest.raises(SystemExit):
+        viewer.main(["--campaign", str(campaign), "--output", str(gallery)])
+    assert "outside the saved campaign" in capsys.readouterr().err
+    assert report.read_bytes() == before
