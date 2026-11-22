@@ -102,3 +102,102 @@ def test_native_state_mismatch_identifies_lifetime():
     mismatch = compare({"trace": expected}, {"trace": actual})
     assert mismatch["source_id"] == 41 and mismatch["lifetime"] == 0
     assert mismatch["tick"] == 1 and mismatch["field"] == "trace.frames.state.actors.x"
+
+
+def lifecycle(report):
+    return [{
+        "step": frame["step"],
+        "active_agent_indices": [
+            actor["binary_index"] for actor in
+            sorted((a for a in frame["actors"] if a["slot"] is not None), key=lambda a: a["slot"])
+        ],
+        "actors": [{
+            "source_id": actor["source_id"], "binary_index": actor["binary_index"],
+            "lifetime_generation": actor["lifetime_generation"],
+            "source_valid": True, "native_present": True,
+            "controller_eligible": actor["role"] != "context",
+            "permanently_removed": False, "removal_reason": "none",
+        } for actor in frame["actors"]],
+    } for frame in report["frames"]]
+
+
+def test_lifecycle_frame_preserves_native_slot_order():
+    from types import SimpleNamespace
+
+    from geotransfer_gap.runtime.run_trace import lifecycle_frame
+
+    snapshot = SimpleNamespace(step=4, active_agent_indices=(2, 0, 1), actors=())
+    assert lifecycle_frame(snapshot, {})["active_agent_indices"] == [2, 0, 1]
+
+
+def test_native_order_rejects_swapped_same_mode_traffic_slots():
+    report = trace()
+    for frame in report["frames"]:
+        for sid, index, slot in ((43, 2, 2), (44, 3, 1)):
+            frame["actors"].append(dict(frame["actors"][0], source_id=sid, binary_index=index,
+                                        slot=slot, role="traffic"))
+            frame["state"]["actors"].append(dict(frame["state"]["actors"][0], id=sid, binary_index=index))
+    evidence = lifecycle(report)
+    assert evidence[0]["active_agent_indices"] == [0, 3, 2]
+    validate_trace(report, evidence)
+    # Changing these slots leaves their range, modes, actions and owners intact.
+    left, right = report["frames"][0]["actors"][-2:]
+    left["slot"], right["slot"] = right["slot"], left["slot"]
+    with pytest.raises(ValueError, match="slot.*binary index"):
+        validate_trace(report, evidence)
+
+
+@pytest.mark.parametrize("has_slot,owner", [
+    (True, "context_replay"),
+    (True, "inactive_replay_mode"),
+    (False, "not_present"),
+])
+@pytest.mark.parametrize("false_owner", ["traffic:ppo", "traffic:smart"])
+def test_context_owner_is_bound_to_presence_and_replay(has_slot, owner, false_owner):
+    report = trace()
+    for frame in report["frames"]:
+        a = frame["actors"][1]
+        a["effective_owner"] = owner
+        if has_slot:
+            a["slot"] = 1
+            if frame["transition_applied"]:
+                a.update(planned_movement_mode=2, applied_movement_mode=2,
+                         action=[0., 0.], intent="replay")
+    report["frames"][1]["actors"][1]["pre_step_native_movement_mode"] = 2
+    report["frames"][1]["state"]["actors"][1]["movement_mode"] = 2
+    evidence = lifecycle(report)
+    if owner != "context_replay":
+        for frame in evidence:
+            frame["actors"][1].update(source_valid=False, native_present=False)
+    validate_trace(report, evidence)
+    report["frames"][0]["actors"][1]["effective_owner"] = false_owner
+    with pytest.raises(ValueError, match="effective owner"):
+        validate_trace(report, evidence)
+
+
+def test_release_schedule_is_recomputed_from_authoritative_inputs(tmp_path, monkeypatch):
+    from geotransfer_gap.artifacts import write_json
+    from geotransfer_gap.runtime import run_trace
+    from geotransfer_gap.runtime.matrix_inputs import fingerprint
+    from test_startup_policy import startup_scene
+
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(tmp_path))
+    scene, binary = startup_scene()
+    source = tmp_path / "testing/ind_fixture.json"
+    write_json(source, scene)
+    source_input = fingerprint(source)
+    report = {
+        "traffic_startup": "source_hold", "requested_observation_frames": 30,
+        "startup_policy": {
+            "source": source_input["reference"], "source_sha256": source_input["sha256"],
+            "window_observations": 30,
+            "release_schedule": [
+                {"binary_index": 1, "source_id": 101, "step": 18},
+                {"binary_index": 2, "source_id": 102, "step": 30},
+            ],
+        },
+    }
+    run_trace._validate_startup(report, {"source_hold": source_input}, tmp_path, binary)
+    report["startup_policy"]["release_schedule"][0]["step"] = 19
+    with pytest.raises(ValueError, match="release schedule"):
+        run_trace._validate_startup(report, {"source_hold": source_input}, tmp_path, binary)
