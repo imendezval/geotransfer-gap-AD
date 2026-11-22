@@ -43,3 +43,50 @@ def test_aggregates_reconcile_all_slots_in_each_dimension():
     assert report["total"] == {"BLOCKED": 1, "PASS": 1, "FAIL": 0, "NOT_RUN": 0}
     for field in ("scene", "group", "ego", "traffic", "startup"):
         assert next(iter(report[field].values())) == report["total"]
+
+
+@pytest.mark.parametrize("terminal", ["passed", "failed"])
+@pytest.mark.parametrize("resume_single_first", [True, False])
+def test_terminal_ledger_recovers_interrupted_launcher_without_rerun(
+    tmp_path, monkeypatch, terminal, resume_single_first,
+):
+    from geotransfer_gap import matrix_campaign
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    job = {"path": "single/fixture", "slots": ["slot"]}
+    folder = tmp_path / job["path"]
+    ledger = folder / "runs/run/run.json"
+    attempt = ledger.parent / "fixture/attempt.json"
+    write_json(attempt, {"status": terminal, "exit_code": 0 if terminal == "passed" else 1})
+    write_json(ledger, {"results": [{"slot_id": "slot", "status": terminal,
+                                    "attempts": [{"record": "fixture/attempt.json"}]}]})
+    original = {path: path.read_bytes() for path in (ledger, attempt)}
+    launcher = folder / "launch-0001.json"
+    write_json(launcher, {"status": "running", "log": "old.log", "command": ["old command"]})
+    manifest = {"single": [job], "batch": [], "freeze": {"environment": {}}}
+    monkeypatch.setattr(matrix_campaign, "_assert_frozen", lambda _: manifest)
+    monkeypatch.setattr(matrix_campaign.subprocess, "run", lambda *a, **kw: pytest.fail("relaunched terminal job"))
+
+    if resume_single_first:
+        matrix_campaign.execute(tmp_path, "single", 1)
+    matrix_campaign.execute(tmp_path, "batch", 1)
+    recovered = read_json(launcher)
+    assert recovered["status"] == "reconciled" and recovered["exit_code"] is None
+    assert recovered["log"] == "old.log" and recovered["command"] == ["old command"]
+    assert recovered["recovery"]["ledger"] == "runs/run/run.json"
+    assert {path: path.read_bytes() for path in original} == original
+    assert list(folder.glob("launch-*.json")) == [launcher]
+
+
+def test_partial_ledger_still_blocks_batch(tmp_path, monkeypatch):
+    from geotransfer_gap import matrix_campaign
+    from geotransfer_gap.artifacts import write_json
+
+    job = {"path": "single/fixture", "slots": ["slot"]}
+    folder = tmp_path / job["path"]
+    write_json(folder / "runs/run/run.json", {"results": [{"slot_id": "slot", "status": "running"}]})
+    write_json(folder / "launch-0001.json", {"status": "running"})
+    manifest = {"single": [job], "batch": [], "freeze": {"environment": {}}}
+    monkeypatch.setattr(matrix_campaign, "_assert_frozen", lambda _: manifest)
+    with pytest.raises(ValueError, match="finish the independent single pass"):
+        matrix_campaign.execute(tmp_path, "batch", 1)
