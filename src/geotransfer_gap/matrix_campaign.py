@@ -350,7 +350,7 @@ def report(root):
     failures = [{"slot_id": row["slot_id"], "single": row["single"], "batch": row["batch"],
                  "mismatch": row["mismatch"]} for row in rows if row["status"] == "FAIL"]
     gates = {
-        **manifest["freeze"]["preflight"],
+        **{name: manifest["freeze"]["preflight"][name] for name in ("V", "F")},
         "E": {"status": "PASS" if all(
             row[view]["status"] in TERMINAL for row in rows for view in ("single", "batch")
         ) else "BLOCKED", "evidence": "verification_matrix.json"},
