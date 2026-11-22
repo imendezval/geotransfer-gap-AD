@@ -12,6 +12,7 @@ import sys
 
 from geotransfer_gap.artifacts import read_json, reference, resolve_reference, sha256, write_json
 from geotransfer_gap.config import settings
+from geotransfer_gap.runtime.actor_index import ActorIndex
 from geotransfer_gap.runtime.matrix_inputs import fingerprint, load_binary, load_source_hold
 from geotransfer_gap.runtime.native_modes import NativeMovementMode as Mode
 
@@ -236,7 +237,7 @@ def validate_trace(trace, lifecycle=None, binary=None):
                                  ) if info["controller_eligible"] else "context"
                 if assignment["role"] != expected_role:
                     raise ValueError(f"unexpected controller ownership at step {tick}, actor {sid}")
-                _validate_ownership(trace, assignment, info, tick, advances, schedule, releases)
+                _validate_ownership(trace, assignment, info, tick, advances, schedule, releases, binary)
             if live and generation is not None:
                 key = (sid, generation)
                 if previous.get(key) is not None and previous[key] != pre:
@@ -258,7 +259,7 @@ def validate_trace(trace, lifecycle=None, binary=None):
             raise ValueError("terminal reason does not match the last native ego observation")
 
 
-def _validate_ownership(trace, actor, lifecycle, tick, advances, schedule, releases):
+def _validate_ownership(trace, actor, lifecycle, tick, advances, schedule, releases, binary):
     sid, index, role = actor["source_id"], actor["binary_index"], actor["role"]
     declared = trace[f"{role}_controller"] if role != "context" else None
     if actor["declared_controller"] != declared:
@@ -290,6 +291,25 @@ def _validate_ownership(trace, actor, lifecycle, tick, advances, schedule, relea
                 or actor["scheduled_release_step"] != scheduled
                 or actor["actual_release_step"] != releases.get(key)):
             raise ValueError(f"invalid hold/release record at step {tick}, actor {sid}")
+
+        if binary is not None:
+            obj = binary["objects"][index]
+            window = trace["startup_policy"]["window_observations"]
+            if (index == trace["ego_binary_index"] or obj.get("mark_as_expert")
+                    or obj["type"] != ActorIndex.VEHICLE_TYPE):
+                status = "exempt"
+            elif scheduled is None:
+                status = "not_scheduled"
+            elif key in releases:
+                status = "released"
+            elif scheduled == window and tick + 1 == window:
+                status = "held_through_window"
+            elif not advances:
+                status = "scheduled_not_released"
+            else:
+                status = "scheduled"
+            if actor.get("startup_status") != status:
+                raise ValueError(f"invalid startup status at step {tick}, actor {sid}")
 
 
 def _digest(value, label):
