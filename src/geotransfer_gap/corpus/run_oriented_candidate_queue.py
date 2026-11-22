@@ -4,12 +4,12 @@ Never grants research admission. Manual source review and SMART model-input
 proof are separate. Resume skips only records bound to unchanged sources/tools.
 """
 
-from geotransfer_gap.artifacts import resolve_reference
+from geotransfer_gap.artifacts import resolve_reference, write_json
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
 import argparse
 import concurrent.futures
-import hashlib
+import csv
 import json
 import os
 from pathlib import Path
@@ -27,6 +27,47 @@ def scene_key(row):
 
 def candidate_key(row):
     return (*scene_key(row), row["actor"])
+
+
+TERMINAL_STATUSES = {
+    "source_geometry_rejection", "unresolved_semantics_screen",
+    "source_ego_boundary_rejection", "unreviewable_source_overlap",
+    "awaiting_manual_review", "technical_rejection",
+}
+
+
+def source_fingerprints(recording):
+    from geotransfer_gap.maps.lanelet import map_paths
+
+    data = settings().source / "data"
+    metadata = data / f"{recording:02d}_recordingMeta.csv"
+    with metadata.open(newline="") as stream:
+        map_files = map_paths(next(csv.DictReader(stream)), recording)
+    files = [metadata, *map_files, data / f"{recording:02d}_tracks.csv",
+             data / f"{recording:02d}_tracksMeta.csv"]
+    return {str(path): sha(path) for path in files}
+
+
+def reusable_result(row, tools, source):
+    if (row.get("status") not in TERMINAL_STATUSES or
+            row.get("screen_fingerprints") != tools or row.get("source_fingerprints") != source):
+        return False
+    testing = resolve_reference(row["root"]) / "testing"
+    evidence = row.get("artifact_fingerprints")
+    return bool(evidence) and all(
+        Path(name).name == name and (testing / name).is_file() and sha(testing / name) == digest
+        for name, digest in evidence.items()
+    )
+
+
+def retain_previous(row, rows):
+    previous = [item for item in rows if candidate_key(item) == candidate_key(row)]
+    row["attempt_history"] = [
+        record
+        for item in previous
+        for record in [*item.get("attempt_history", []),
+                       {key: value for key, value in item.items() if key != "attempt_history"}]
+    ]
 
 
 def unsupported_rules(a):
@@ -79,6 +120,15 @@ def main():
         help="Defer alternate windows after a technically admitted, primary-actor-preserved window; manual/research review remains mandatory.",
     )
     args = ap.parse_args()
+    args.ledger = args.ledger.resolve()
+    args.selection = args.selection.resolve()
+    args.ledger.parent.mkdir(parents=True, exist_ok=True)
+    with args.ledger.with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _run_queue(args)
+
+
+def _run_queue(args):
     os.chdir(HERE)
     selection = json.loads(args.selection.read_text())
     jobs = selection["jobs"]
@@ -124,6 +174,8 @@ def main():
         Path(__file__).name,
     ]
     fingerprints = {n: sha(project_path(n)) for n in tools}
+    fingerprints["conversion_workflow"] = sha(HERE / "src/geotransfer_gap/conversion/workflow.py")
+    fingerprints["upstream_writer"] = sha(settings().bench / "pufferlib/ocean/drive/drive.py")
     fingerprints["selection"] = sha(args.selection)
     fingerprints["variant_selection_mode"] = (
         "one_faithful_per_task" if args.one_faithful_window_per_task else "all_windows"
@@ -132,9 +184,12 @@ def main():
         json.loads(args.ledger.read_text()) if args.ledger.exists() else {"results": []}
     )
     rows = previous["results"]
-    done = {
-        candidate_key(r) for r in rows if r.get("screen_fingerprints") == fingerprints
-    }
+    sources = {recording: source_fingerprints(recording) for recording in {r["recording"] for r in jobs}}
+
+    def reusable(row):
+        return row["recording"] in sources and reusable_result(row, fingerprints, sources[row["recording"]])
+
+    done = {candidate_key(r) for r in rows if reusable(r)}
     remaining = [r for r in jobs if candidate_key(r) not in done]
     print("remaining chunk", len(remaining), "total selection", len(jobs), flush=True)
     env = dict(
@@ -154,7 +209,17 @@ def main():
             with (root / ".candidate_queue.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 try:
-                    return run_scene(row)
+                    try:
+                        result = run_scene(row)
+                        if result["status"] in TERMINAL_STATUSES:
+                            result["artifact_fingerprints"] = {
+                                path.name: sha(path) for path in (root / "testing").iterdir()
+                                if path.is_file() and path.suffix in {".bin", ".json"}
+                            }
+                        return result
+                    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+                        return dict(row, root=str(root), screen_fingerprints=fingerprints,
+                                    status="tool_failure", error=str(error))
                 finally:
                     fcntl.flock(lock, fcntl.LOCK_UN)
 
@@ -164,7 +229,8 @@ def main():
         root = project_path("pilot/oriented_v3") / f"r{rec:02d}_e{ego}_f{first}"
         t = root / "testing"
         root.mkdir(parents=True, exist_ok=True)
-        row.update(root=str(root), screen_fingerprints=fingerprints)
+        row.update(root=str(root), screen_fingerprints=fingerprints,
+                   source_fingerprints=sources[rec])
 
         def command(script, extra=()):
             proc = subprocess.run(
@@ -185,7 +251,7 @@ def main():
         proc = subprocess.run(
             [
                 sys.executable,
-                str(project_path("pilot_ind.py")),
+                "-m", "geotransfer_gap", "convert",
                 "--recording",
                 str(rec),
                 "--ego",
@@ -240,7 +306,10 @@ def main():
                 in pending
             ):
                 proc = command("audit_task_rule_scope.py")
-                if proc.returncode == 0:
+                if proc.returncode:
+                    row.update(status="source_audit_error", error=proc.stderr[-1000:])
+                    return row
+                else:
                     scope = json.loads((t / "source_task_rule_scope.json").read_text())
                     scoped = bool(scope["rules"]) and all(
                         (x["stop_obligation_outside_task"] for x in scope["rules"])
@@ -256,7 +325,10 @@ def main():
             ids = sorted({flag_actors[x] for x in pending if x in flag_actors})
             if ids:
                 proc = command("audit_following_scope.py", ["--actors", *map(str, ids)])
-                if proc.returncode == 0:
+                if proc.returncode:
+                    row.update(status="source_audit_error", error=proc.stderr[-1000:])
+                    return row
+                else:
                     proof = json.loads((t / "source_following_scope.json").read_text())
                     certified = {
                         x["actor_id"]
@@ -290,9 +362,11 @@ def main():
         if any((not d.get("reviewable_annotation_overlap") for d in details.values())):
             row.update(status="unreviewable_source_overlap", overlaps=list(details))
             return row
-        proc = command("admit_scene.py", ["--traffic-protocol", "hybrid_startup"])
         gate = t / "admission_hybrid_startup.json"
-        if not gate.exists():
+        previous_generation = gate.stat().st_mtime_ns if gate.exists() else None
+        proc = command("admit_scene.py", ["--traffic-protocol", "hybrid_startup"])
+        if (proc.returncode not in (0, 1) or not gate.exists()
+                or gate.stat().st_mtime_ns == previous_generation):
             row.update(status="technical_gate_error", error=proc.stderr[-1000:])
             return row
         d = json.loads(gate.read_text())
@@ -326,7 +400,7 @@ def main():
     faithful = {
         task_key(r)
         for r in rows
-        if r.get("screen_fingerprints") == fingerprints
+        if reusable(r)
         and r.get("technical_admitted")
         and (r.get("candidate_actor_fidelity") or {}).get(
             "preserved_for_claimed_interaction"
@@ -336,14 +410,8 @@ def main():
 
     def record(row):
         nonlocal rows, attempted
-        rows = [
-            r
-            for r in rows
-            if not (
-                candidate_key(r) == candidate_key(row)
-                and r.get("screen_fingerprints") == fingerprints
-            )
-        ] + [row]
+        retain_previous(row, rows)
+        rows = [item for item in rows if candidate_key(item) != candidate_key(row)] + [row]
         if row.get("technical_admitted") and (
             row.get("candidate_actor_fidelity") or {}
         ).get("preserved_for_claimed_interaction"):
@@ -356,10 +424,7 @@ def main():
             "variant_selection_mode": fingerprints["variant_selection_mode"],
             "results": rows,
         }
-        args.ledger.parent.mkdir(parents=True, exist_ok=True)
-        temporary = args.ledger.with_name(args.ledger.name + ".tmp")
-        temporary.write_text(json.dumps(report, indent=2) + "\n")
-        temporary.replace(args.ledger)
+        write_json(args.ledger, report)
         print(
             resolve_reference(row["root"]).name,
             row["status"],
@@ -409,7 +474,7 @@ def main():
                 not in {
                     candidate_key(x)
                     for x in rows
-                    if x.get("screen_fingerprints") == fingerprints
+                    if reusable(x)
                 }
                 for r in remaining
             )
