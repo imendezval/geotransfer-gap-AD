@@ -145,3 +145,70 @@ def test_legacy_smart_diagnostic_rejects_wrong_traffic_protocol(matrix_bundle):
     write_json(folder / "diagnostic.json", dict(diagnostic, traffic_protocol="expert"))
     with pytest.raises(ValueError, match="Diagnostic traffic protocol"):
         viewer.view_payload(root, [folder / "trace.json"])
+
+
+@pytest.fixture
+def saved_campaign(tmp_path, matrix_bundle):
+    from geotransfer_gap.artifacts import sha256, write_json
+
+    root, folder, report, _ = matrix_bundle
+    campaign = tmp_path / "campaign"
+    files = {kind: {"path": name, "sha256": sha256(folder / name)}
+             for kind, name in (("trace", "trace.json"), ("provenance", "verification.json"))}
+    write_json(campaign / "campaign.json", {"inventory": {"scenes": [
+        {"name": root.name, "root": report["scene"]},
+    ]}})
+    write_json(campaign / "verification_matrix.json", {"slots": [
+        {"scene": root.name, "ego": "expert", "traffic": "idm", "startup": "source_hold",
+         "status": "PASS", "single": {"directory": str(folder), "files": files}},
+        {"scene": root.name, "ego": "smart", "traffic": "idm", "startup": "source_hold",
+         "status": "BLOCKED", "reason": "missing authoritative example"},
+    ]})
+    return campaign, folder
+
+
+def test_campaign_gallery_and_specific_configuration_use_saved_traces(tmp_path, saved_campaign):
+    from geotransfer_gap.cli import main
+
+    campaign, _ = saved_campaign
+    gallery = tmp_path / "gallery"
+    main(["view", "--campaign", str(campaign), "--output", str(gallery)])
+    index = (gallery / "index.html").read_text()
+    assert "scene.html#pair=expert%20%2F%20idm%20%2F%20source_hold" in index
+    assert 'title="missing authoritative example"' in index
+    assert "verification_matrix.json" in index
+    assert '"name": "expert / idm / source_hold"' in (gallery / "scene.html").read_text()
+
+    episode = tmp_path / "selected.html"
+    main(["view", "--campaign", str(campaign), "--scene", "scene",
+          "--ego", "expert", "--traffic", "idm", "--traffic-startup", "source_hold",
+          "--output", str(episode)])
+    assert '"name": "expert / idm / source_hold"' in episode.read_text()
+
+
+def test_campaign_export_does_not_write_inside_evidence(tmp_path, saved_campaign, capsys):
+    campaign, _ = saved_campaign
+    with pytest.raises(SystemExit):
+        viewer.main(["--campaign", str(campaign), "--output", str(campaign / "gallery")])
+    assert "outside the saved campaign" in capsys.readouterr().err
+    assert not (campaign / "gallery").exists()
+
+
+def test_campaign_export_checks_saved_hashes_without_attempt_record(tmp_path, saved_campaign, capsys):
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    campaign, folder = saved_campaign
+    sidecar = folder / "verification.json"
+    write_json(sidecar, dict(read_json(sidecar), swapped=True))
+    with pytest.raises(SystemExit):
+        viewer.main(["--campaign", str(campaign), "--output", str(tmp_path / "gallery")])
+    assert "Playback hash" in capsys.readouterr().err
+
+
+def test_blocked_campaign_configuration_explains_missing_evidence(tmp_path, saved_campaign, capsys):
+    campaign, _ = saved_campaign
+    with pytest.raises(SystemExit):
+        viewer.main(["--campaign", str(campaign), "--scene", "scene", "--ego", "smart",
+                     "--output", str(tmp_path / "blocked.html")])
+    assert "missing authoritative example" in capsys.readouterr().err
+    assert not (tmp_path / "blocked.html").exists()
