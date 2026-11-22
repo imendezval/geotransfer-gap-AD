@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -31,7 +32,18 @@ def main(argv=None):
         subprocess.run(["cp", "-RL", "--reflink=auto", str(cfg.artifacts) + "/.",
                         str(artifacts)], check=True)
         env["GEOTRANSFER_ARTIFACTS"] = str(artifacts)
+        cfg.cache.mkdir(parents=True, exist_ok=True)
+        env["GEOTRANSFER_CHECK_SANDBOX"] = json.dumps(_sandbox(cfg.artifacts, artifacts, cfg.cache))
         _run_checks(args, destination, env, cfg.project, artifacts)
+
+
+def _sandbox(live, scratch, cache):
+    bwrap = shutil.which("bwrap")
+    if bwrap is None:
+        raise SystemExit("check all requires bubblewrap to protect live evidence")
+    return [bwrap, "--die-with-parent", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev",
+            "--proc", "/proc", "--bind", "/tmp", "/tmp", "--bind", str(cache), str(cache),
+            "--bind", str(scratch), str(scratch), "--bind", str(scratch), str(live)]
 
 
 def _run_checks(args, destination, env, project, artifacts):
@@ -49,11 +61,12 @@ def _run_checks(args, destination, env, project, artifacts):
     ]
     if not args.skip_admission:
         checks += ["admission"]
+    sandbox = json.loads(env.pop("GEOTRANSFER_CHECK_SANDBOX"))
     results = []
     for check in checks:
         with (destination / (check + ".log")).open("w") as log:
             proc = subprocess.run(
-                [sys.executable, "-m", "geotransfer_gap", "check", check],
+                [*sandbox, sys.executable, "-m", "geotransfer_gap", "check", check],
                 cwd=project,
                 env=env,
                 stdout=log,
@@ -81,7 +94,7 @@ def _run_checks(args, destination, env, project, artifacts):
     ]:
         with (destination / (check + ".log")).open("w") as log:
             proc = subprocess.run(
-                [sys.executable, "-m", "geotransfer_gap", "check", check, *extra],
+                [*sandbox, sys.executable, "-m", "geotransfer_gap", "check", check, *extra],
                 cwd=project,
                 env=env,
                 stdout=log,

@@ -13,7 +13,7 @@ def test_suite_isolates_fixture_writes(tmp_path, monkeypatch, error):
     review = tree / "review.json"
     review.write_text("original")
     monkeypatch.setattr(suite, "settings", lambda: SimpleNamespace(
-        artifacts=tree, runs=tmp_path / "runs", project=tmp_path))
+        artifacts=tree, runs=tmp_path / "runs", project=tmp_path, cache=tmp_path / "cache"))
     scratch_paths = []
 
     def checks(args, destination, env, project, artifacts):
