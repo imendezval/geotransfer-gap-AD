@@ -154,6 +154,11 @@ def main(argv=None):
         else:
             parser.error("Use scenes list or scenes show SCENE")
         return
+    if args.command == "convert":
+        from .conversion.workflow import main as convert
+
+        convert(rest)
+        return
     if args.command == "run":
         from .execution import main as execute
 
