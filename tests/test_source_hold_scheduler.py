@@ -114,3 +114,42 @@ def test_permanent_retirement_during_hold_prevents_release(kind):
         assert actor.key not in traffic._states
     else:
         assert not traffic.planner.history.valid[1].any()
+
+
+@pytest.mark.parametrize("collision,terminal", [(False, "horizon"), (True, "ego_collision")])
+def test_final_smart_release_observes_without_act_or_transition(collision, terminal):
+    from geotransfer_gap.runtime.episode_worker import run_episode
+
+    binary, native = scenario()
+    native.update(active_agent_indices=[0, 1, 2, 3, 4], active_agent_count=5)
+    planner = Planner()
+    traffic = SMARTController(planner, "traffic")
+    calls = []
+    act = traffic.act
+
+    def record(snapshot, targets):
+        calls.append(snapshot.step)
+        return act(snapshot, targets)
+
+    traffic.act = record
+
+    class TerminalEnv(FakeEnv):
+        def step(self, actions):
+            super().step(actions)
+            if collision and self.step_calls == 12:
+                self.state["entities"][0].update(collision_state=1, collided_before_goal=True)
+
+    env = TerminalEnv(native)
+    report = run_episode(env, binary, FakeBinding(), ExpertController("ego"), traffic,
+                         steps=13, startup=StartupPolicy("source_hold", 91, {1: 12}),
+                         frame_fn=lambda *_: {})
+    final = report["frames"][-1]
+    target = next(row for row in final["actors"] if row["source_id"] == 200)
+    assert report["terminal_reason"] == terminal
+    assert planner.prepared == list(range(13))
+    assert env.step_calls == report["transitions"] == 12
+    assert calls == [10, 11]
+    assert 12 not in [row["step"] for row in traffic.refreshes]
+    assert not final["transition_applied"]
+    assert target["actual_release_step"] is target["applied_movement_mode"] is target["action"] is None
+    assert target["startup_status"] == "scheduled_not_released"
