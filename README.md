@@ -25,9 +25,13 @@ Source CSV + Lanelet2/OpenDRIVE
   → independent corpus manifest → isolated execution → offline playback
 ```
 
-SMART uses the faithful adapter and corrected evaluator runtime. PPO, PDM and
-other BB planners remain available as explicit diagnostics; SMART admission does
-not validate their interfaces. Upstream BehaviorBench remains unchanged.
+The controller matrix runs expert, IDM, PPO and SMART as ego or vehicle traffic.
+It supports 16 immediate-start protocols and 12 source-hold protocols. At the
+frozen M9 revision, all 448 German slots and all 32 immediate US slots passed
+independent single/batch validation and exact trace comparison. The 24 US
+source-hold slots lack authoritative source JSON. Matrix runs are diagnostic.
+Original SMART admission applies to its recorded protocol, and encounter
+preservation remains unassessed. See the [acceptance guide](docs/controller-matrix-acceptance.md).
 
 ## Setup
 
@@ -65,7 +69,38 @@ no server. The time slider, actor labels, aerial background and comparison selec
 show the original source, converted tracks and any captured evaluator rollouts.
 An HTML page contains licensed source imagery; handle it as a dataset-derived artifact.
 
+## Browse a saved controller campaign
+
+```bash
+# All scenes and accepted configurations from the saved M9 campaign.
+.venv/bin/geotransfer view --campaign runs/m9_acceptance \
+  --output runs/m9-gallery --open
+
+# One scene with one saved configuration. Omit the controller flags for all its runs.
+.venv/bin/geotransfer view --campaign runs/m9_acceptance --scene r12_e151_f12041 \
+  --ego ppo --traffic smart --traffic-startup source_hold \
+  --output runs/r12-ppo-smart-hold.html --open
+```
+
+The campaign index opens any passing cell in the offline viewer. Use the two
+viewer menus to compare configurations on one scene. It reads the local
+campaign report and traces and generates HTML without running models. A fresh
+clone needs the saved campaign artifacts and the configured scene assets.
+
 ## Run a planner
+
+```bash
+# Run a fresh matrix episode and open the saved trace.
+scene=r12_e151_f12041
+episode=$(.venv/bin/geotransfer run --scene "$scene" \
+  --ego ppo --traffic smart --traffic-startup source_hold)
+.venv/bin/geotransfer view --scene "$scene" --trace "$episode/trace.json" \
+  --output runs/ppo-smart-hold.html --open
+```
+
+Matrix startup defaults to `immediate`. Source hold is available for IDM,
+PPO and SMART traffic. The original replay and faithful SMART commands remain
+available for baseline reproduction.
 
 ```bash
 .venv/bin/geotransfer run --scene r07_e200_f25439 --planner smart
@@ -90,8 +125,9 @@ The BB diagnostic bridge retains its planner/config options:
   --bb-args --planner.type pdm --traffic.type expert
 ```
 
-For PPO, select `--planner.type ppo` and supply the checkpoint/device options
-required by the configured BB checkout. This is not a validated planner comparison.
+The BB bridge can also run upstream PPO with the checkpoint and device options
+required by the BB checkout. The verified matrix uses `--ego ppo` or
+`--traffic ppo` and the pinned policy adapter.
 
 ## Convert and admit a new scene
 
@@ -140,6 +176,10 @@ prior, and SMART lacks navigation-goal and full lane-rule conditioning. The US
 fixtures establish mechanics, not a matched geographic study. The cyclist crossing
 after ego passage is not a mandatory-yielding example.
 
-[Step 1](docs/plans/1_faithful_scenes.md), [Step 2](docs/plans/2_admissible_scene_set.md)
-and the [research scope](docs/plans/2_protocol_scope_and_matching.md) retain the
-research requirements. Older reports are historical records, not current commands.
+[Step 1](docs/plans/step_1/1_faithful_scenes.md),
+[Step 2](docs/plans/step_2/2_admissible_scene_set.md) and the
+[research scope](docs/plans/step_2/2_protocol_scope_and_matching.md) retain the
+research requirements. The
+[controller matrix plan](docs/plans/controller_matrix/GEOTRANSFER_CONTROLLER_MATRIX_PLAN.md)
+and [stage prompts](docs/plans/controller_matrix/CODEX_STAGE_PROMPTS.md) record
+the M0–M9 specification.

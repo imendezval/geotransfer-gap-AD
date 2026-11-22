@@ -1,7 +1,7 @@
 # GeoTransfer Gap AD — Controller Matrix Implementation and Verification Plan
 
-**Status:** implementation specification for Codex; **not** a claim of completed implementation or verified runs.  
-**Target:** [`imendezval/geotransfer-gap-AD`](https://github.com/imendezval/geotransfer-gap-AD), current `main` as inspected 2026-11-17.  
+**Status:** implementation specification for Codex; **not** a claim of completed implementation or verified runs.\
+**Target:** [`imendezval/geotransfer-gap-AD`](https://github.com/imendezval/geotransfer-gap-AD), current `main` as inspected 2026-11-17.\
 **Execution environment:** user's existing local `bb_pufferdrive`, external BehaviorBench checkout, licensed inD/WOMD scenes and weights. Pin exact local Git SHA and dependencies before changing code.
 
 ## 0. Decision summary

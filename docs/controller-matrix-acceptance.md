@@ -8,8 +8,25 @@ are recorded as BLOCKED in both views.
 
 ## Viewer
 
-Use either a local corpus scene or a trace-only reference. Pass one or two
-traces with repeated flags to compare same-scene trajectories side by side.
+Build an offline gallery from the saved campaign report and its independently
+validated single-pass traces.
+
+```bash
+.venv/bin/geotransfer view --campaign runs/m9_acceptance --output runs/m9-gallery --open
+.venv/bin/geotransfer view --campaign runs/m9_acceptance --scene r12_e151_f12041 \
+  --ego ppo --traffic smart --traffic-startup source_hold \
+  --output runs/r12-ppo-smart-hold.html --open
+```
+
+Omit the controller filters to include all passing configurations for the
+selected scene. Without a scene filter, the output is a gallery directory
+containing `index.html`. The grid retains the statuses of blocked, failed and
+incomplete slots. The output goes outside the saved campaign directory.
+Viewing uses the saved report and configured scene assets without inference
+or a campaign freeze check.
+
+Use repeated trace flags to compare hand-selected trajectories on the same
+scene.
 
 ```bash
 .venv/bin/geotransfer view --scene artifacts/oriented_v3/r12_e151_f12041 \
@@ -21,8 +38,10 @@ declared and effective owners, mode readback and applied modes, action, release
 steps and events. A source hold keeps an expert replay owner until takeover.
 Native and source gaps are distinct. Missing optional historical fields are
 shown as not recorded. Sibling verification and diagnostic files enrich the
-display when they are present and match the trace scene or binary. There is no
-network dependency. US references can show verified binary map geometry and
+display when they match the trace. Verification sidecars must match the scene,
+binary, controller protocol and recorded outcome. The viewer checks the trace
+and verification hashes when a campaign or validated attempt records them.
+There is no network dependency. US references can show verified binary map geometry and
 recorded actor states. Source trajectory and imagery controls indicate
 unavailability. German source sampling and image registration continue to
 use the local licensed inputs.
@@ -79,7 +98,10 @@ campaign generation, with the prior evidence retained.
 
 Both phases can be restarted with the same command after interruption. Jobs
 with terminal ledger rows are retained. Incomplete ledgers use the existing
-M8 CLI resume path. Resume can create another attempt when a batch is only
+M8 CLI resume path. If the episode ledger committed before the supervisor
+recorded the CLI exit, the launcher is marked `reconciled`. The original
+attempts remain intact and an unknown launcher exit code stays unset.
+Resume can create another attempt when a batch is only
 partially complete. An earlier failed attempt remains a campaign failure
 even if a later attempt succeeds. Launch and worker logs and attempt records
 remain separate in the single and batch directories.
