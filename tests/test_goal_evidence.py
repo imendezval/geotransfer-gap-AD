@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from geotransfer_gap.runtime.goal_evidence import GoalEvidence
+from geotransfer_gap.runtime.goal_evidence import GoalEvidence, validate_goal_evidence
 
 
 @pytest.mark.parametrize(("award", "collision", "terminal", "cause"), [
@@ -42,3 +42,21 @@ def test_campaign_outcome_keeps_raw_flag_separate_from_native_award():
     assert outcome["native_goal_award_observed"] is True
     assert outcome["reached_goal"] is False
     assert outcome["terminal_cause"] == "goal_award"
+
+
+
+def test_native_goal_evidence_is_rejected_when_event_names_another_slot():
+    trace = {"transitions": 1, "ego_binary_index": 4, "terminal_reason": "ego_removed", "frames": [
+        {"actors": [{"binary_index": 4, "slot": 1}],
+         "state": {"actors": [{"binary_index": 4, "collision_state": 0,
+                               "removed": True, "reached_goal": False}]}}
+    ] * 2}
+    env = SimpleNamespace(REWARD_COMPONENT_NAMES=["goal"], reward_components_raw=[[0], [1]],
+                          goal_behavior=3)
+    capture = GoalEvidence(env)
+    capture.transition(0, SimpleNamespace(current_active_slot=1))
+    result = capture.finish(trace)
+    validate_goal_evidence(trace, result, 3)
+    result["native_goal_awards"][0]["active_slot"] = 0
+    with pytest.raises(ValueError, match="goal award"):
+        validate_goal_evidence(trace, result, 3)
