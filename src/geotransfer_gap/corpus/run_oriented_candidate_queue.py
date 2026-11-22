@@ -44,7 +44,7 @@ def source_fingerprints(recording):
     with metadata.open(newline="") as stream:
         map_files = map_paths(next(csv.DictReader(stream)), recording)
     files = [metadata, *map_files, data / f"{recording:02d}_tracks.csv",
-             data / f"{recording:02d}_tracksMeta.csv"]
+             data / f"{recording:02d}_tracksMeta.csv", data / f"{recording:02d}_background.png"]
     return {str(path): sha(path) for path in files}
 
 
@@ -60,8 +60,13 @@ def reusable_result(row, tools, source):
     )
 
 
+def same_producer_record(left, right):
+    return (candidate_key(left) == candidate_key(right)
+            and left.get("screen_fingerprints") == right.get("screen_fingerprints"))
+
+
 def retain_previous(row, rows):
-    previous = [item for item in rows if candidate_key(item) == candidate_key(row)]
+    previous = [item for item in rows if same_producer_record(item, row)]
     row["attempt_history"] = [
         record
         for item in previous
@@ -411,7 +416,7 @@ def _run_queue(args):
     def record(row):
         nonlocal rows, attempted
         retain_previous(row, rows)
-        rows = [item for item in rows if candidate_key(item) != candidate_key(row)] + [row]
+        rows = [item for item in rows if not same_producer_record(item, row)] + [row]
         if row.get("technical_admitted") and (
             row.get("candidate_actor_fidelity") or {}
         ).get("preserved_for_claimed_interaction"):
