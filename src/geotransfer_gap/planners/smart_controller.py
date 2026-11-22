@@ -91,8 +91,14 @@ class SMARTController:
         # Match plan()'s pre-append speed estimate when the prior pair is valid.
         # Fresh births and returns use the causal bootstrap for this observed tick.
         for index in indices:
-            speed_tick = tick - 1 if h.valid[index, tick - 2:tick].all() else tick
-            speeds[index] = np.linalg.norm(h.velocity[index, speed_tick])
+            has_prior_pair = h.valid[index, tick - 2:tick].all()
+            if self.role == "ego" and has_prior_pair:
+                # Keep the faithful ego path's float32 operation order.
+                dx, dy = h.position[[index], tick - 1].T - h.position[[index], tick - 2].T
+                speeds[index] = (np.sqrt(dx**2 + dy**2) / self.planner.config.dt)[0]
+            else:
+                speed_tick = tick - 1 if has_prior_pair else tick
+                speeds[index] = np.linalg.norm(h.velocity[index, speed_tick])
         actions = self.planner._positions_to_actions(
             indices, snapshot.step, h.position[:, tick], h.heading[:, tick], speeds,
         )

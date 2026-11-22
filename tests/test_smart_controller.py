@@ -12,7 +12,7 @@ class Planner:
     def __init__(self):
         from types import SimpleNamespace
 
-        self.config = SimpleNamespace(repredict_interval=5, num_historical_steps=11)
+        self.config = SimpleNamespace(repredict_interval=5, num_historical_steps=11, dt=0.1)
         self.history = SimpleNamespace(
             position=np.zeros((5, 120, 2), dtype=np.float32),
             heading=np.zeros((5, 120), dtype=np.float32),
