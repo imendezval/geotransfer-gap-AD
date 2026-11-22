@@ -58,3 +58,34 @@ def test_queue_resume_retries_failed_conversion_and_retains_attempt(tmp_path, mo
     assert [prior["status"] for prior in row["attempt_history"]] == ["conversion_failure"]
     queue.main()
     assert len(conversions) == 2
+
+
+def test_queue_retains_interrupted_attempt_before_retry(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import pytest
+
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(tmp_path))
+    monkeypatch.setattr(queue, "source_fingerprints", lambda _: {})
+    selection, ledger = tmp_path / "selection.json", tmp_path / "ledger.json"
+    write_json(selection, {"jobs": [{"recording": 0, "ego": 1, "first_frame": 2, "actor": 3,
+                                    "role": "interaction", "location": 1}]})
+    monkeypatch.setattr(sys, "argv", ["queue", "--selection", str(selection), "--ledger", str(ledger)])
+
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(queue.subprocess, "run", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        queue.main()
+    assert read_json(ledger)["results"][0]["status"] == "running"
+    monkeypatch.setattr(queue.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="failure"))
+    queue.main()
+    row, = read_json(ledger)["results"]
+    assert row["status"] == "conversion_failure"
+    assert row["attempt_history"][0]["status"] == "interrupted"
