@@ -1,12 +1,13 @@
 """Build a current, source-independent manifest for a fixed SMART pilot batch."""
 
-from geotransfer_gap.artifacts import resolve_reference
+from geotransfer_gap.artifacts import read_json, write_json, portable_manifest, resolve_reference
 from geotransfer_gap.artifacts import evidence_current
 from geotransfer_gap.validation.scene_contract import contracts_equal
 from geotransfer_gap.config import PROJECT_ROOT, settings, project_path, tool_path
 from geotransfer_gap.artifacts import sha256 as sha
 import argparse
 import csv
+import fcntl
 import hashlib
 import json
 from pathlib import Path
@@ -23,6 +24,30 @@ def type_family(label):
     if label.startswith("lead_vehicle_"):
         return "longitudinal_following"
     return label
+
+
+def publish_current(path, manifest, expected):
+    rows = manifest["scenes"]
+    roots = [resolve_reference(row["root"]) for row in rows]
+    if not rows or len({row["name"] for row in rows}) != len(rows) or len(set(roots)) != len(rows):
+        raise ValueError("Publication requires nonempty, unique scene identities")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_name(".publish.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = read_json(path) if path.exists() else {"scenes": []}
+        if current == manifest:
+            return
+        actual = sha(path) if path.exists() else "absent"
+        old_rows = {row["name"]: row for row in current["scenes"]}
+        new_rows = {row["name"]: row for row in rows}
+        print(json.dumps({"previous_sha256": actual, "expected_previous_sha256": expected,
+                          "added": sorted(new_rows.keys() - old_rows.keys()),
+                          "removed": sorted(old_rows.keys() - new_rows.keys()),
+                          "changed": sorted(k for k in old_rows.keys() & new_rows.keys()
+                                            if old_rows[k] != new_rows[k])}), flush=True)
+        if expected != actual:
+            raise ValueError("Publication requires --expected-current-sha256 matching the preview")
+        write_json(path, manifest)
 
 
 def main():
@@ -52,6 +77,7 @@ def main():
         action="store_true",
         help="Publish the admitted selection as the portable current corpus",
     )
+    ap.add_argument("--expected-current-sha256", help="Expected hash from the publication preview, or absent")
     args = ap.parse_args()
     accepted, ledger = ([], [])
     jobs = json.loads(args.selection.read_text())["jobs"]
@@ -183,12 +209,6 @@ def main():
                 ],
             }
         )
-    if args.publish_current:
-        from geotransfer_gap.artifacts import write_json, portable_manifest
-
-        write_json(
-            settings().artifacts / "corpus/current.json", portable_manifest(accepted)
-        )
     summary = {
         "schema_version": 1,
         "selection_sha256": sha(args.selection),
@@ -234,6 +254,18 @@ def main():
                         for k, v in row.items()
                     }
                 )
+    if args.publish_current:
+        if any(not row["admission_current"] for row in ledger):
+            raise ValueError("Publication refused while candidate admission evidence is stale or missing")
+        for row in accepted:
+            testing = resolve_reference(row["root"]) / "testing"
+            gate = testing / "admission_smart_hybrid_startup.json"
+            if (sha(gate) != row["admission_sha256"]
+                    or sha(testing / "map_000000.bin") != row["binary_sha256"]
+                    or not evidence_current(read_json(gate))):
+                raise ValueError("Candidate evidence changed before publication")
+        publish_current(settings().artifacts / "corpus/current.json",
+                        portable_manifest(accepted), args.expected_current_sha256)
     print(
         json.dumps(
             {
