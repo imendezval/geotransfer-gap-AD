@@ -17,6 +17,7 @@ from .artifacts import (
     sha256,
     reference,
     read_manifest,
+    resolve_reference,
 )
 
 
@@ -105,6 +106,7 @@ def build_parser():
         help="Explicitly run without planner admission; never grants it",
     )
     parser.add_argument("--steps", type=int, default=91)
+    parser.add_argument("--resume", type=Path, help="Continue an existing matrix batch")
     parser.add_argument(
         "--bb-args",
         nargs=argparse.REMAINDER,
@@ -288,6 +290,60 @@ def replay(root, output):
     write_json(output, result)
 
 
+def _matrix_evidence(folder, row):
+    report = read_json(folder / "trace.json")
+    if not report["frames"]:
+        raise ValueError("worker produced an empty trace")
+    return {"trace": "trace.json", "trace_sha256": sha256(folder / "trace.json")}
+
+
+def _run_matrix(protocol, rows, resume):
+    from .runtime.matrix_batch import execute_batch
+    from .runtime.matrix_inputs import preflight_inputs, slot_id
+
+    config = {
+        "ego_controller": protocol.ego, "traffic_controller": protocol.traffic,
+        "traffic_startup": protocol.traffic_startup, "steps": protocol.steps,
+        "diagnostic_only": True, "diagnostic_requested": protocol.diagnostic,
+        "research_admission_status": "not_established",
+    }
+    expected = []
+    for row in rows:
+        root = scene_root(row["root"])
+        name = row["name"] if protocol.manifest else root.name
+        expected_hash = row.get("binary_sha256")
+        if protocol.manifest and not expected_hash:
+            raise ValueError(f"Missing manifest binary hash: {name}")
+        inputs, blocked = preflight_inputs(
+            root, name, expected_hash, protocol.steps,
+            check_source_hold=protocol.traffic_startup == "source_hold",
+        )
+        expected.append({
+            "slot_id": slot_id(name, protocol.ego, protocol.traffic, protocol.traffic_startup),
+            "scene": reference(root), "name": name, "inputs": inputs, "blocked_reason": blocked,
+            **config,
+        })
+
+    def command_for(row, folder):
+        return [
+            sys.executable, "-m", "geotransfer_gap.runtime.episode_worker",
+            "--root", str(resolve_reference(row["scene"])),
+            "--ego", protocol.ego, "--traffic", protocol.traffic,
+            "--traffic-startup", protocol.traffic_startup, "--steps", str(protocol.steps),
+            "--output", str(folder / "trace.json"),
+        ]
+
+    if not expected or len({row["name"] for row in expected}) != len(expected):
+        raise ValueError("expected at least one scene and no duplicate scene names")
+    destination = resume.resolve() if resume else new_run(f"{protocol.ego}_{protocol.traffic}")
+    ledger = execute_batch(destination, config, expected, command_for, _matrix_evidence,
+                           resume=resume is not None)
+    if not ledger["passed"]:
+        print(f"Matrix batch incomplete or failed. See {destination / 'run.json'}", file=sys.stderr)
+        raise SystemExit(1)
+    return destination
+
+
 def main(argv=None):
     ap = build_parser()
     args = ap.parse_args(argv)
@@ -298,6 +354,8 @@ def main(argv=None):
     if protocol.selection == "matrix":
         if not 1 <= protocol.steps <= 91:
             ap.error("--steps must request 1 through 91 observation frames")
+    if args.resume and protocol.selection != "matrix":
+        ap.error("--resume requires a matrix controller pair")
     rows = (
         [{"name": Path(protocol.scene).name, "root": str(scene_root(protocol.scene))}]
         if protocol.scene
@@ -305,72 +363,10 @@ def main(argv=None):
     )
 
     if protocol.selection == "matrix":
-        prepared_rows = []
-        for row in rows:
-            root = scene_root(row["root"])
-            if protocol.manifest:
-                expected_hash = row.get("binary_sha256")
-                if (
-                    not expected_hash
-                    or sha256(root / "testing/map_000000.bin") != expected_hash
-                ):
-                    ap.error("Stale manifest binary: " + row["name"])
-            prepared_rows.append({**row, "_resolved_root": root})
-
-        destination = new_run(f"{protocol.ego}_{protocol.traffic}")
-        results = []
-        for row in prepared_rows:
-            root = row["_resolved_root"]
-            folder = destination / row["name"]
-            folder.mkdir()
-            cmd = [
-                sys.executable,
-                "-m",
-                "geotransfer_gap.runtime.episode_worker",
-                "--root",
-                str(root),
-                "--ego",
-                protocol.ego,
-                "--traffic",
-                protocol.traffic,
-                "--steps",
-                str(protocol.steps),
-                "--output",
-                str(folder / "trace.json"),
-            ]
-            if protocol.traffic_startup == "source_hold":
-                cmd += ["--traffic-startup", protocol.traffic_startup]
-            with (folder / "execution.log").open("w") as log:
-                subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True)
-            results.append(
-                {
-                    "scene": reference(root),
-                    "name": row["name"],
-                    "output": str(folder),
-                    "ego_controller": protocol.ego,
-                    "traffic_controller": protocol.traffic,
-                    "traffic_startup": protocol.traffic_startup,
-                    "diagnostic_only": True,
-                    "diagnostic_requested": protocol.diagnostic,
-                    "research_admission_status": "not_established",
-                }
-            )
-            write_json(
-                destination / "run.json",
-                {
-                    "schema_version": 3,
-                    "selection": "matrix",
-                    "ego_controller": protocol.ego,
-                    "traffic_controller": protocol.traffic,
-                    "traffic_startup": protocol.traffic_startup,
-                    "diagnostic_only": True,
-                    "diagnostic_requested": protocol.diagnostic,
-                    "research_admission_status": "not_established",
-                    "results": results,
-                },
-            )
-            print(folder, flush=True)
-        return destination
+        try:
+            return _run_matrix(protocol, rows, args.resume)
+        except (ValueError, OSError) as exc:
+            ap.error(str(exc))
 
     destination = new_run(protocol.legacy_planner)
     results = []
@@ -386,7 +382,17 @@ def main(argv=None):
             ):
                 raise ValueError("Stale manifest: " + row["name"])
         if protocol.legacy_planner == "expert":
-            replay(root, folder / "trace.json")
+            if protocol.manifest:
+                command = [
+                    sys.executable, "-c",
+                    "import sys; from pathlib import Path; from geotransfer_gap.execution import replay; "
+                    "replay(Path(sys.argv[1]), Path(sys.argv[2]))",
+                    str(root), str(folder / "trace.json"),
+                ]
+                with (folder / "execution.log").open("w") as log:
+                    subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
+            else:
+                replay(root, folder / "trace.json")
         elif protocol.legacy_planner == "smart":
             cmd = [
                 sys.executable,

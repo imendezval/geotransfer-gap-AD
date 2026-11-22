@@ -7,17 +7,13 @@ from pathlib import Path
 from .artifacts import read_json, reference, resolve_reference, sha256, write_json
 from .config import settings
 from .execution import CONTROLLERS, STARTUP_POLICIES
-from .runtime.matrix_inputs import binary_path, fingerprint, load_binary, load_source_hold
+from .runtime.matrix_inputs import fingerprint, load_binary, preflight_inputs, slot_id
 
 MANIFEST_SHA256 = "316438458c537adfd6b3347a8387844c95ac806d2067365fdc0d72abe2b3992c"
 US_REFERENCES = {
     "us_hybrid_1002fdc9826fc6d1": "105a45498ea7edf1d92e2664814b1b94b93f772209cf36ff233c950895ed0828",
     "us_smart_negative_world_739e0513c6f7cfe8": "a4aa356dbd348f50154dd38272518f0819084eeb1112f23b4e48be4f6e071859",
 }
-
-
-def slot_id(scene, ego, traffic, startup):
-    return f"{scene}:{ego}:{traffic}:{startup}"
 
 
 def enumerate_slots(scenes):
@@ -78,27 +74,12 @@ def _german_scene(row):
     return {**scene, "protected_inputs": inputs, "original_source_admission": admission}
 
 
-def inspect_scene(root, name, expected_hash, steps):
-    """Check binary and source-hold availability independently of controller choice."""
-    binary = fingerprint(binary_path(root))
-    if expected_hash and binary["sha256"] != expected_hash:
-        raise ValueError(f"stale manifest binary: {name}")
-    scenario = load_binary(root)
-    problem = None
-    inputs = {"binary": binary}
-    try:
-        source, _ = load_source_hold(root, scenario, steps)
-        inputs["source_hold"] = fingerprint(source)
-    except (ValueError, OSError) as exc:
-        problem = str(exc)
-    return inputs, problem, scenario
-
-
 def _scene(name, root, expected, group):
     scene = {"name": name, "root": reference(root), "group": group,
              "expected_binary_sha256": expected}
     try:
-        inputs, problem, binary = inspect_scene(root, name, expected, 91)
+        inputs, problem = preflight_inputs(root, name, expected, 91, check_source_hold=True)
+        binary = load_binary(root)
     except (ValueError, OSError) as exc:
         return {**scene, "binary_problem": str(exc), "source_hold_problem": None}
     ego = int(binary["sdc_track_index"])

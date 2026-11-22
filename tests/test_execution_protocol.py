@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from geotransfer_gap import execution
+from geotransfer_gap.runtime import matrix_inputs
 
 
 CONTROLLERS = ("expert", "idm", "ppo", "smart")
@@ -267,7 +268,9 @@ def test_matrix_run_metadata_never_claims_research_admission(
     monkeypatch.setattr(execution, "scene_root", lambda _: scene)
     monkeypatch.setattr(execution, "new_run", create_run)
     monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
-    monkeypatch.setattr(execution, "sha256", lambda _: "binary-hash")
+    monkeypatch.setattr(matrix_inputs, "preflight_inputs", lambda *a, **k: ({}, None))
+    monkeypatch.setattr(execution, "resolve_reference", lambda _: scene)
+    monkeypatch.setattr(execution, "_matrix_evidence", lambda *_: {"verified_fixture": True})
     if selection == "manifest":
         monkeypatch.setattr(
             execution,
@@ -279,7 +282,7 @@ def test_matrix_run_metadata_never_claims_research_admission(
     monkeypatch.setattr(
         execution.subprocess,
         "run",
-        lambda cmd, **kwargs: calls.append((cmd, kwargs)),
+        lambda cmd, **kwargs: calls.append((cmd, kwargs)) or SimpleNamespace(returncode=0),
     )
 
     options = (
@@ -298,7 +301,7 @@ def test_matrix_run_metadata_never_claims_research_admission(
     command = calls[0][0]
     assert command[command.index("--ego") + 1] == ego
     assert command[command.index("--traffic") + 1] == traffic
-    assert calls[0][1]["check"] is True
+    assert calls[0][1]["check"] is False
     assert (destination / "scene/trace.json").parent.is_dir()
     assert (destination / "run.json").is_file()
     run_record = json.loads((destination / "run.json").read_text())
@@ -350,7 +353,10 @@ def test_source_hold_pairs_reach_worker_as_diagnostic(monkeypatch, tmp_path, ego
     monkeypatch.setattr(execution, "scene_root", lambda _: scene)
     monkeypatch.setattr(execution, "new_run", new_run)
     monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
-    monkeypatch.setattr(execution.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+    monkeypatch.setattr(matrix_inputs, "preflight_inputs", lambda *a, **k: ({}, None))
+    monkeypatch.setattr(execution, "resolve_reference", lambda _: scene)
+    monkeypatch.setattr(execution, "_matrix_evidence", lambda *_: {"verified_fixture": True})
+    monkeypatch.setattr(execution.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or SimpleNamespace(returncode=0))
     execution.main(["--scene", str(scene), "--ego", ego, "--traffic", traffic,
                     "--traffic-startup", "source_hold"])
     command, = calls

@@ -32,3 +32,24 @@ def load_source_hold(root, binary, steps):
 
 def fingerprint(path):
     return {"reference": reference(path), "sha256": sha256(path)}
+
+
+
+def slot_id(scene, ego, traffic, startup):
+    return f"{scene}:{ego}:{traffic}:{startup}"
+
+
+def preflight_inputs(root, name, expected_hash, steps, *, check_source_hold):
+    """Check scene inputs before scheduling a worker."""
+    binary = fingerprint(binary_path(root))
+    if expected_hash and binary["sha256"] != expected_hash:
+        raise ValueError(f"stale manifest binary: {name}")
+    inputs = {"binary": binary}
+    problem = None
+    if check_source_hold:
+        try:
+            source, _ = load_source_hold(root, load_binary(root), steps)
+            inputs["source_hold"] = fingerprint(source)
+        except (ValueError, OSError) as exc:
+            problem = str(exc)
+    return inputs, problem
