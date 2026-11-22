@@ -23,14 +23,37 @@ def _check_output(path, campaign):
         raise ValueError("Choose a viewer output outside the saved campaign")
 
 
-def _render_scene(scene, output, slots):
+def _archived_trace(campaign, original_roots, slot):
+    saved = slot["single"]
+    directory = Path(saved["directory"])
+    if directory.is_absolute():
+        for root in (campaign, *original_roots):
+            if directory.is_relative_to(root):
+                directory = directory.relative_to(root)
+                break
+        else:
+            raise ValueError("Saved episode directory is outside the campaign archive")
+    expected = Path("single") / "_".join(_protocol(slot)) / slot["scene"] / "runs"
+    if not directory.is_relative_to(expected) or ".." in directory.parts:
+        raise ValueError("Saved episode directory escapes its campaign slot")
+    path = campaign / directory / saved["files"]["trace"]["path"]
+    if not path.resolve().is_relative_to((campaign / expected).resolve()) or not path.resolve().is_relative_to(campaign):
+        raise ValueError("Saved trace path escapes the campaign archive")
+    for item in saved["files"].values():
+        artifact = Path(item["path"])
+        if artifact.name != item["path"] or not (path.parent / artifact).resolve().is_relative_to(campaign):
+            raise ValueError("Saved evidence path escapes the campaign archive")
+    return path
+
+
+def _render_scene(scene, output, slots, campaign, original_roots):
     traces = {}
     for slot in slots:
         if slot["status"] != "PASS":
             continue
         saved = slot["single"]
         files = saved["files"]
-        path = Path(saved["directory"]) / files["trace"]["path"]
+        path = _archived_trace(campaign, original_roots, slot)
         if path in traces:
             raise ValueError(f"multiple campaign slots reference {path}")
         traces[path] = files
@@ -96,7 +119,13 @@ def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, sta
     """Render accepted single-pass traces and link the persisted campaign report."""
     campaign, output = Path(campaign).resolve(), Path(output).resolve()
     _check_output(output, campaign)
-    inventory = read_json(campaign / "campaign.json")["inventory"]["scenes"]
+    saved_manifest = read_json(campaign / "campaign.json")
+    original_roots = {
+        path.parent.parent for job in saved_manifest.get("batch", [])
+        if (selectors := job.get("selectors", []))[:1] == ["--manifest"] and len(selectors) > 1
+        and (path := Path(selectors[1])).is_absolute() and path.parent.name == "manifests"
+    }
+    inventory = saved_manifest["inventory"]["scenes"]
     inventory = {row["name"]: row for row in inventory}
     scenes = defaultdict(dict)
     filters = ego, traffic, startup
@@ -121,7 +150,7 @@ def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, sta
             raise ValueError(f"No passing playback for {scene}. " + "; ".join(reasons))
         path = output if output.suffix == ".html" else output / f"{scene}.html"
         _check_output(path, campaign)
-        return _render_scene(inventory[scene], path, slots)
+        return _render_scene(inventory[scene], path, slots, campaign, original_roots)
 
     if output.suffix == ".html":
         raise ValueError("Choose an output directory for the campaign gallery")
@@ -132,6 +161,6 @@ def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, sta
         _check_output(path, campaign)
     output.mkdir(parents=True, exist_ok=True)
     for name, path in pages.items():
-        _render_scene(inventory[name], path, scenes[name].values())
+        _render_scene(inventory[name], path, scenes[name].values(), campaign, original_roots)
     _write_index(index, campaign, scenes, pages)
     return index
