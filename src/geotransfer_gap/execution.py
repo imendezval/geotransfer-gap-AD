@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Literal
+from typing import Literal, get_args
 import uuid
 from .config import settings, tool_path, ensure_bench
 from .artifacts import (
@@ -22,6 +22,8 @@ from .artifacts import (
 
 Controller = Literal["expert", "idm", "ppo", "smart"]
 TrafficStartup = Literal["immediate", "source_hold"]
+CONTROLLERS = get_args(Controller)
+STARTUP_POLICIES = get_args(TrafficStartup)
 LegacyPlanner = Literal["smart", "expert", "bb"]
 LegacyTraffic = Literal["hybrid_startup", "idm", "expert"]
 
@@ -71,21 +73,21 @@ def build_parser():
     )
     parser.add_argument(
         "--ego",
-        choices=["expert", "idm", "ppo", "smart"],
+        choices=CONTROLLERS,
         default=None,
         action=_StoreConsistentSelector,
         help="Ego controller for a new controller-matrix pair",
     )
     parser.add_argument(
         "--traffic",
-        choices=["expert", "idm", "ppo", "smart", "hybrid_startup"],
+        choices=(*CONTROLLERS, "hybrid_startup"),
         default=None,
         action=_StoreConsistentSelector,
         help="Traffic controller; hybrid_startup is a legacy SMART alias",
     )
     parser.add_argument(
         "--traffic-startup",
-        choices=["immediate", "source_hold"],
+        choices=STARTUP_POLICIES,
         default=None,
         action=_StoreConsistentSelector,
         help="New-pair traffic startup policy (default: immediate)",

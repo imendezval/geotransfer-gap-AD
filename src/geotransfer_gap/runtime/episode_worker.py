@@ -9,7 +9,8 @@ from geotransfer_gap.planners.expert_controller import ExpertController
 from geotransfer_gap.planners.idm_controller import IDMController
 from geotransfer_gap.runtime.actor_index import ActorIndex
 from geotransfer_gap.runtime.scheduler import EpisodeScheduler
-from geotransfer_gap.runtime.startup_policy import StartupPolicy, source_hold_policy
+from geotransfer_gap.runtime.startup_policy import StartupPolicy
+from geotransfer_gap.runtime.matrix_inputs import binary_path, load_binary, load_source_hold
 
 
 def run_episode(
@@ -152,21 +153,13 @@ def main(argv=None):
     ensure_bench()
     from geotransfer_gap.runtime import late_spawn_runtime
     from geotransfer_gap.runtime.session import evaluation_env
-    from pufferlib.prediction.binary_reader import read_binary_scenario
-
     root = args.root.resolve()
-    binary_path = root / "testing/map_000000.bin"
-    binary = read_binary_scenario(str(binary_path))
+    binary_file = binary_path(root)
+    binary = load_binary(root)
     startup = StartupPolicy()
     source = None
     if args.traffic_startup == "source_hold":
-        sources = sorted((root / "testing").glob("ind_*.json"))
-        if len(sources) != 1:
-            raise SystemExit(f"source_hold requires exactly one authoritative source JSON in {root / 'testing'}")
-        source, = sources
-        startup = source_hold_policy(read_json(source), binary)
-        if args.steps > startup.window:
-            raise SystemExit("source_hold steps exceed the authoritative source window")
+        source, startup = load_source_hold(root, binary, args.steps)
     runtime = late_spawn_runtime.load()
     # Load the corrected extension before importing the package's binding
     # attribute; an earlier import would stay attached to the stock module even
@@ -207,7 +200,7 @@ def main(argv=None):
             steps=args.steps,
             runtime=runtime,
             scene_reference=reference(root),
-            binary_sha256=sha256(binary_path),
+            binary_sha256=sha256(binary_file),
             startup=startup,
         )
     finally:
