@@ -12,7 +12,7 @@ import sys
 
 from geotransfer_gap.artifacts import read_json, reference, resolve_reference, sha256, write_json
 from geotransfer_gap.config import settings
-from geotransfer_gap.runtime.matrix_inputs import fingerprint, load_binary
+from geotransfer_gap.runtime.matrix_inputs import fingerprint, load_binary, load_source_hold
 from geotransfer_gap.runtime.native_modes import NativeMovementMode as Mode
 
 BB_COMMIT = "805fe04c6977b60c41c92c31f1a5211fbd704f44"
@@ -26,6 +26,7 @@ SMART_CODEBOOK_SHA256 = {
 }
 MODEL_PROVENANCE = {"ppo": "ppo_provenance.json", "smart": "smart_provenance.json"}
 MODES = set(Mode)
+VERIFICATION_SCHEMA_VERSION = 2
 
 
 def lifecycle_frame(snapshot, native):
@@ -45,7 +46,11 @@ def lifecycle_frame(snapshot, native):
             "collided_before_goal": actor.collided_before_goal,
             "navigation_goal_native_xy": goal,
         })
-    return {"step": snapshot.step, "actors": actors}
+    return {
+        "step": snapshot.step,
+        "active_agent_indices": list(snapshot.active_agent_indices),
+        "actors": actors,
+    }
 
 
 def _git_at(path, *args):
@@ -85,7 +90,7 @@ def run_provenance(report, lifecycle, env_settings, binary_file, source):
     cfg = settings()
     torch = sys.modules.get("torch")
     return {
-        "schema_version": 1, "scene": report["scene"],
+        "schema_version": VERIFICATION_SCHEMA_VERSION, "scene": report["scene"],
         "ego": report["ego_controller"], "traffic": report["traffic_controller"],
         "startup": report["traffic_startup"], "diagnostic_only": True,
         "integration_validity": "pending_parent_validation",
@@ -172,11 +177,16 @@ def validate_trace(trace, lifecycle=None, binary=None):
             raise ValueError(f"invalid transition at step {tick}")
         state = _actors_by_id(frame["state"]["actors"], "id", "native state")
         assignments = _actors_by_id(frame["actors"], "source_id", "scheduler assignments")
-        life = None
+        life = active_indices = None
         if lifecycle is not None:
             life = _actors_by_id(lifecycle[tick]["actors"], "source_id", "lifecycle")
             if life.keys() != state.keys() or lifecycle[tick]["step"] != tick:
                 raise ValueError(f"lifecycle identity mismatch at step {tick}")
+            active_indices = lifecycle[tick].get("active_agent_indices")
+            if (not isinstance(active_indices, list)
+                    or any(type(index) is not int for index in active_indices)
+                    or len(set(active_indices)) != len(active_indices)):
+                raise ValueError(f"invalid native active index ordering at step {tick}")
         identities = {sid: row["binary_index"] for sid, row in state.items()}
         if scene_actors is None:
             scene_actors = identities
@@ -195,6 +205,10 @@ def validate_trace(trace, lifecycle=None, binary=None):
                 slots.add(slot)
             if actor["binary_index"] != assignment["binary_index"]:
                 raise ValueError(f"binary index changed at step {tick}, actor {sid}")
+            if active_indices is not None and slot is not None:
+                if slot >= len(active_indices) or active_indices[slot] != actor["binary_index"]:
+                    raise ValueError(f"native slot {slot} does not map to binary index "
+                                     f"{actor['binary_index']} at step {tick}, actor {sid}")
             pre = assignment.get("pre_step_native_movement_mode")
             applied = assignment.get("applied_movement_mode")
             planned = assignment.get("planned_movement_mode")
@@ -222,13 +236,14 @@ def validate_trace(trace, lifecycle=None, binary=None):
                                  ) if info["controller_eligible"] else "context"
                 if assignment["role"] != expected_role:
                     raise ValueError(f"unexpected controller ownership at step {tick}, actor {sid}")
-                _validate_ownership(trace, assignment, tick, advances, schedule, releases)
+                _validate_ownership(trace, assignment, info, tick, advances, schedule, releases)
             if live and generation is not None:
                 key = (sid, generation)
                 if previous.get(key) is not None and previous[key] != pre:
                     raise ValueError(f"applied movement mode did not persist at step {tick}, actor {sid}, generation {generation}")
                 current[key] = applied
-        if slots != set(range(len(slots))):
+        active_count = len(slots) if active_indices is None else len(active_indices)
+        if slots != set(range(active_count)):
             raise ValueError(f"incomplete active slots at step {tick}")
         previous = current
 
@@ -243,7 +258,7 @@ def validate_trace(trace, lifecycle=None, binary=None):
             raise ValueError("terminal reason does not match the last native ego observation")
 
 
-def _validate_ownership(trace, actor, tick, advances, schedule, releases):
+def _validate_ownership(trace, actor, lifecycle, tick, advances, schedule, releases):
     sid, index, role = actor["source_id"], actor["binary_index"], actor["role"]
     declared = trace[f"{role}_controller"] if role != "context" else None
     if actor["declared_controller"] != declared:
@@ -251,7 +266,11 @@ def _validate_ownership(trace, actor, tick, advances, schedule, releases):
     scheduled = schedule.get(index)
     held = role == "traffic" and scheduled is not None and tick < scheduled
     if role == "context":
-        owner, mode = None, Mode.EXPERT_REPLAY
+        if lifecycle["source_valid"] and lifecycle["native_present"]:
+            owner = "context_replay"
+        else:
+            owner = "inactive_replay_mode" if actor["slot"] is not None else "not_present"
+        mode = Mode.EXPERT_REPLAY
     elif tick < 10 or held:
         owner = "warmup_replay" if tick < 10 else "source_hold_replay"
         mode = Mode.EXPERT_REPLAY
@@ -259,7 +278,7 @@ def _validate_ownership(trace, actor, tick, advances, schedule, releases):
         owner = f"{role}:{declared}"
         mode = {"expert": Mode.EXPERT_REPLAY, "idm": Mode.IDM,
                 "ppo": Mode.DYNAMICS, "smart": Mode.DYNAMICS}[declared]
-    if ((owner is not None and actor["effective_owner"] != owner)
+    if (actor["effective_owner"] != owner
             or (advances and actor["slot"] is not None and actor["applied_movement_mode"] != mode)
             or (mode != Mode.DYNAMICS and actor.get("action") not in (None, [0, 0]))):
         raise ValueError(f"invalid effective owner or controller action at step {tick}, actor {sid}")
@@ -325,6 +344,29 @@ def validate_claims(provenance):
         raise ValueError("unsupported source, task or controller-pair admission claim")
 
 
+def _validate_startup(trace, inputs, root, binary):
+    recorded = trace.get("startup_policy")
+    if trace["traffic_startup"] != "source_hold":
+        if recorded is not None or "source_hold" in inputs:
+            raise ValueError("immediate startup contains source-hold evidence")
+        return
+
+    source, policy = load_source_hold(root, binary, trace["requested_observation_frames"])
+    actual = fingerprint(source)
+    if (inputs.get("source_hold") != actual or not isinstance(recorded, dict)
+            or recorded.get("source") != actual["reference"]
+            or recorded.get("source_sha256") != actual["sha256"]
+            or recorded.get("window_observations") != policy.window):
+        raise ValueError("source-hold evidence does not match the authoritative source")
+
+    expected_schedule = [
+        {"binary_index": index, "source_id": int(binary["objects"][index]["id"]), "step": step}
+        for index, step in sorted(policy.releases.items())
+    ]
+    if recorded.get("release_schedule") != expected_schedule:
+        raise ValueError("release schedule disagrees with the authoritative source")
+
+
 def validate_run(folder, row):
     bundle = load_bundle(folder)
     trace, provenance = bundle["trace"], bundle["provenance"]
@@ -334,7 +376,8 @@ def validate_run(folder, row):
     for key in ("scene", "ego_controller", "traffic_controller", "traffic_startup"):
         if trace[key] != row[key]:
             raise ValueError(f"worker trace has the wrong {key}")
-    if (provenance.get("schema_version") != 1 or provenance["scene"] != row["scene"]
+    if (provenance.get("schema_version") != VERIFICATION_SCHEMA_VERSION
+            or provenance["scene"] != row["scene"]
             or [provenance[key] for key in ("ego", "traffic", "startup")] !=
                [row[key] for key in ("ego_controller", "traffic_controller", "traffic_startup")]
             or row["inputs"] != provenance["inputs"]
@@ -370,7 +413,9 @@ def validate_run(folder, row):
         raise ValueError("worker did not use the pinned CPU/classic dynamics configuration")
     if trace.get("startup_policy") != provenance["source_hold_prior"]:
         raise ValueError("startup policy provenance is inconsistent")
-    binary = load_binary(resolve_reference(row["scene"]))
+    root = resolve_reference(row["scene"])
+    binary = load_binary(root)
+    _validate_startup(trace, row["inputs"], root, binary)
     validate_trace(trace, provenance["lifecycle"], binary)
     models = validate_models(folder, row["ego_controller"], row["traffic_controller"])
     if ("smart" in models and models["smart"]["binary_sha256"] != trace["binary_sha256"]):
