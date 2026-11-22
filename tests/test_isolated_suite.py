@@ -31,3 +31,24 @@ def test_suite_isolates_fixture_writes(tmp_path, monkeypatch, error):
             suite.main([])
     assert scratch_paths and not scratch_paths[0].exists()
     assert review.read_text() == "original"
+
+
+def test_subprocess_cannot_write_live_artifact_through_absolute_reference(tmp_path):
+    import shutil
+    import subprocess
+    import sys
+
+    if shutil.which("bwrap") is None:
+        pytest.skip("bubblewrap is unavailable")
+    live = tmp_path / "live"
+    scratch = tmp_path / "copy"
+    cache = tmp_path / "cache"
+    for path in (live, scratch, cache):
+        path.mkdir()
+        (path / "file").write_text("original")
+    prefix = suite._sandbox(live, scratch, cache)
+    subprocess.run([*prefix, sys.executable, "-c",
+                    "from pathlib import Path; import sys; Path(sys.argv[1]).write_text('changed')",
+                    str(live / "file")], check=True)
+    assert (live / "file").read_text() == "original"
+    assert (scratch / "file").read_text() == "changed"
