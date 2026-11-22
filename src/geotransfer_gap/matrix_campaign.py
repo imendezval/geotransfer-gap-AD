@@ -4,7 +4,6 @@ import argparse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import fcntl
-from hashlib import sha256 as hash_bytes
 from importlib.metadata import distribution
 import math
 from pathlib import Path
@@ -107,9 +106,10 @@ def fingerprint_environment():
         "torch": ("_C.cpython", "libtorch_cpu.so", "libtorch_python.so"),
     }.items():
         package = distribution(name)
-        record = package.read_text("RECORD")
-        if record is None:
-            raise ValueError(f"{name} distribution has no RECORD")
+        records = [file for file in package.files if file.name == "RECORD"
+                   and file.parent.name.endswith(".dist-info")]
+        if len(records) != 1:
+            raise ValueError(f"{name} distribution lacks a unique RECORD")
         critical = {
             str(file): sha256(package.locate_file(file))
             for file in package.files if str(file).endswith(".so")
@@ -118,7 +118,7 @@ def fingerprint_environment():
         if len(critical) != len(filenames):
             raise ValueError(f"{name} distribution lacks expected native library fingerprints")
         packages[name] = {"version": package.version,
-                          "record_sha256": hash_bytes(record.encode()).hexdigest(), "libraries": critical}
+                          "record_sha256": sha256(package.locate_file(records[0])), "libraries": critical}
     return {
         "commit": _git(cfg.project, "rev-parse", "HEAD"),
         "tree": _git(cfg.project, "rev-parse", "HEAD^{tree}"),
