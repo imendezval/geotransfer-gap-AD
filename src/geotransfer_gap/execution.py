@@ -291,10 +291,9 @@ def replay(root, output):
 
 
 def _matrix_evidence(folder, row):
-    report = read_json(folder / "trace.json")
-    if not report["frames"]:
-        raise ValueError("worker produced an empty trace")
-    return {"trace": "trace.json", "trace_sha256": sha256(folder / "trace.json")}
+    from .runtime.run_trace import validate_run
+
+    return validate_run(folder, row)
 
 
 def _run_matrix(protocol, rows, resume):

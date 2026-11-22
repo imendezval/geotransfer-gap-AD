@@ -26,6 +26,7 @@ def run_episode(
     binary_sha256=None,
     frame_fn=None,
     startup=None,
+    capture_lifecycle=None,
 ):
     """Capture each pre-step frame and advance at most ``steps - 1`` times."""
     if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 91:
@@ -49,6 +50,8 @@ def run_episode(
         native = env.get_state()
         state = native[0] if isinstance(native, list) else native
         snapshot = index.capture_pre_step(step, state, env.observations)
+        if capture_lifecycle is not None:
+            capture_lifecycle(snapshot, state)
         ego = snapshot.actor_for(snapshot.ego_id)
         if ego.removed:
             terminal_reason = "ego_removed"
@@ -169,7 +172,20 @@ def main(argv=None):
     if Path(binding.__file__).resolve() != Path(runtime["runtime_binary"]).resolve():
         raise RuntimeError("episode worker loaded a different native binding than the runtime")
 
+    import numpy as np
+
+    from geotransfer_gap.runtime.run_trace import lifecycle_frame, run_provenance
+
+    np.random.seed(0)
+    lifecycle = []
     env = evaluation_env(root)
+    native_settings = {
+        "ini": env.ini_file, "dynamics_model": env.dynamics_model,
+        "action_type_flag": env._action_type_flag,
+        "episode_length": env.episode_length,
+        "observation_width": env.single_observation_space.shape[0],
+        "goal_behavior": env.goal_behavior,
+    }
     try:
         provenance = None
         factories = {"expert": ExpertController, "idm": IDMController}
@@ -202,6 +218,7 @@ def main(argv=None):
             scene_reference=reference(root),
             binary_sha256=sha256(binary_file),
             startup=startup,
+            capture_lifecycle=lambda snapshot, native: lifecycle.append(lifecycle_frame(snapshot, native)),
         )
     finally:
         env.close()
@@ -245,6 +262,8 @@ def main(argv=None):
             "information_access": "Static map, observed joint histories and observed-birth velocity",
             "refreshes": smart_roles,
         })
+    write_json(args.output.with_name("verification.json"),
+               run_provenance(report, lifecycle, native_settings, binary_file, source))
     print(args.output.resolve(), flush=True)
     return args.output
 
