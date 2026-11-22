@@ -38,9 +38,11 @@ def _sync_directory(path):
 
 
 def durable_json(path, record):
-    write_json(path, record)
-    with path.open("rb") as file:
+    staged = path.with_suffix(path.suffix + ".staged")
+    write_json(staged, record)
+    with staged.open("rb") as file:
         os.fsync(file.fileno())
+    staged.replace(path)
     _sync_directory(path.parent)
 
 

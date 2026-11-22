@@ -71,6 +71,8 @@ def _german_scene(row):
     scene = _scene(row["name"], root, row["binary_sha256"], "german")
     if scene.get("binary_problem"):
         raise ValueError(scene["binary_problem"])
+    if (scene["ego_source_id"], scene["ego_binary_index"]) != (row["ego_track_id"], row["ego_binary_index"]):
+        raise ValueError(f"binary ego does not match the manifest: {root}")
     return {**scene, "protected_inputs": inputs, "original_source_admission": admission}
 
 

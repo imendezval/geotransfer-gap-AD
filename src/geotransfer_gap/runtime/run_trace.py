@@ -19,6 +19,11 @@ BB_COMMIT = "805fe04c6977b60c41c92c31f1a5211fbd704f44"
 RUNTIME_DIGEST = "beedf8f1b0e9c490"
 PPO_SHA256 = "50a9a580cca905fc3dae47b5847b4edf408de3b7fe7517bd4f3a781fa140e3b3"
 SMART_SHA256 = "b2cdeb31b0336588df1fc872e2f64dc6b24ec88472936068ec7e9501e9252616"
+EVAL_INI_SHA256 = "afdf157a7b809e31700a49f977c46a7a4913c7e73546a5803d8635a9ae1f5e4e"
+SMART_CODEBOOK_SHA256 = {
+    "map_codebook": "efc4aa79d57cd60aba257bbb2cc2262e13043d545f5e02d9b483a5c1d1926d8a",
+    "motion_codebook": "90f727d4753e576bd0f1f13dd64336cd0d16419e98fd06b8900df50611ccf800",
+}
 MODEL_PROVENANCE = {"ppo": "ppo_provenance.json", "smart": "smart_provenance.json"}
 MODES = set(Mode)
 
@@ -78,6 +83,7 @@ def code_fingerprints():
 
 def run_provenance(report, lifecycle, env_settings, binary_file, source):
     cfg = settings()
+    torch = sys.modules.get("torch")
     return {
         "schema_version": 1, "scene": report["scene"],
         "ego": report["ego_controller"], "traffic": report["traffic_controller"],
@@ -107,6 +113,8 @@ def run_provenance(report, lifecycle, env_settings, binary_file, source):
                 key: os.getenv(key) for key in ("OMP_NUM_THREADS", "MKL_NUM_THREADS",
                                                "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
             },
+            "torch_threads": torch.get_num_threads() if torch is not None else None,
+            "torch_interop_threads": torch.get_num_interop_threads() if torch is not None else None,
             "python_hash_seed": os.getenv("PYTHONHASHSEED"),
             "cuda_visible_devices": os.getenv("CUDA_VISIBLE_DEVICES"),
         },
@@ -292,12 +300,14 @@ def validate_models(folder, ego, traffic, *, models=None):
             raise ValueError(f"invalid {model} provenance or admission")
         if model == "ppo":
             if (Path(record["checkpoint"]).resolve() != checkpoint
+                    or record["evaluation_ini_sha256"] != EVAL_INI_SHA256
                     or record["behaviorbench_commit"] != BB_COMMIT or record["torch_threads"] != 1
                     or record["observation"]["width"] != 1151 or record["checkpoint_keys"] != 32
                     or record["action"]["selection"] != "argmax of 91 joint logits, acceleration-major"
                     or (traffic == "ppo" and "traffic_ppo" not in record)):
                 raise ValueError("invalid PPO model, observation or action provenance")
         elif (record["input_hashes"] != {key: sha256(path) for key, path in input_paths().items()}
+              or any(record["input_hashes"].get(key) != digest for key, digest in SMART_CODEBOOK_SHA256.items())
               or record["greedy"] is not True
               or set(record["refreshes"]) != {role for role, name in (("ego", ego), ("traffic", traffic)) if name == "smart"}):
             raise ValueError("invalid SMART input hashes or model provenance")
@@ -337,18 +347,24 @@ def validate_run(folder, row):
         if sha256(resolve_reference(artifact["reference"])) != _digest(artifact["sha256"], key):
             raise ValueError(f"input hash mismatch: {key}")
     software = provenance["software"]
-    if (software["behaviorbench_commit"] != BB_COMMIT or software["behaviorbench_dirty"]
+    if (software["evaluation_ini"]["sha256"] != EVAL_INI_SHA256
+            or software["behaviorbench_commit"] != BB_COMMIT or software["behaviorbench_dirty"]
             or software["runtime_source_digest"] != RUNTIME_DIGEST
             or software["code_sha256"] != code_fingerprints()
             or trace["runtime"]["runtime_source_sha256"] != RUNTIME_DIGEST
             or software["runtime_binary_sha256"] != sha256(trace["runtime"]["runtime_binary"])):
         raise ValueError("worker did not use the pinned corrected native runtime")
-    if (provenance["determinism"]["thread_environment"] != {
+    determinism = provenance["determinism"]
+    if (determinism["thread_environment"] != {
             key: "1" for key in ("OMP_NUM_THREADS", "MKL_NUM_THREADS",
                                 "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")}
-            or provenance["determinism"]["native_reset_seed"] != 0
-            or provenance["determinism"]["numpy_seed"] != 0
-            or provenance["determinism"]["device"] != "cpu"
+            or determinism["native_reset_seed"] != 0
+            or determinism["numpy_seed"] != 0
+            or determinism["device"] != "cpu"
+            or determinism["python_hash_seed"] != "0" or determinism["cuda_visible_devices"] != ""
+            or (provenance["model_provenance"] and (
+                determinism["torch_threads"] != 1 or determinism["learned_model_torch_seed"] != 0
+            ))
             or provenance["native"]["dynamics_model"] != "classic"
             or provenance["native"]["action_type_flag"] != 1):
         raise ValueError("worker did not use the pinned CPU/classic dynamics configuration")
