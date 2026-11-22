@@ -300,10 +300,16 @@ def build(root, output, traces=(), *, files_by_trace=None):
 
 
 def main(argv=None):
+    from geotransfer_gap.execution import CONTROLLERS, STARTUP_POLICIES
+
     ap = argparse.ArgumentParser(__doc__)
-    g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--scene")
+    g = ap.add_mutually_exclusive_group()
     g.add_argument("--manifest", type=Path)
+    g.add_argument("--campaign", type=Path, help="Render a saved matrix campaign under runs")
+    ap.add_argument("--scene", help="Scene ID or root (scene ID when filtering a campaign)")
+    ap.add_argument("--ego", choices=CONTROLLERS, help="Filter saved campaign traces")
+    ap.add_argument("--traffic", choices=CONTROLLERS, help="Filter saved campaign traces")
+    ap.add_argument("--traffic-startup", choices=STARTUP_POLICIES, help="Filter saved campaign traces")
     ap.add_argument("--trace", type=Path, action="append", default=[])
     ap.add_argument("--output", type=Path)
     ap.add_argument(
@@ -313,6 +319,25 @@ def main(argv=None):
     )
     ap.add_argument("--open", action="store_true")
     args = ap.parse_args(argv)
+    if args.campaign:
+        if args.trace or args.run:
+            ap.error("--campaign uses its saved traces and cannot be combined with --trace or --run")
+        from geotransfer_gap.visualization.campaign_gallery import render_campaign
+
+        destination = args.output or settings().runs / "views" / args.campaign.resolve().name
+        try:
+            index = render_campaign(args.campaign, destination, scene=args.scene, ego=args.ego,
+                                    traffic=args.traffic, startup=args.traffic_startup)
+        except (OSError, ValueError) as exc:
+            ap.error(str(exc))
+        print(index, flush=True)
+        if args.open:
+            webbrowser.open(index.resolve().as_uri())
+        return index
+    if bool(args.manifest) == bool(args.scene):
+        ap.error("Specify exactly one of --scene and --manifest, or use --campaign")
+    if args.ego or args.traffic or args.traffic_startup:
+        ap.error("Controller filters require --campaign")
     destination = args.output or settings().runs / "views"
     rows = (
         [{"name": scene_root(args.scene).name, "root": str(scene_root(args.scene))}]
