@@ -304,7 +304,7 @@ def _job_results(root, inventory, jobs):
     return results
 
 
-def _driving_outcome(trace):
+def _driving_outcome(trace, goal=None):
     ego = trace["ego_binary_index"]
     states = [next(a for a in frame["state"]["actors"] if a["binary_index"] == ego)
               for frame in trace["frames"]]
@@ -321,6 +321,8 @@ def _driving_outcome(trace):
         "offroad_observed": any(a["collision_state"] == 2 for a in states),
         "removed": any(a["removed"] for a in states), "reached_goal": any(a["reached_goal"] for a in states),
         "ego_displacement_m": displacement,
+        "native_goal_award_observed": (bool(goal["native_goal_awards"]) if goal is not None else None),
+        "terminal_cause": goal["terminal_cause"] if goal else "unknown",
     }
 
 
@@ -353,7 +355,7 @@ def _report_rows(root, inventory, single, batch):
             "task_preservation": "not_assessed", "campaign_manifest": "campaign.json",
             "verification_schema": VERIFICATION_SCHEMA_VERSION,
             "driving_outcomes": {
-                view: _driving_outcome(bundle["trace"]) if bundle else None
+                view: _driving_outcome(bundle["trace"], bundle.get("goal_evidence")) if bundle else None
                 for view, bundle in zip(("single", "batch"), bundles, strict=True)
             },
         }
@@ -404,8 +406,13 @@ def _summary(root, manifest, rows, totals, gates):
               "", "| Observed outcome | Episodes |", "| --- | --- |"]
     for label, count in sorted(Counter(outcome["terminal_reason"] for outcome in outcomes).items()):
         lines.append(f"| Terminal {label} | {count} |")
-    for field in ("early", "collision_observed", "offroad_observed", "removed", "reached_goal"):
+    for field in ("early", "collision_observed", "offroad_observed", "removed"):
         lines.append(f"| {field.replace('_', ' ')} | {sum(outcome[field] for outcome in outcomes)} |")
+    lines.extend((
+        f"| Raw reached_goal flag | {sum(outcome['reached_goal'] for outcome in outcomes)} |",
+        f"| Native goal award observed | {sum(outcome['native_goal_award_observed'] is True for outcome in outcomes)} |",
+        f"| Native goal telemetry unavailable | {sum(outcome['native_goal_award_observed'] is None for outcome in outcomes)} |",
+    ))
     lines += ["", "Collisions and goal misses can be valid simulation outcomes. Observed ego displacement is "
               "available per attempt. Wrong-way or task-specific progress was not classified.",
               "", "## Information access", "",
