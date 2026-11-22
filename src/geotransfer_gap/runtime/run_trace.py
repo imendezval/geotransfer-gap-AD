@@ -13,6 +13,7 @@ import sys
 from geotransfer_gap.artifacts import read_json, reference, resolve_reference, sha256, write_json
 from geotransfer_gap.config import settings
 from geotransfer_gap.runtime.actor_index import ActorIndex
+from geotransfer_gap.runtime.goal_evidence import validate_goal_evidence
 from geotransfer_gap.runtime.matrix_inputs import fingerprint, load_binary, load_source_hold
 from geotransfer_gap.runtime.native_modes import NativeMovementMode as Mode
 
@@ -445,6 +446,7 @@ def validate_run(folder, row):
     goal = bundle.get("goal_evidence")
     if goal is None or goal["trace_sha256"] != sha256(folder / "trace.json"):
         raise ValueError("missing or inconsistent native goal evidence")
+    validate_goal_evidence(trace, goal, provenance["native"]["goal_behavior"])
     expected["goal_evidence"] = "goal_evidence.json"
     return {
         "integration_validity": "validated_trace_and_provenance",
