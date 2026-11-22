@@ -1,0 +1,66 @@
+# Initial P0 research operating profile; thresholds are not legal or universal limits.
+# Normative metric definitions live in docs/performance_evaluation.md.
+
+[profile]
+schema_version = 1
+id = "geotransfer_p0_v1"
+definition_version = "1.0.0"
+scope = "initial_research_operating_choices"
+annotations_directory = "configs/evaluation/annotations"
+annotation_schema_version = 1
+
+[time]
+nominal_sample_interval_s = 0.1
+warmup_transitions = 10
+primary_start_observation = 10
+primary_last_observation_index = 90
+time_source = "recorded_time_s_or_producer_guaranteed_10hz_step"
+
+[kinematics]
+source_velocity_fallback = "observed_position_backward_difference_same_lifetime"
+differentiate_across_lifetime_gap = false
+differentiate_across_owner_handover = false
+interpolate_missing_states = false
+smooth_states = false
+pad_derivative_endpoints = false
+
+[safety.ttc]
+model = "fixed_heading_constant_world_velocity_oriented_rectangle_sat"
+primary_horizon_s = 5.0
+sensitivity_horizons_s = [3.0, 5.0, 8.0]
+
+[safety.near_miss]
+ttc_below_s = 1.5
+ttc_sensitivity_s = [1.0, 1.5, 2.0]
+footprint_clearance_below_m = 0.5
+clearance_sensitivity_m = [0.25, 0.5, 1.0]
+
+[comfort]
+longitudinal_acceleration_abs_limit_m_s2 = 3.0
+lateral_acceleration_abs_limit_m_s2 = 3.0
+longitudinal_jerk_abs_limit_m_s3 = 5.0
+total_world_jerk_limit_m_s3 = 5.0
+threshold_scale_sensitivity = [0.8, 1.0, 1.2]
+yaw_rate_is_continuous_only = true
+yaw_acceleration_is_continuous_only = true
+
+[efficiency]
+stationary_speed_below_m_s = 0.2
+stationary_speed_sensitivity_m_s = [0.1, 0.2, 0.3]
+low_progress_candidate_distance_m = 1.0
+low_progress_candidate_window_s = 3.0
+low_progress_is_confirmed_deadlock = false
+
+[uncertainty]
+cluster_unit = "recording_or_sequence"
+bootstrap_seed = 0
+bootstrap_resamples = 2000
+confidence_level = 0.95
+zero_width_interval_implies_certainty = false
+
+[safe_completion]
+criterion_set_id = "safe_completion_core_v1"
+requires_validated_task_completion = true
+requires_known_pass_for_all_applicable_critical_criteria = true
+missing_required_evidence_outcome = "not_assessed"
+near_miss_is_critical_only_when_explicitly_designated = true

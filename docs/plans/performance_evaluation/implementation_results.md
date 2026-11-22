@@ -1,0 +1,78 @@
+# Performance evaluation implementation results
+
+This is the single handoff log for PE00–PE14. Normative metric definitions live in [`docs/performance_evaluation.md`](../../performance_evaluation.md). The scope, milestone, and prompt documents remain at their existing single-copy location under `docs/plans/performance_metrics/`; the initial prompts' `performance_evaluation/` location assumption did not match this checkout.
+
+## PE00 — Baseline, reuse audit, and frozen definitions
+
+**Status:** Definition/profile baseline complete. Native smoke has one failing probe; current admission inventory is blocked by stale evidence. No metric implementation or production-code change was made.
+
+### Starting state and drift from planning review
+
+- No applicable `AGENTS.md` and no prior `implementation_results.md` were present. This file establishes the shared handoff location.
+- The planning review commit `504218cb9ecd7fd64d2952630b9f10f56d80f923` was the starting HEAD. I created branch `pe00/performance-evaluation-baseline`. Two owner-authored commits appeared on that branch during the session and were preserved: `658a279` adds regression cases for the US source-hold inputs; `0beb7d8` qualifies the exact original WOMD sources for the two US diagnostic fixtures. The final baseline HEAD is `0beb7d84d6b61357d6bbfa7b28c83cb72e08f95c`.
+- The code drift is narrow: `runtime/matrix_inputs.py` now accepts the two US fixtures only when one exact original WOMD v1.3 source is found, its pinned hash matches, and the pinned upstream writer recreates the existing binary hash. `verification_matrix.py` imports those pinned identities from `matrix_inputs.py`. No evaluator, metric, runner, viewer, schema, or controller owner changed in these commits.
+- Both WOMD source JSONs are available and hash-match the new constants. The committed parametrized source-hold tests passed in the final full pytest run (the fixtures yield 9 and 2 release entries). This expands source-hold protocol availability for two US **diagnostic** fixtures; it does not make them a matched geographic baseline.
+- The three requested plan files are physically under `docs/plans/performance_metrics/`, not `docs/plans/performance_evaluation/`. They remain there without duplicate copies. New operational definitions and this results log link to their actual locations.
+- Pre-existing untracked `.codex-attachments/` and `docs/plans/performance_metrics/` were preserved. No unrelated changes were staged or discarded.
+
+### Repository-specific reuse map
+
+| Existing owner | PE reuse decision |
+|---|---|
+| `cli.py` | Keep its lazy command dispatch; add evaluation dispatch only in its selected implementation milestone. |
+| `execution.py`, `runtime/episode_worker.py` | Keep all orchestration and the single stepping loop. The worker already exposes a pre-step lifecycle capture callback; any future optional evidence capture extends it. |
+| `runtime/session.py` | Keep the canonical environment and world-coordinate `frame()` representation. It records `time_s = step × 0.1`, present pose/velocity/footprint, native collision state, and ego goal state. It does not serialize partner/impact positions. Preserve this fingerprinted execution owner. |
+| `runtime/actor_index.py`, `step_snapshot.py`, `scheduler.py` | Consume stable source IDs, lifetime generations, fixed binary indices, effective ownership, movement modes, and the per-step slot mapping. Never infer identity from active slot order. |
+| `runtime/run_trace.py` | Preserve schema-3 matrix validation, schema-2 verification, strict live `validate_run()`, exact comparison, and all-package-Python fingerprints. Historical artifacts must be handled at a separate saved-evidence boundary, not by weakening this validator. |
+| `runtime/matrix_batch.py`, `matrix_campaign.py`, `verification_matrix.py` | Read schema-4 durable run/attempt accounting and persisted campaign views. Do not add a scheduler/retry ledger. The fixed campaign inventory is not the general evaluation cohort builder; campaign freeze/report checks require a live matching revision/environment. |
+| `artifacts.py`, `config.py` | Reuse finite atomic JSON writing, SHA-256, configured roots, portable references, scene lookup, and manifest resolution. Do not add another artifact/path framework. |
+| `visualization/viewer.py`, `campaign_gallery.py`, `viewer.html` | Keep the existing viewer and gallery. Current viewer loading already checks attempt/campaign trace and verification hashes plus sidecar coherence. PE01 should extract those checks once for viewer/evaluator reuse and preserve viewer APIs/rendering. |
+| `maps/lanelet.py`, `audit_scene.py`, `audit_rule_applicability.py`, `validation/audit_physical_source.py` | Reuse recording-specific map selection, projection/orientation/topology, pure polygon/oriented-box helpers, and supported source physical evidence. `box_distance()` already computes polygon gap. Keep source admission separate from rollout results. |
+| `audit_following_scope.py`, `audit_task_rule_scope.py`, `audit_directed_rule_scope.py`, `audit_task_interactions.py`, `audit_interaction_fidelity.py` | Read source-only task/rule/following/conflict/fidelity certificates within their recorded scope. Assess encounter realization from each actual rollout; do not treat a source certificate as its verdict or as a waiver after route deviation. |
+| Pinned BehaviorBench `evaluation/metrics.py`, `evaluator.py`, `collision_classifier.py`, `ocean/drive/binding.c` | Do not vendor the runner. Its metrics operate on live environment logs and contain `-1`/infinity sentinels and zero defaults. Its responsibility heuristic uses stopped/approach/lane-drift rules; its fallback partner search selects a projected nearest entity. These are not automatic GeoTransfer truth. The binding exposes `collided_with_index` and collision positions, but canonical traces omit them. Native `VEHICLE_COLLISION=1` and `OFFROAD=2` are distinct; native off-road is road-edge intersection, and the single collision state cannot prove simultaneous geometry. A later narrow optional adapter/capture path must state evidence limits. |
+
+### Operational decisions fixed for PE01 onward
+
+The normative decisions and profile are in [`docs/performance_evaluation.md`](../../performance_evaluation.md) and [`configs/evaluation/default.toml`](../../../configs/evaluation/default.toml), profile `geotransfer_p0_v1`, definition `1.0.0` (profile file SHA-256 `8e5a6dfc329b0c71f75ac4aca41000efea6699acc5726ac7cfc61863139fba55`). They settle:
+
+- observation versus transition counts, 10 warmup transitions, attribution boundary at observation 10, and the full 80-transition/8-second primary window for a complete 91-observation rollout;
+- raw state-based kinematics with explicit interval and adjacent-interval finite-difference stencils, support exclusions, owner/lifetime boundaries, and no smoothing/padding/interpolation;
+- native collision/off-road events versus sampled footprint geometry and constant-velocity SAT TTC, partner/severity limitations, and explicit pair/coverage status;
+- route progress versus travelled distance, separate native goal/task/encounter/safe-completion outcomes, horizon censoring, and nonconfirmed low-progress candidates;
+- `valid`/`unavailable`/`not_applicable`/`undefined`/`invalid` assessment states, separate criterion outcomes, and archived-attested versus trace-only evidence;
+- initial TTC, near-miss, comfort, stationary, low-progress, and cluster-bootstrap operating choices, including sensitivity values and their research-only status;
+- sparse evidence-bound annotation requirements without copied manifest actor lists, source hashes, routes, or map geometry.
+
+No real annotation was created. Shapely is not installed in the current environment. PE05 should reuse current Lanelet2/pure geometry helpers first; if robust polygon union/difference needs it, the definition allows only an optional `evaluation-geometry` extra, lazy and unrelated-command-safe.
+
+### Baseline and verification
+
+All generated verification output is local and ignored under `runs/pe00_baseline_20261122/`. The 896 MB artifact tree was copied to `recheck/artifacts/`; `check all` and both migration commands used that copy with `GEOTRANSFER_ARTIFACTS` and `GEOTRANSFER_RUNS` redirected beneath the PE00 run root.
+
+| Command / check | Result |
+|---|---|
+| `.venv/bin/pytest -q` at HEAD `0beb7d8` | **PASS**, 328 passed, 1 upstream PyG deprecation warning, 36.69 s. Final-head output: `runs/pe00_baseline_20261122/pytest_current_head.stdout.txt`. An earlier run overlapped the two commits and is not used as the final baseline. |
+| `.venv/bin/geotransfer doctor` at HEAD `0beb7d8` | **PASS**, exit 0, no configured source/BB/weight paths missing. Output: `doctor_current_head.stdout.txt`. |
+| `GEOTRANSFER_ARTIFACTS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/artifacts GEOTRANSFER_RUNS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/runs .venv/bin/geotransfer check all` | **PASS**, all 13 checks: orientation, lane changes, background, map, route, directed rule, restart, following, task rule, queue, admission, re-entry, startup. Exact command/root summary: `check_all.status.json`; per-check log: `check_all.log`; result summary: `recheck/runs/checks/summary.json`. |
+| `GEOTRANSFER_ARTIFACTS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/artifacts GEOTRANSFER_RUNS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/runs .venv/bin/geotransfer check migration conversion` | **PASS**, byte-identical JSON/binary/manifest conversions for all 16 scenes. Exact command/root/status: `migration_conversion.status.json`; output: `migration_conversion.log`. |
+| `GEOTRANSFER_ARTIFACTS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/artifacts GEOTRANSFER_RUNS=/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/runs/pe00_baseline_20261122/recheck/runs .venv/bin/geotransfer check migration execution` | **PASS**, exact legacy/new execution comparisons for all 16 scenes (actions, meaningful states, actor identity, prediction-input hashes). Exact command/root/status: `migration_execution.status.json`; output: `migration_execution.log`. |
+| `matrix_campaign.fingerprint_environment()` | **PASS** at HEAD `0beb7d8`; BB `805fe04c6977b60c41c92c31f1a5211fbd704f44` clean; runtime source `beedf8f1b0e9c490`, native binary SHA-256 `bdf1a2cb70f4153a0283a45fe18920b09a545ecba15fdb335a87a31762b94d58`; SMART/PPO checkpoint and both codebook hashes match their pinned identities. Python 3.11.18, NumPy 1.26.4, Torch 2.5.1+cu121, Lanelet2 1.2.3. Full fingerprint: `matrix_environment_fingerprint.json`. |
+| `.venv/bin/python tests/integration/probe_ppo_native.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r07_e200_f25439` | **PASS**. |
+| `.venv/bin/python tests/integration/probe_ppo_traffic_physics.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r07_e200_f25439 --target-index 7` | **PASS**. |
+| `.venv/bin/python tests/integration/probe_smart_controller.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r07_e200_f25439` | **FAIL** at `tests/integration/probe_smart_controller.py:94`, `StopIteration`: no traffic refresh at expected step 14. No code/input change was made to mask this probe failure. |
+| `.venv/bin/python tests/integration/probe_smart_ego_reference.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r07_e200_f25439` | **PASS**. |
+| `.venv/bin/python tests/integration/probe_smart_ego_reference.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r32_e391_f21356 --steps 4 --require-birth` | **PASS**, causal birth check. |
+| `.venv/bin/python tests/integration/probe_source_hold_models.py --root /home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r12_e151_f12041 --actor 137` | **PASS** for PPO/SMART hold and release readback. The `check all` startup regression also passed on the copied artifacts. All exact argv, exit codes, and per-probe log paths: `native_probes/summary.json`. |
+| `.venv/bin/python -m geotransfer_gap.verification_matrix --output runs/pe00_baseline_20261122/current_matrix_inventory.json` | **BLOCKED**, exit 1 at `r00_e321_f21017`: current admission SHA differs from the pinned portable manifest. No inventory output was written. A final audit found 7 of 16 admission records differ; precise old/current hashes are in `current_matrix_inventory_status.json`. The 7 scene IDs are `r00_e321_f21017`, `r01_e280_f18833`, `r01_e301_f20017`, `r09_e136_f11030`, `r32_e391_f21356`, `r09_e196_f16232`, and `r15_e332_f25626`. No admission was regenerated or restored. |
+| Fresh representative single/manifest matrix parity | **BLOCKED / not launched** because its required `build_matrix()` rejects the same stale admission hashes. No fresh episode or fixed 504-slot campaign was started. |
+
+The pre-check protected-input snapshot contains 577 fingerprints (portable manifest, scene recipes, reviews, 555 files in the 16 scene `testing/` trees, SMART/PPO checkpoints, and SMART codebooks). The final comparison has 7 changed paths and no missing files; every changed path is one of the seven admission JSONs listed above. The other 570 fingerprinted inputs match the pre-check snapshot. The source/binary/review/config/checkpoint/codebook hashes are unchanged. Because the admission differences were observed in the shared artifact tree during this session and their cause is not established, the “protected admission inputs unchanged” gate remains **BLOCKED**; they were not edited by this implementation and were not repaired. Snapshots: `protected_inputs_before.json` and `protected_inputs_after.json`.
+
+Existing archived evidence is present: `runs/m9_acceptance/campaign.json` (504 slots, frozen at `4706b42a0d6ea5a97b3e149dd32ddfdaeebeb804`) and `runs/post_m9_hardening/us_generation/campaign.json` (24 slots, frozen at `0beb7d84d6b61357d6bbfa7b28c83cb72e08f95c`), plus migration acceptance/conversion/execution reports under `artifacts/audits/`. These are availability observations, not a fresh live campaign validation. The source-hold files and exact hashes are recorded in `protected_inputs_after.json` and `current_matrix_inventory_status.json`.
+
+### PE01 handoff
+
+1. Implement the finite result/status contracts and parse/hash the effective default profile, without adding placeholder metrics or importing Torch/BehaviorBench/Lanelet2 for trace-only reads.
+2. Add the single `runtime/trace_io.py` saved-evidence boundary and narrowly extract the viewer's existing file-hash/coherence checks. Preserve `run_trace.validate_run()`, exact comparison, viewer API, historical bytes, and display semantics.
+3. Cover flat legacy schema-2 expert/SMART traces and nested matrix schema-3 traces. Resolve ego through recorded binary index and stable source ID; retain lifetime/ownership and absent metadata. Support producer revision `504218c` (and older archived producers) independently of evaluator HEAD `0beb7d8`.
+4. Test synthetic archived-attested and trace-only bundles, tampering, sidecar mismatch, actor reorder/nonzero ego, finite serialization, and old viewer behavior. The stale live admission records do not authorize re-admission or weakening the saved-evidence hash boundary; carry them as a source-context limitation.
