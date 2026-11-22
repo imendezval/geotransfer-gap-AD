@@ -23,7 +23,10 @@ def audit(env, binary, binding, target_index):
     policy, provenance = load_pinned_ego_policy(env)
     cases = {}
     real_infer = policy.infer_batch
-    for label, index in (("accel", 84), ("brake", 6), ("left", 45), ("right", 33)):
+    for label, index, intended in (
+        ("accel", 84, (1., 0.)), ("brake", 6, (-1., 0.)),
+        ("left", 48, (0., .5)), ("right", 42, (0., -.5)),
+    ):
         def directed(rows, states):
             actions, memory, logits, value = real_infer(rows, states)
             # Select a known grid index so each physical response is observable.
@@ -48,10 +51,15 @@ def audit(env, binary, binding, target_index):
         assignment = plan.by_source_id[actor.source_id]
         assert assignment.effective_owner == "traffic:ppo"
         action = policy.decode(index)
+        assert action == intended
         np.testing.assert_array_equal(actions[slot], action)
         np.testing.assert_array_equal(env.actions[slot], action)
         after = sample(env.get_state()[0], target_index)
         assert after["movement_mode"] == assignment.native_mode == NativeMovementMode.DYNAMICS
+        speed_delta = np.hypot(after["vx"], after["vy"]) - np.hypot(before["vx"], before["vy"])
+        np.testing.assert_allclose(speed_delta, .4 * action[0], rtol=0, atol=1e-5)
+        assert np.sign(after["heading"] - before["heading"]) == np.sign(action[1])
+        assert after["steering_angle"] == action[1]
         expected = classic_reference(before, action)
         errors = {k: abs(expected[k] - after[k]) for k in expected}
         assert max(errors.values()) < 1e-5, (label, errors)
