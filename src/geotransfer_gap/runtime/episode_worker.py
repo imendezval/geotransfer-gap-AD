@@ -27,6 +27,7 @@ def run_episode(
     frame_fn=None,
     startup=None,
     capture_lifecycle=None,
+    capture_goal=None,
 ):
     """Capture each pre-step frame and advance at most ``steps - 1`` times."""
     if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 91:
@@ -67,6 +68,8 @@ def run_episode(
         state_frame = frame_fn(state, binary, step)
         if advances:
             scheduler.advance(env, plan)
+            if capture_goal is not None:
+                capture_goal(step, ego)
             transitions += 1
         actors = []
         for assignment in plan.assignments:
@@ -186,7 +189,10 @@ def main(argv=None):
         "observation_width": env.single_observation_space.shape[0],
         "goal_behavior": env.goal_behavior,
     }
+    from .goal_evidence import GoalEvidence
+
     try:
+        goal = GoalEvidence(env)
         provenance = None
         factories = {"expert": ExpertController, "idm": IDMController}
         if "ppo" in (args.ego, args.traffic):
@@ -219,7 +225,9 @@ def main(argv=None):
             binary_sha256=sha256(binary_file),
             startup=startup,
             capture_lifecycle=lambda snapshot, native: lifecycle.append(lifecycle_frame(snapshot, native)),
+            capture_goal=goal.transition,
         )
+        goal_record = goal.finish(report)
     finally:
         env.close()
     if source is not None:
@@ -237,6 +245,8 @@ def main(argv=None):
             "research_admission_status": "not_established",
         }
     write_json(args.output, report)
+    write_json(args.output.with_name("goal_evidence.json"),
+               dict(goal_record, trace_sha256=sha256(args.output)))
     if provenance is not None:
         if args.traffic == "ppo":
             provenance["traffic_ppo"] = _traffic_ppo_provenance(report, provenance["observation"])

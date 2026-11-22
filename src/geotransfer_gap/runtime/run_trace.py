@@ -422,6 +422,10 @@ def validate_run(folder, row):
         raise ValueError("SMART evidence names a different scene binary")
     expected = {"trace": "trace.json", "provenance": "verification.json",
                 **{model: MODEL_PROVENANCE[model] for model in models}}
+    goal = bundle.get("goal_evidence")
+    if goal is None or goal["trace_sha256"] != sha256(folder / "trace.json"):
+        raise ValueError("missing or inconsistent native goal evidence")
+    expected["goal_evidence"] = "goal_evidence.json"
     return {
         "integration_validity": "validated_trace_and_provenance",
         "files": {key: {"path": name, "sha256": sha256(folder / name)}
@@ -433,7 +437,7 @@ def load_bundle(folder):
     return {
         "trace": read_json(folder / "trace.json"),
         "provenance": read_json(folder / "verification.json"),
-        **{model: read_json(folder / name) for model, name in MODEL_PROVENANCE.items()
+        **{model: read_json(folder / name) for model, name in dict(MODEL_PROVENANCE, goal_evidence="goal_evidence.json").items()
            if (folder / name).is_file()},
     }
 
@@ -442,6 +446,8 @@ def canonical(bundle):
     """Canonical evidence preserves assigned slots as fields, never as actor identity."""
     result = deepcopy(bundle)
     trace = result["trace"]
+    if "goal_evidence" in result:
+        result["goal_evidence"].pop("trace_sha256", None)
     for frame in trace["frames"]:
         frame["actors"].sort(key=lambda row: (row["source_id"], row["lifetime_generation"] or 0))
         generations = {row["source_id"]: row["lifetime_generation"] for row in frame["actors"]}
