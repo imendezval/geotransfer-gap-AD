@@ -1,6 +1,7 @@
 """Compare role SMART and faithful single-ego execution on one native timeline."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -77,7 +78,15 @@ def audit(env, binary, binding, steps):
             reference._bootstrap_speeds_from_state(speeds, a.num_agents)
             np.testing.assert_allclose(np.linalg.norm(b.velocity[born, tick], axis=1),
                                        speeds[born], rtol=0, atol=1e-6)
-            births.extend({"step": step, "index": int(i), "speed_m_s": float(speeds[i])} for i in born)
+            np.testing.assert_array_equal(a.velocity[born, tick], 0)
+            for i in born:
+                births.append({
+                    "step": step, "index": int(i), "source_id": int(binary["objects"][i]["id"]),
+                    "reference_bootstrap_speed_m_s": float(speeds[i]),
+                    "reference_history_velocity": a.velocity[i, tick].tolist(),
+                    "adapter_history_velocity": b.velocity[i, tick].tolist(),
+                    "native_velocity": [state["entities"][i][axis] for axis in ("vx", "vy")],
+                })
         if step in graphs[0]:
             assert graphs[0][step].keys() == graphs[1][step].keys()
             for key, value in graphs[0][step].items():
@@ -93,18 +102,28 @@ def audit(env, binary, binding, steps):
         binding.vec_set_movement_mode(env.c_envs, list(range(env.num_agents)),
                                       int(NativeMovementMode.EXPERT_REPLAY))
         env.step(np.zeros_like(env.actions))
+    graph_hashes = {}
+    for tick, graph in graphs[0].items():
+        graph_hashes[tick] = {
+            "/".join(map(str, key)): hashlib.sha256(value.detach().cpu().numpy().tobytes()).hexdigest()
+            for key, value in graph.items() if torch.is_tensor(value)
+        }
     report = {"actions": actions, "graph_and_prediction_differences": differences,
-              "causal_births": births, "prediction_steps": sorted(graphs[0])}
+              "causal_births": births, "prediction_steps": sorted(graphs[0]),
+              "clock": "identical native pre-step observations, shared expert replay transitions",
+              "reference_graph_tensor_hashes": graph_hashes}
     print(json.dumps(report, indent=2), flush=True)
     assert sorted(graphs[0]) == sorted(graphs[1]) == list(range(10, steps, 5))
     assert not differences
     assert all(row["max_abs_difference"] == 0 for row in actions)
+    return report
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=16)
+    parser.add_argument("--require-birth", action="store_true")
     args = parser.parse_args()
     ensure_bench()
     runtime = late_spawn_runtime.load()
@@ -115,7 +134,9 @@ def main():
     env = evaluation_env(args.root)
     try:
         env.reset()
-        audit(env, binary, binding, args.steps)
+        report = audit(env, binary, binding, args.steps)
+        if args.require_birth:
+            assert any(birth["reference_bootstrap_speed_m_s"] > 0 for birth in report["causal_births"])
     finally:
         env.close()
 
