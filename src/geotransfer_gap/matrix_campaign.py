@@ -175,17 +175,37 @@ def _ledger(folder):
     return paths[0] if paths else None
 
 
+def _job_complete(folder, job, ledger, launches):
+    launcher = read_json(launches[-1]) if launches else None
+    if ledger is None:
+        # Retain a process failure before matrix ledger creation.
+        return launcher is not None and launcher["status"] == "finished"
+    rows = read_json(ledger)["results"]
+    if {row["slot_id"] for row in rows} != set(job["slots"]) or len(rows) != len(job["slots"]):
+        raise ValueError(f"ledger slots differ from frozen job: {ledger}")
+    if any(row["status"] not in TERMINAL for row in rows):
+        return False
+    if launcher is None:
+        raise ValueError(f"terminal ledger has no launch record: {ledger}")
+    if launcher["status"] == "running":
+        # The worker committed its results before the supervisor recorded the CLI exit.
+        launcher["status"] = "reconciled"
+        launcher.setdefault("exit_code", None)
+        launcher["recovery"] = {
+            "reason": "terminal_ledger_after_interrupted_launcher",
+            "ledger": str(ledger.relative_to(folder)),
+        }
+        durable_json(launches[-1], launcher)
+    return launcher["status"] in {"finished", "reconciled"}
+
+
 def _run_job(root, job, env):
     folder = root / job["path"]
     folder.mkdir(parents=True, exist_ok=True)
     ledger = _ledger(folder)
     launcher_records = sorted(folder.glob("launch-*.json"))
-    if ledger:
-        statuses = {r["status"] for r in read_json(ledger)["results"]}
-        if statuses <= TERMINAL:
-            return
-    elif launcher_records and read_json(launcher_records[-1])["status"] == "finished":
-        return  # retain a process failure before matrix ledger creation
+    if _job_complete(folder, job, ledger, launcher_records):
+        return
 
     index = len(launcher_records) + 1
     stem = f"launch-{index:04}"
@@ -209,8 +229,7 @@ def execute(root, phase, jobs):
                 folder = root / job["path"]
                 launches = sorted(folder.glob("launch-*.json"))
                 ledger = _ledger(folder)
-                if (not launches or read_json(launches[-1])["status"] != "finished"
-                        or (ledger and any(r["status"] not in TERMINAL for r in read_json(ledger)["results"]))):
+                if not _job_complete(folder, job, ledger, launches):
                     raise ValueError("finish the independent single pass before launching the batch repeat")
         env = manifest["freeze"]["environment"]
         pending = manifest[phase]
