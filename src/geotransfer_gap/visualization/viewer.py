@@ -324,7 +324,13 @@ def main(argv=None):
             ap.error("--campaign uses its saved traces and cannot be combined with --trace or --run")
         from geotransfer_gap.visualization.campaign_gallery import render_campaign
 
-        destination = args.output or settings().runs / "views" / args.campaign.resolve().name
+        destination = args.output
+        if destination is None:
+            destination = settings().runs / "views" / args.campaign.resolve().name
+            filters = args.ego, args.traffic, args.traffic_startup
+            if args.scene or any(filters):
+                selection = "__".join(value or "all" for value in filters)
+                destination = destination / "selections" / selection
         try:
             index = render_campaign(args.campaign, destination, scene=args.scene, ego=args.ego,
                                     traffic=args.traffic, startup=args.traffic_startup)
