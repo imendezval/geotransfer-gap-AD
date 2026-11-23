@@ -96,6 +96,7 @@ def main(argv=None):
             "run",
             "view",
             "check",
+            "evaluate",
         ],
     )
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
@@ -163,6 +164,11 @@ def main(argv=None):
         from .visualization.viewer import main as view
 
         view(rest)
+        return
+    if args.command == "evaluate":
+        from .evaluation.commands import main as evaluate
+
+        evaluate(rest)
         return
     if args.command == "check" and rest and rest[0] == "all":
         from .validation.suite import main as suite
