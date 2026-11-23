@@ -8,6 +8,7 @@ from pathlib import Path
 
 from geotransfer_gap.artifacts import sha256
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
+from geotransfer_gap.evaluation.safety import measure_safety
 
 
 RESULT_SCHEMA_VERSION = 1
@@ -15,7 +16,8 @@ RESULT_SCHEMA_VERSION = 1
 
 def _code_identity():
     package = Path(__file__).parent
-    owners = ("contracts.py", "profile.py", "kinematics.py", "episode.py", "commands.py")
+    owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
+              "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -23,10 +25,17 @@ def _code_identity():
 
 
 def evaluate_episode(saved, profile, *, scene=None):
-    """Read a saved trace and calculate PE02 exposure/kinematics only."""
+    """Read a saved trace and calculate supported exposure and driving metrics."""
     report = saved.playback.report
     frames = list(saved.frames())
     measured = measure_kinematics(frames, saved.ego_source_id, report, profile)
+    safety = measure_safety(
+        frames, saved.ego_source_id, report, profile, measured["events"],
+        measured["exposure"],
+        evaluation_capture=saved.playback.evaluation_capture,
+        evaluation_capture_bound=saved.playback.evaluation_capture_bound,
+    )
+    measured["metrics"].extend(safety["metrics"])
     metric_refs = [{"kind": "trace", "sha256": saved.playback.hashes["trace"]}]
     if saved.playback.bound:
         metric_refs.extend({"kind": key, "sha256": digest}
@@ -89,7 +98,8 @@ def evaluate_episode(saved, profile, *, scene=None):
         },
         "context_limitations": [
             "No validated task annotation was supplied; task outcomes are not assessed.",
-            "PE02 measures saved ego states and observed flags; map geometry and collision-partner metrics are outside this result scope.",
+            "Map-based road metrics and validated task outcomes are outside this result scope.",
+            "Native collision partner and detector-center details require a hash-bound evaluation capture.",
         ],
         "scene_context": (scene
                           if scene is not None else {"status": "trace_only_no_map_or_task_context"}),
