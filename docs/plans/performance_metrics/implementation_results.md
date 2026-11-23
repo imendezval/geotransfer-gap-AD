@@ -130,3 +130,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE03 — Optional native event capture
 
 **Dispatch.** Base `9cc69c5562c60a5ed00f057179458dbca98d1ff5`. Use the existing worker pre-step hook and parent batch validation. Verify capture on/off and representative single/manifest parity independently of the blocked full inventory.
+
+**Review pending repair.** Candidate `01210d5` and PE02 test isolation repair `6883a36`. Native capture on/off and representative single/manifest parity evidence and full pytest (381 passed, 1 warning) are under `runs/pe_campaign/pe03/agent/`. Review requires binding the capture collision flags and native settings to canonical evidence and consistent handling of unmapped native partners. Full inventory still blocked.
