@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 
 from geotransfer_gap.artifacts import sha256
+from geotransfer_gap.evaluation.context import MapContext
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
+from geotransfer_gap.evaluation.map_metrics import measure_map_metrics
 from geotransfer_gap.evaluation.safety import measure_safety
 
 
@@ -17,14 +19,18 @@ RESULT_SCHEMA_VERSION = 1
 def _code_identity():
     package = Path(__file__).parent
     owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
-              "episode.py", "commands.py")
+              "context.py", "map_metrics.py", "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
+    files["maps/lanelet.py"] = sha256(package.parent / "maps/lanelet.py")
+    files["validation/audit_physical_source.py"] = sha256(
+        package.parent / "validation/audit_physical_source.py"
+    )
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return {"files": files, "sha256": hashlib.sha256(canonical).hexdigest()}
 
 
-def evaluate_episode(saved, profile, *, scene=None):
+def evaluate_episode(saved, profile, *, scene=None, map_context=None):
     """Read a saved trace and calculate supported exposure and driving metrics."""
     report = saved.playback.report
     frames = list(saved.frames())
@@ -36,13 +42,27 @@ def evaluate_episode(saved, profile, *, scene=None):
         evaluation_capture_bound=saved.playback.evaluation_capture_bound,
     )
     measured["metrics"].extend(safety["metrics"])
+    spatial = measure_map_metrics(
+        frames, saved.ego_source_id, profile, measured["exposure"],
+        map_context or MapContext(
+            status="unavailable",
+            reason="No selected scene or hash-bound source-map context was supplied",
+        ),
+    )
+    measured["metrics"].extend(spatial["metrics"])
     metric_refs = [{"kind": "trace", "sha256": saved.playback.hashes["trace"]}]
     if saved.playback.bound:
         metric_refs.extend({"kind": key, "sha256": digest}
                            for key, digest in saved.playback.hashes.items()
                            if key != "trace")
+    map_evidence_refs = [dict(item) for item in
+                         (map_context.evidence_refs if map_context else ())]
     for metric in measured["metrics"]:
-        metric["evidence_refs"] = list(metric_refs)
+        refs = list(metric_refs)
+        if (metric["metric_id"].startswith("safety.map_")
+                or metric["metric_id"].startswith("trajectory.lane_")):
+            refs.extend(map_evidence_refs)
+        metric["evidence_refs"] = refs
     event_channels = measured["exposure"]["event_observation_coverage"]["windows"]["full"]["channels"]
     has_event_channel = any(row["status"] == "valid" for row in event_channels.values())
     event_coverage_incomplete = any(
@@ -98,11 +118,12 @@ def evaluate_episode(saved, profile, *, scene=None):
         },
         "context_limitations": [
             "No validated task annotation was supplied; task outcomes are not assessed.",
-            "Map-based road metrics and validated task outcomes are outside this result scope.",
+            "Map metrics are supported only by hash-bound mapped Lanelet surfaces; legal access and map completeness are not assessed.",
             "Native collision partner and detector-center details require a hash-bound evaluation capture.",
         ],
-        "scene_context": (scene
-                          if scene is not None else {"status": "trace_only_no_map_or_task_context"}),
+        "scene_context": (scene if scene is not None else
+                          {"status": "trace_only_no_map_or_task_context"}),
+        "map_context": spatial["context"],
         "limitations": [
             "A readable trace does not attest to its execution; evidence level is reported separately.",
             "Observed event timing does not establish root cause or responsibility.",

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from geotransfer_gap.artifacts import reference, resolve_reference, scene_root, sha256, write_json
 from geotransfer_gap.config import settings
+from geotransfer_gap.evaluation.context import build_map_context
 from geotransfer_gap.evaluation.episode import evaluate_episode
 from geotransfer_gap.evaluation.profile import load_profile
 
@@ -90,10 +91,24 @@ def _episode(args):
 
     saved = load_saved_trace(trace)
     selected_root, scene_info = _scene_context(args.scene, saved.playback.report)
+    map_root = selected_root
+    if map_root is None and saved.playback.report.get("scene") is not None:
+        try:
+            map_root = resolve_reference(saved.playback.report["scene"])
+        except (KeyError, TypeError, ValueError):
+            map_root = None
+    map_context = build_map_context(map_root, saved.playback.report.get("binary_sha256"))
+    if scene_info is None and map_context.status == "valid":
+        scene_info = {
+            "root": saved.playback.report.get("scene"),
+            "binary_sha256": saved.playback.report.get("binary_sha256"),
+            "status": "saved_scene_identity_and_source_map_context_checked",
+        }
     profile_path = args.profile or settings().project / "configs/evaluation/default.toml"
     destination = _output_path(args.output, trace, profile_path, selected_root)
     profile = load_profile(profile_path)
-    result, events = evaluate_episode(saved, profile, scene=scene_info)
+    result, events = evaluate_episode(saved, profile, scene=scene_info,
+                                      map_context=map_context)
     result["input"]["trace_filename"] = trace.name
     destination.mkdir(parents=True, exist_ok=False)
     if events:

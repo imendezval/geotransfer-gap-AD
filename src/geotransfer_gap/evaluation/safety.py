@@ -380,6 +380,54 @@ def _native_metric(events, exposure, report, version, window, warmup, last):
     )
 
 
+def _native_offroad_metric(events, exposure, version, window, warmup, last):
+    """Expose the existing native road-edge channel independently of geometry."""
+    rows = [event for event in events if event.get("channel") == "native_offroad"]
+    selected = [event for event in rows if window == "full" or
+                warmup <= event.get("step", -1) <= last]
+    onset_rows = [event for event in selected if event.get("observation") in
+                  ("newly_observed_onset", "newly_observed_during_warmup")]
+    coverage = exposure.get("event_observation_coverage", {}).get("windows", {}).get(
+        "full" if window == "full" else "primary", {}).get("channels", {}).get(
+            "collision_state", {})
+    if coverage.get("status") != "valid":
+        return _status_metric(
+            "safety.native_offroad_onsets", version, AssessmentStatus.UNAVAILABLE,
+            "Native collision-state channel is absent from the selected trace window",
+            units="onsets", window=window,
+            limitations=("Native off-road is a road-edge event, not a polygon membership calculation",),
+        )
+    incomplete = (coverage.get("fraction") != 1.0 or any(
+        event.get("observation") in ("active_after_unknown_prior", "active_at_first_observation")
+        for event in selected
+    ))
+    warmup_rows = [event for event in onset_rows if event.get("attribution") in
+                   ("warmup_or_initial_condition", "initial_condition")]
+    controlled_rows = [event for event in onset_rows
+                       if event.get("attribution") == "recorded_controlled_transition"]
+    value = {
+        "observed_onset_count": len(onset_rows),
+        "count_is_lower_bound": bool(incomplete),
+        "warmup_or_initial_condition_count": len(warmup_rows),
+        "recorded_controlled_transition_count": len(controlled_rows),
+        "active_after_unknown_prior_count": sum(
+            event.get("observation") == "active_after_unknown_prior" for event in selected),
+        "left_censored_initial_active_count": sum(
+            event.get("observation") == "active_at_first_observation" for event in selected),
+        "event_observation_coverage": coverage,
+        "onsets": onset_rows,
+        "geometry_channel": "independent_from_safety.map_footprint_outside",
+    }
+    return _status_metric(
+        "safety.native_offroad_onsets", version, AssessmentStatus.VALID,
+        "Observed native road-edge classification transitions; no map geometry is inferred",
+        value, units="onsets", window=window,
+        eligible_samples=coverage.get("observations_with_field"),
+        limitations=("Native off-road is the simulator road-edge collision-state event",
+                     "The native collision state is a single classification and cannot prove simultaneous geometric conditions"),
+    )
+
+
 def _window_metrics(frames, ego_id, report, profile, events, exposure, times, window):
     values = profile.values
     version = values["profile"]["definition_version"]
@@ -506,7 +554,10 @@ def _window_metrics(frames, ego_id, report, profile, events, exposure, times, wi
 
     # Native events use the same PE02 transition/onset machinery. This section
     # only enriches those rows from the hash-bound optional native capture.
-    metrics = [_native_metric(events, exposure, report, version, window, warmup, last)]
+    metrics = [
+        _native_metric(events, exposure, report, version, window, warmup, last),
+        _native_offroad_metric(events, exposure, version, window, warmup, last),
+    ]
     actor_refs = [(ego_id, generation) for generation in sorted(
         { _generation(_actor_map(frames[i]).get(ego_id, {})) for i in indices },
         key=lambda value: -1 if value is None else value)]
