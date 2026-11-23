@@ -32,6 +32,8 @@ class Playback:
     hashes: dict[str, str]
     attempt: dict | None
     bound: bool
+    evaluation_capture: dict | None = None
+    evaluation_capture_bound: bool = False
 
 
 @dataclass(frozen=True)
@@ -82,14 +84,20 @@ def read_playback(path, digest=None, expected=None, *, verify_all_files=False):
     path = Path(path)
     paths = {"trace": path, "provenance": path.with_name("verification.json"),
              "diagnostic": path.with_name("diagnostic.json"),
-             "attempt": path.with_name("attempt.json")}
+             "attempt": path.with_name("attempt.json"),
+             "evaluation_capture": path.with_name("evaluation_capture.json")}
     data = {key: file.read_bytes() for key, file in paths.items()
-            if key == "trace" or file.is_file()}
+            if key == "trace" or file.is_file()
+            and (key != "evaluation_capture" or verify_all_files)}
     hashes = {key: hashlib.sha256(value).hexdigest() for key, value in data.items()}
     attempt = _json_object(data["attempt"], paths["attempt"]) if "attempt" in data else None
     recorded = ((attempt or {}).get("evidence") or {}).get("files")
     if (attempt or {}).get("status") == "passed" and not recorded:
         raise SavedEvidenceError(f"Passed attempt has no playback hashes: {paths['attempt']}")
+    if (attempt or {}).get("status") == "passed":
+        requested_capture = (attempt.get("scene_config") or {}).get("capture_evaluation") is True
+        if requested_capture != bool(recorded and "evaluation_capture" in recorded):
+            raise SavedEvidenceError("Passed attempt capture request and evidence binding disagree")
     if recorded is not None and expected is not None:
         kinds = set(expected) | {"trace", "provenance"} if verify_all_files else ("trace", "provenance")
         if any(expected.get(kind) != recorded.get(kind) for kind in kinds):
@@ -137,10 +145,15 @@ def read_playback(path, digest=None, expected=None, *, verify_all_files=False):
         if ("traffic_protocol" in diagnostic and "traffic_protocol" in report
                 and diagnostic["traffic_protocol"] != report["traffic_protocol"]):
             raise SavedEvidenceError("Diagnostic traffic protocol differs from viewed trace")
+    evaluation_capture = (_json_object(data["evaluation_capture"], paths["evaluation_capture"])
+                          if "evaluation_capture" in data else None)
+    capture_bound = bool(verify_all_files and binding is not None
+                         and "evaluation_capture" in binding and "evaluation_capture" in hashes)
     bound = (binding is not None and {"trace", "provenance"} <= binding.keys()) or (
         evidence is not None and evidence.get("trace_sha256") == hashes["trace"]
     )
-    return Playback(report, evidence, diagnostic, hashes, attempt, bound)
+    return Playback(report, evidence, diagnostic, hashes, attempt, bound,
+                    evaluation_capture, capture_bound)
 
 
 def _digest(value):
@@ -218,6 +231,22 @@ def _validate_layout(saved):
             raise SavedEvidenceError("Verification runtime source identity differs from trace")
         if verification.get("trace_sha256", saved.hashes["trace"]) != saved.hashes["trace"]:
             raise SavedEvidenceError("Verification trace hash mismatch")
+
+    capture = saved.evaluation_capture
+    attempt = saved.attempt
+    if attempt is not None and attempt.get("status") == "passed":
+        requested_capture = (attempt.get("scene_config") or {}).get("capture_evaluation") is True
+        if requested_capture and capture is None:
+            raise SavedEvidenceError("Passed capture-enabled attempt is missing evaluation capture")
+        if not requested_capture and capture is not None and saved.evaluation_capture_bound:
+            raise SavedEvidenceError("Capture evidence is bound to an attempt that did not request it")
+    if capture is not None:
+        try:
+            from geotransfer_gap.evaluation.capture import validate_evaluation_capture
+
+            validate_evaluation_capture(capture, report, saved.hashes["trace"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise SavedEvidenceError(f"Invalid evaluation capture: {exc}") from exc
 
     if diagnostic is not None:
         if type(diagnostic.get("schema_version")) is not int or diagnostic["schema_version"] != 1:
@@ -331,7 +360,8 @@ def load_saved_trace(path, *, expected_files=None, expected_binary_sha256=None,
                 raise SavedEvidenceError("Supplied hashes disagree with the campaign slot")
             expected_files = single["files"]
         saved = read_playback(path, expected_binary_sha256, expected_files, verify_all_files=True)
-        for record in (saved.report, saved.verification, saved.diagnostic, saved.attempt):
+        for record in (saved.report, saved.verification, saved.diagnostic, saved.attempt,
+                       saved.evaluation_capture):
             _check_finite(record)
         ego_id = _validate_layout(saved)
         report, verification, attempt = saved.report, saved.verification, saved.attempt

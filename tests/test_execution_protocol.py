@@ -51,6 +51,14 @@ def test_all_28_new_controller_protocols_are_normalized(ego, traffic, startup):
 def test_new_pair_startup_defaults_to_immediate():
     protocol = parse_protocol("--ego", "smart", "--traffic", "idm")
     assert protocol.traffic_startup == "immediate"
+    assert protocol.capture_evaluation is False
+
+
+def test_evaluation_capture_is_matrix_only_and_opt_in():
+    protocol = parse_protocol("--ego", "smart", "--traffic", "idm", "--capture-evaluation")
+    assert protocol.capture_evaluation is True
+    with pytest.raises(ValueError, match="requires an --ego/--traffic"):
+        parse_protocol("--planner", "smart", "--capture-evaluation")
 
 
 @pytest.mark.parametrize(
@@ -312,6 +320,34 @@ def test_matrix_run_metadata_never_claims_research_admission(
     assert row["diagnostic_requested"] is diagnostic_requested
     assert run_record["research_admission_status"] == "not_established"
     assert row["research_admission_status"] == "not_established"
+    assert "capture_evaluation" not in run_record and "capture_evaluation" not in row
+
+
+def test_opted_in_matrix_passes_capture_flag_and_records_protocol(monkeypatch, tmp_path):
+    scene = tmp_path / "scene"
+    scene.mkdir()
+    destination = tmp_path / "matrix-run"
+    calls = []
+
+    def create_run(_label):
+        destination.mkdir()
+        return destination
+
+    monkeypatch.setattr(execution, "scene_root", lambda _: scene)
+    monkeypatch.setattr(execution, "new_run", create_run)
+    monkeypatch.setattr(execution, "reference", lambda _: {"root": "project", "path": "scene"})
+    monkeypatch.setattr(matrix_inputs, "preflight_inputs", lambda *a, **k: ({}, None))
+    monkeypatch.setattr(execution, "resolve_reference", lambda _: scene)
+    monkeypatch.setattr(execution, "_matrix_evidence", lambda *_: {"verified_fixture": True})
+    monkeypatch.setattr(execution.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or SimpleNamespace(returncode=0))
+
+    execution.main(["--scene", str(scene), "--ego", "smart", "--traffic", "idm",
+                    "--capture-evaluation"])
+    command = calls[0]
+    assert command[-1] == "--capture-evaluation"
+    record = json.loads((destination / "run.json").read_text())
+    assert record["protocol"]["capture_evaluation"] is True
+    assert record["results"][0]["capture_evaluation"] is True
 
 
 def test_legacy_expert_selector_still_uses_legacy_replay_path(monkeypatch, tmp_path):

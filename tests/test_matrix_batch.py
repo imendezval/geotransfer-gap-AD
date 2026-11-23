@@ -1,6 +1,7 @@
 import signal
 import subprocess
 import sys
+import hashlib
 
 import pytest
 
@@ -118,3 +119,46 @@ def test_resume_checks_existing_passed_evidence_without_rerunning(tmp_path):
     with pytest.raises((ValueError, OSError), match="passed evidence"):
         execute(tmp_path, [row("done")], PASS, resume=True)
     assert not (tmp_path / "done/attempt-0002").exists()
+
+
+def test_requested_capture_failure_is_retained_and_passed_capture_is_resume_bound(tmp_path):
+    requested = {**row("captured"), "capture_evaluation": True}
+
+    def verify_capture(folder, expectation):
+        names = ["trace.json"]
+        if expectation["capture_evaluation"]:
+            names.append("evaluation_capture.json")
+        files = {}
+        for name in names:
+            path = folder / name
+            if not path.is_file():
+                raise ValueError(f"missing required evidence: {name}")
+            files[name.removesuffix(".json")] = {
+                "path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        return {"integration_validity": "validated_fixture", "files": files}
+
+    missing_capture = (
+        "import pathlib,sys; pathlib.Path(sys.argv[1], 'trace.json').write_text('{}')"
+    )
+    result = execute(tmp_path, [requested], missing_capture, verifier=verify_capture)
+    failed = result["results"][0]
+    attempt = read_json(tmp_path / failed["attempts"][0]["record"])
+    assert failed["status"] == "failed"
+    assert attempt["classification"] == "invalid_evidence"
+    assert "trace.json" in attempt["artifacts"]
+    assert (tmp_path / "captured/execution.log").is_file()
+
+    with_capture = (
+        "import pathlib,sys; out=pathlib.Path(sys.argv[1]); "
+        "(out/'trace.json').write_text('{}'); (out/'evaluation_capture.json').write_text('{\"trace_sha256\":\"bound\"}')"
+    )
+    resumed = execute(tmp_path, [requested], with_capture, resume=True, verifier=verify_capture)
+    row_result = resumed["results"][0]
+    assert row_result["status"] == "passed"
+    attempt = read_json(tmp_path / row_result["attempts"][-1]["record"])
+    assert "evaluation_capture" in attempt["evidence"]["files"]
+
+    (tmp_path / "captured/attempt-0002/evaluation_capture.json").write_text("tampered")
+    with pytest.raises(ValueError, match="passed evidence"):
+        execute(tmp_path, [requested], with_capture, resume=True, verifier=verify_capture)

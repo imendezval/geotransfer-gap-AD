@@ -72,6 +72,41 @@ def attest(path, trace, verification):
     return attempt
 
 
+def synthetic_capture(trace, trace_digest):
+    observations = []
+    for frame in trace["frames"]:
+        assignments = {row["source_id"]: row for row in frame["actors"]}
+        actors = []
+        for state in frame["state"]["actors"]:
+            assignment = assignments[state["id"]]
+            actors.append({
+                "source_id": state["id"], "binary_index": state["binary_index"],
+                "lifetime_generation": assignment.get("lifetime_generation"),
+                "collision_state": 0, "collision_partner_binary_index": None,
+                "collision_partner_source_id": None, "collision_center_world_xy": None,
+                "partner_center_world_xy": None, "navigation_goal_world_xy": None,
+            })
+        observations.append({"step": frame["step"], "coordinate_anchor_binary_index": 0,
+                             "coordinate_offset_world_minus_native_m": [0., 0.],
+                             "actors": actors})
+    return {
+        "schema_version": 1, "trace_sha256": trace_digest, "scene": trace["scene"],
+        "binary_sha256": trace["binary_sha256"], "ego_binary_index": trace["ego_binary_index"],
+        "ego_source_id": 41, "ego_controller": trace["ego_controller"],
+        "traffic_controller": trace["traffic_controller"], "traffic_startup": trace["traffic_startup"],
+        "steps_semantics": trace["steps_semantics"],
+        "requested_observation_frames": trace["requested_observation_frames"],
+        "observation_frames": trace["observation_frames"], "terminal_reason": trace["terminal_reason"],
+        "native_settings": {"dynamics_model": "classic", "action_type_flag": 1,
+                            "episode_length": 91, "observation_width": 1151,
+                            "goal_behavior": 3},
+        "coordinate_frame": {
+            "transform": "world_xy = native_xy + coordinate_offset_world_minus_native_m",
+        },
+        "observations": observations, "limitations": [],
+    }
+
+
 def test_archived_bundle_binds_bytes_and_joins_identity(bundle):
     path, trace, verification, binary = bundle
     attempt = attest(path, trace, verification)
@@ -103,6 +138,38 @@ def test_campaign_can_attest_detached_single(bundle):
     assert load_saved_trace(path, campaign_slot=slot, **kwargs).evidence_level == "archived_attested"
     with pytest.raises(SavedEvidenceError, match="differs"):
         load_saved_trace(path, campaign_slot=dict(slot, ego="ppo"), **kwargs)
+
+
+def test_bound_evaluation_capture_is_returned_and_tampering_is_rejected(bundle):
+    path, trace, verification, _ = bundle
+    attempt = attest(path, trace, verification)
+    capture = synthetic_capture(trace, sha256(path))
+    capture_path = path.with_name("evaluation_capture.json")
+    write_json(capture_path, capture)
+    attempt["scene_config"]["capture_evaluation"] = True
+    attempt["evidence"]["files"]["evaluation_capture"] = {
+        "path": capture_path.name, "sha256": sha256(capture_path),
+    }
+    write_json(path.with_name("attempt.json"), attempt)
+
+    result = load_saved_trace(path)
+    assert result.evidence_level is EvidenceLevel.ARCHIVED_ATTESTED
+    assert result.playback.evaluation_capture["ego_source_id"] == 41
+    assert result.playback.evaluation_capture_bound
+
+    capture_path.write_bytes(capture_path.read_bytes() + b" ")
+    with pytest.raises(SavedEvidenceError, match="Playback hash"):
+        load_saved_trace(path)
+
+
+def test_capture_alone_does_not_attest_execution(bundle):
+    path, trace, _, _ = bundle
+    capture = synthetic_capture(trace, sha256(path))
+    write_json(path.with_name("evaluation_capture.json"), capture)
+    result = load_saved_trace(path)
+    assert result.evidence_level is EvidenceLevel.TRACE_ONLY_DIAGNOSTIC
+    assert result.playback.evaluation_capture is not None
+    assert not result.playback.evaluation_capture_bound
 
 
 def test_hashes_and_sidecar_alone_do_not_attest(bundle):
@@ -247,6 +314,34 @@ assert not {'numpy', 'torch', 'pufferlib', 'lanelet2'} & sys.modules.keys()
            for key in ("BENCH", "WEIGHTS", "SOURCE", "ARTIFACTS", "REFERENCE_DATA", "CACHE")}
     subprocess.run([sys.executable, "-I", "-S", "-c", code, src, str(trace)],
                    cwd=trace.parent, env=env, check=True)
+
+
+def test_bound_capture_reader_needs_no_native_or_model_imports(bundle):
+    from geotransfer_gap.config import settings
+
+    path, trace, verification, _ = bundle
+    attempt = attest(path, trace, verification)
+    capture_path = path.with_name("evaluation_capture.json")
+    write_json(capture_path, synthetic_capture(trace, sha256(path)))
+    attempt["scene_config"]["capture_evaluation"] = True
+    attempt["evidence"]["files"]["evaluation_capture"] = {
+        "path": capture_path.name, "sha256": sha256(capture_path),
+    }
+    write_json(path.with_name("attempt.json"), attempt)
+    src = str(settings().project / "src")
+    code = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from geotransfer_gap.runtime.trace_io import load_saved_trace
+saved = load_saved_trace(sys.argv[2])
+assert saved.playback.evaluation_capture_bound
+assert saved.playback.evaluation_capture['ego_source_id'] == 41
+assert not {'numpy', 'torch', 'pufferlib', 'lanelet2'} & sys.modules.keys()
+"""
+    env = {f"GEOTRANSFER_{key}": str(path.parent / "missing")
+           for key in ("BENCH", "WEIGHTS", "SOURCE", "ARTIFACTS", "REFERENCE_DATA", "CACHE")}
+    subprocess.run([sys.executable, "-I", "-S", "-c", code, src, str(path)],
+                   cwd=path.parent, env=env, check=True)
 
 
 def test_expected_trace_digest_without_optional_sidecars(bundle):
