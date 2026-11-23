@@ -291,7 +291,9 @@ def test_episode_cli_writes_trace_only_bundle_and_refuses_unsafe_targets(tmp_pat
     assert (output / "events.json").is_file()
     assert saved["observed_events"]["count"] > 0
     assert saved["observed_events"]["sha256"] == sha256(output / "events.json")
-    assert any("task outcomes are not assessed" in item for item in saved["context_limitations"])
+    assert saved["task"]["bounded_task_completion"]["outcome"] == "unassessable"
+    assert any("task outcomes are unassessable" in item
+               for item in saved["context_limitations"])
     with pytest.raises(FileExistsError):
         main(["evaluate", "episode", "--trace", str(trace), "--output", str(output)])
     with pytest.raises(ValueError, match="beneath configured runs"):

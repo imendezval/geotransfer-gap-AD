@@ -7,10 +7,11 @@ import json
 from pathlib import Path
 
 from geotransfer_gap.artifacts import sha256
-from geotransfer_gap.evaluation.context import MapContext
+from geotransfer_gap.evaluation.context import MapContext, build_task_context
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
 from geotransfer_gap.evaluation.map_metrics import measure_map_metrics
 from geotransfer_gap.evaluation.safety import measure_safety
+from geotransfer_gap.evaluation.tasks import measure_tasks
 
 
 RESULT_SCHEMA_VERSION = 1
@@ -19,7 +20,7 @@ RESULT_SCHEMA_VERSION = 1
 def _code_identity():
     package = Path(__file__).parent
     owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
-              "context.py", "map_metrics.py", "episode.py", "commands.py")
+              "context.py", "map_metrics.py", "tasks.py", "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
     files["maps/lanelet.py"] = sha256(package.parent / "maps/lanelet.py")
@@ -30,7 +31,8 @@ def _code_identity():
     return {"files": files, "sha256": hashlib.sha256(canonical).hexdigest()}
 
 
-def evaluate_episode(saved, profile, *, scene=None, map_context=None):
+def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root=None,
+                     task_context=None):
     """Read a saved trace and calculate supported exposure and driving metrics."""
     report = saved.playback.report
     frames = list(saved.frames())
@@ -55,6 +57,14 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None):
         metric_refs.extend({"kind": key, "sha256": digest}
                            for key, digest in saved.playback.hashes.items()
                            if key != "trace")
+    selected_task = task_context or build_task_context(
+        scene_root, report.get("binary_sha256"), saved.ego_source_id, map_context
+    )
+    task_measurement = measure_tasks(
+        frames, saved.ego_source_id, report, profile, measured["exposure"],
+        measured["events"], selected_task, evidence_refs=metric_refs,
+    )
+    measured["metrics"].extend(task_measurement["metrics"])
     map_evidence_refs = [dict(item) for item in
                          (map_context.evidence_refs if map_context else ())]
     for metric in measured["metrics"]:
@@ -62,6 +72,11 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None):
         if (metric["metric_id"].startswith("safety.map_")
                 or metric["metric_id"].startswith("trajectory.lane_")):
             refs.extend(map_evidence_refs)
+        if metric["metric_id"] in {
+                "trajectory.route_progress", "trajectory.normalized_route_progress",
+                "efficiency.stationary_duration", "efficiency.low_progress_candidate",
+                "efficiency.completion_time", "task.outcome", "task.safe_completion"}:
+            refs.extend(dict(item) for item in selected_task.evidence_refs)
         metric["evidence_refs"] = refs
     event_channels = measured["exposure"]["event_observation_coverage"]["windows"]["full"]["channels"]
     has_event_channel = any(row["status"] == "valid" for row in event_channels.values())
@@ -116,11 +131,16 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None):
             "count_is_lower_bound": event_coverage_incomplete,
             "cause_inferred": False,
         },
-        "context_limitations": [
-            "No validated task annotation was supplied; task outcomes are not assessed.",
+        "context_limitations": ([
+            "No validated task context was supplied; task outcomes are unassessable."
+        ] if selected_task.status != "valid" else [
+            "Task bounds come from the hash-bound source evaluation contract and converted scene."
+        ] + (["No sparse task annotation was supplied; source-owned bounds are used."]
+             if task_measurement["task"]["context"]["annotation"]["status"] == "absent" else [])) + [
             "Map metrics are supported only by hash-bound mapped Lanelet surfaces; legal access and map completeness are not assessed.",
             "Native collision partner and detector-center details require a hash-bound evaluation capture.",
         ],
+        "task": task_measurement["task"],
         "scene_context": (scene if scene is not None else
                           {"status": "trace_only_no_map_or_task_context"}),
         "map_context": spatial["context"],

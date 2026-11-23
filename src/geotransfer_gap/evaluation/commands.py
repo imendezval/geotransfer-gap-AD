@@ -108,7 +108,7 @@ def _episode(args):
     destination = _output_path(args.output, trace, profile_path, selected_root)
     profile = load_profile(profile_path)
     result, events = evaluate_episode(saved, profile, scene=scene_info,
-                                      map_context=map_context)
+                                      map_context=map_context, scene_root=map_root)
     result["input"]["trace_filename"] = trace.name
     destination.mkdir(parents=True, exist_ok=False)
     if events:
