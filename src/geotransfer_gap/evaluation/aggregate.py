@@ -14,6 +14,9 @@ import random
 
 from geotransfer_gap.artifacts import read_json, sha256, write_json
 from geotransfer_gap.config import settings
+from geotransfer_gap.evaluation.compatibility import (
+    CORE_CRITERIA, CORE_CRITERION_SET_ID, CORE_CRITERION_SET_VERSION,
+)
 from geotransfer_gap.evaluation.profile import load_profile
 from geotransfer_gap.evaluation.reporting import (
     INDEX_SCHEMA_VERSION,
@@ -463,6 +466,154 @@ def _aggregate_metric(rows, metric_id, window, definition_version, units, *, boo
     }
 
 
+def _secondary_block(result):
+    metrics = result.get("episode_metrics")
+    if isinstance(metrics, dict) and isinstance(metrics.get("secondary_metrics"), dict):
+        return metrics["secondary_metrics"]
+    secondary = result.get("secondary_metrics")
+    return secondary if isinstance(secondary, dict) else {}
+
+
+def _secondary_value_summary(rows, path):
+    values, statuses, coverage_fractions = [], Counter(), []
+    for result, _events in rows:
+        secondary = _secondary_block(result)
+        value = secondary
+        for key in path:
+            value = value.get(key) if isinstance(value, dict) else None
+        status = value.get("status") if isinstance(value, dict) else None
+        statuses[status or "not_emitted"] += 1
+        scalar = value.get("value") if isinstance(value, dict) else None
+        if isinstance(scalar, dict) and _number(scalar.get("mean")):
+            scalar = scalar["mean"]
+        if status == "valid" and _number(scalar):
+            values.append(float(scalar))
+        coverage = None
+        if path[:1] == ("reference_deviation",):
+            coverage = ((secondary.get("reference_deviation") or {}).get("coverage") or {})
+        elif path[:1] == ("traffic_plausibility",) and isinstance(value, dict):
+            coverage = value.get("coverage")
+        fraction = coverage.get("fraction") if isinstance(coverage, dict) else None
+        if _number(fraction):
+            coverage_fractions.append(float(fraction))
+    return {"submitted": len(rows), "status_counts": dict(sorted(statuses.items())),
+            "valid": statuses["valid"], "per_episode_scalar": _summary(values),
+            "episode_coverage_fraction": _summary(coverage_fractions)}
+
+
+def _secondary_summaries(rows):
+    submitted = len(rows)
+    outcomes, statuses = Counter(), Counter()
+    expected = [{"criterion_id": criterion_id, "source_metric_id": source_metric}
+                for criterion_id, source_metric in CORE_CRITERIA]
+    criteria = {item["criterion_id"]: {"outcomes": Counter(), "statuses": Counter()}
+                for item in expected}
+    compatibility_statuses = Counter()
+    for result, _events in rows:
+        secondary = _secondary_block(result)
+        all_core = secondary.get("all_core_pass_rate") if isinstance(secondary, dict) else None
+        criterion_issue = None
+        if isinstance(all_core, dict):
+            criterion_set = all_core.get("criterion_set")
+            supported_set = (isinstance(criterion_set, dict)
+                             and criterion_set.get("id") == CORE_CRITERION_SET_ID
+                             and criterion_set.get("version") == CORE_CRITERION_SET_VERSION
+                             and criterion_set.get("required_criteria") == expected)
+            if not supported_set:
+                statuses["invalid_criterion_set"] += 1
+                outcomes["not_assessed"] += 1
+                criterion_issue = "invalid_criterion_set"
+                rows_by_id = {}
+            else:
+                raw_criteria = all_core.get("criteria")
+                rows_by_id = ({item.get("criterion_id"): item for item in raw_criteria
+                               if isinstance(item, dict)}
+                              if isinstance(raw_criteria, list) else {})
+                row_ids = [item.get("criterion_id") for item in raw_criteria
+                           if isinstance(item, dict)] if isinstance(raw_criteria, list) else []
+                criteria_complete = (isinstance(raw_criteria, list)
+                                     and len(raw_criteria) == len(expected)
+                                     and all(isinstance(item, dict) for item in raw_criteria)
+                                     and len(row_ids) == len(expected)
+                                     and set(row_ids) == {item["criterion_id"] for item in expected})
+                if not criteria_complete:
+                    statuses["invalid_criterion_records"] += 1
+                    outcomes["not_assessed"] += 1
+                    criterion_issue = "invalid_criterion_records"
+                    rows_by_id = {}
+                else:
+                    row_outcomes = {
+                        item["criterion_id"]: (
+                            item.get("outcome") if item.get("status") == "valid"
+                            and item.get("outcome") in {"pass", "fail"} else "not_assessed")
+                        for item in raw_criteria
+                    }
+                    computed_outcome = ("fail" if "fail" in row_outcomes.values() else
+                                        "pass" if all(value == "pass" for value in row_outcomes.values())
+                                        else "not_assessed")
+                    computed_status = ("valid" if computed_outcome in {"pass", "fail"}
+                                       else "unavailable")
+                    if (all_core.get("criterion_outcome") != computed_outcome
+                            or all_core.get("status") != computed_status):
+                        statuses["inconsistent_assessment"] += 1
+                        outcomes["not_assessed"] += 1
+                        criterion_issue = "inconsistent_assessment"
+                    else:
+                        statuses[computed_status] += 1
+                        outcomes[computed_outcome] += 1
+        else:
+            statuses["not_emitted"] += 1
+            outcomes["not_assessed"] += 1
+            rows_by_id = {}
+            criterion_issue = "not_emitted"
+        for criterion_id, counts in criteria.items():
+            criterion = rows_by_id.get(criterion_id)
+            result_outcome = (criterion.get("outcome")
+                              if criterion and criterion.get("status") == "valid"
+                              else "not_assessed")
+            counts["outcomes"][result_outcome if result_outcome in {"pass", "fail"}
+                               else "not_assessed"] += 1
+            criterion_status = (criterion.get("status", "status_missing") if criterion
+                                else criterion_issue or "missing_criterion")
+            counts["statuses"][criterion_status] += 1
+        benchmark = secondary.get("benchmark_compatibility") if isinstance(secondary, dict) else None
+        bb = benchmark.get("behaviorbench") if isinstance(benchmark, dict) else None
+        compatibility_statuses[(bb or {}).get("compatibility_level") or "not_emitted"] += 1
+    assessable = outcomes["pass"] + outcomes["fail"]
+    all_core = {
+        "criterion_set_id": CORE_CRITERION_SET_ID,
+        "criterion_set_version": CORE_CRITERION_SET_VERSION,
+        "fixed_required_criteria": expected,
+        "submitted_episode_denominator": submitted,
+        "assessable_episode_denominator": assessable,
+        "pass_count": outcomes["pass"], "fail_count": outcomes["fail"],
+        "indeterminate_count": submitted - assessable,
+        "pass_rate_among_assessable": (outcomes["pass"] / assessable if assessable else None),
+        "criterion_outcome_counts": dict(sorted(outcomes.items())),
+        "assessment_status_counts": dict(sorted(statuses.items())),
+        "required_criterion_outcomes": {
+            criterion_id: {"submitted_denominator": submitted,
+                           "outcome_counts": dict(sorted(counts["outcomes"].items())),
+                           "assessment_status_counts": dict(sorted(counts["statuses"].items()))}
+            for criterion_id, counts in criteria.items()},
+        "interpretation": "The denominator is every submitted episode; the assessable rate is also reported and unknown criteria remain indeterminate.",
+    }
+    return {
+        "all_core_pass_rate": all_core,
+        "reference_ade_m": _secondary_value_summary(
+            rows, ("reference_deviation", "ade")),
+        "reference_fde_m": _secondary_value_summary(
+            rows, ("reference_deviation", "fde")),
+        "traffic_speed_primary_m_s": _secondary_value_summary(
+            rows, ("traffic_plausibility", "speed_m_s", "primary")),
+        "traffic_acceleration_primary_m_s2": _secondary_value_summary(
+            rows, ("traffic_plausibility", "acceleration_m_s2", "primary")),
+        "traffic_gap_primary_m": _secondary_value_summary(
+            rows, ("traffic_plausibility", "nearest_ego_footprint_gap_m", "primary")),
+        "behaviorbench_compatibility_level_counts": dict(sorted(compatibility_statuses.items())),
+    }
+
+
 def _outcomes(rows, uncertainty_profile):
     collision = {window: _episode_outcome_rate(
         rows, "safety.native_vehicle_collision_onsets",
@@ -765,6 +916,7 @@ def aggregate_records(records, *, uncertainty_profile):
             "recording_cluster_count": len(clusters),
             "location_count": len(locations),
             "metric_summaries": metric_rows,
+            "secondary_summaries": _secondary_summaries(rows),
             "outcomes": _outcomes(rows, bootstrap_options),
             "interaction_family_recurrence": _family_recurrence(rows),
             "failure_label_recurrence": _failure_recurrence(rows),

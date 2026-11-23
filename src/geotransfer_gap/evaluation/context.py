@@ -95,6 +95,10 @@ class TaskContext:
     route_span_m: float | None = None
     evidence_refs: tuple[dict, ...] = ()
     identity: dict | None = None
+    reference_source_id: int | None = None
+    reference_positions: tuple[tuple[float, float] | None, ...] = ()
+    reference_valid: tuple[bool, ...] = ()
+    reference_source_sha256: str | None = None
 
     def summary(self):
         return {
@@ -536,6 +540,15 @@ def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
                 or validation_goal.get("y") != goal.get("y")):
             return TaskContext("invalid", "Source goal/window metadata is inconsistent",
                                scene_id=scene_id)
+        # Retain the selected source ego track already read and identity-checked
+        # here. PE12 consumes this in-memory view; it does not introduce a
+        # second converted-scene reader or expose it in task summaries.
+        reference_valid = tuple(type(flag) is int and flag == 1 for flag in valid)
+        reference_positions = tuple(
+            (float(position["x"]), float(position["y"]))
+            if reference_valid[index] and _finite_pair(position) else None
+            for index, position in enumerate(positions)
+        )
         start_sample = next((index for index in range(goal_sample + 1)
                              if type(valid[index]) is int and valid[index] == 1
                              and _finite_pair(positions[index])), None)
@@ -614,6 +627,10 @@ def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
             reference_points=points, route_status=route_status,
             route_reason=route_reason, route_span_m=route_span,
             evidence_refs=_task_refs(paths), identity=identity,
+            reference_source_id=source_id,
+            reference_positions=reference_positions,
+            reference_valid=reference_valid,
+            reference_source_sha256=identity["source_scene_sha256"],
         )
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         return TaskContext("invalid", f"Source task evidence is malformed: {exc}", scene_id=scene_id)

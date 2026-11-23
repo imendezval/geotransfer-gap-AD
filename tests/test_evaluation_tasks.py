@@ -292,6 +292,11 @@ def test_task_context_resolves_nonzero_ego_by_manifest_and_binary_identity(tmp_p
     assert task.status == "valid"
     assert task.goal_source_step == 2
     assert task.goal_xy == (2.0, 0.0)
+    assert task.reference_source_id == 57
+    assert task.reference_positions == ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
+    assert task.reference_valid == (True, True, True)
+    assert task.reference_source_sha256 == task.identity["source_scene_sha256"]
+    assert "reference_positions" not in task.summary()
 
 
 def test_task_context_accepts_only_converter_name_derived_from_bound_identity(

@@ -155,6 +155,66 @@ def test_recording_cluster_precedes_route_hash_and_route_only_is_unknown():
     assert _identity(route_only)[1] == "sequence:ind:1:12:100"
 
 
+def test_secondary_all_core_uses_fixed_submitted_and_assessable_denominators():
+    passed = episode("a", 1)
+    failed = episode("b", 2)
+    missing = episode("c", 3)
+    incompatible = episode("d", 4)
+    unknown = episode("e", 5)
+    fixed_criterion_set = {"id": "all_core_v1", "version": "1.0.0", "required_criteria": [
+        {"criterion_id": "bounded_task_completion", "source_metric_id": "task.outcome"},
+        {"criterion_id": "safe_completion_core_v1", "source_metric_id": "task.safe_completion"},
+    ]}
+    passed["episode_metrics"]["secondary_metrics"] = {
+        "all_core_pass_rate": {"status": "valid", "criterion_outcome": "pass",
+                                "criterion_set": fixed_criterion_set, "criteria": [
+            {"criterion_id": "bounded_task_completion", "status": "valid", "outcome": "pass"},
+            {"criterion_id": "safe_completion_core_v1", "status": "valid", "outcome": "pass"},]},
+        "reference_deviation": {"ade": {"status": "valid", "value": 1.5},
+                                "coverage": {"fraction": 0.75}},
+    }
+    failed["episode_metrics"]["secondary_metrics"] = {
+        "all_core_pass_rate": {"status": "valid", "criterion_outcome": "fail",
+                                "criterion_set": fixed_criterion_set, "criteria": [
+            {"criterion_id": "bounded_task_completion", "status": "valid", "outcome": "fail"},
+            {"criterion_id": "safe_completion_core_v1", "status": "unavailable", "outcome": "not_assessed"},]},
+        "reference_deviation": {"ade": {"status": "valid", "value": 2.5},
+                                "coverage": {"fraction": 0.25}},
+    }
+    incompatible["episode_metrics"]["secondary_metrics"] = {
+        "all_core_pass_rate": {"status": "valid", "criterion_outcome": "pass",
+                                "criterion_set": {**fixed_criterion_set, "version": "2.0.0"},
+                                "criteria": [
+            {"criterion_id": "bounded_task_completion", "status": "valid", "outcome": "pass"},
+            {"criterion_id": "safe_completion_core_v1", "status": "valid", "outcome": "pass"},]},
+    }
+    unknown["episode_metrics"]["secondary_metrics"] = {
+        "all_core_pass_rate": {"status": "valid", "criterion_outcome": "pass",
+                                "criterion_set": fixed_criterion_set, "criteria": [
+            {"criterion_id": "bounded_task_completion", "status": "valid", "outcome": "pass"},
+            {"criterion_id": "safe_completion_core_v1", "status": "valid", "outcome": "pass"},
+            {"criterion_id": "future_criterion", "status": "valid", "outcome": "pass"},]},
+    }
+    aggregate = aggregate_records(
+        [(passed, []), (failed, []), (missing, []), (incompatible, []), (unknown, [])],
+        uncertainty_profile=PROFILE)
+    secondary = aggregate["strata"][0]["secondary_summaries"]
+    core = secondary["all_core_pass_rate"]
+    assert core["criterion_set_id"] == "all_core_v1"
+    assert core["submitted_episode_denominator"] == 5
+    assert core["assessable_episode_denominator"] == 2
+    assert core["indeterminate_count"] == 3
+    assert core["pass_rate_among_assessable"] == pytest.approx(0.5)
+    assert core["required_criterion_outcomes"]["safe_completion_core_v1"]["outcome_counts"] == {
+        "not_assessed": 4, "pass": 1}
+    assert core["required_criterion_outcomes"]["safe_completion_core_v1"][
+        "assessment_status_counts"] == {"invalid_criterion_records": 1,
+                                         "invalid_criterion_set": 1, "not_emitted": 1,
+                                         "unavailable": 1, "valid": 1}
+    assert secondary["reference_ade_m"]["per_episode_scalar"]["mean"] == pytest.approx(2.0)
+    assert secondary["reference_ade_m"]["episode_coverage_fraction"]["mean"] == pytest.approx(0.5)
+
+
 def test_planner_pairing_treats_varying_ego_checkpoint_as_condition():
     expert = episode("expert-row", 12, distance=10)
     ppo = episode("ppo-row", 12, distance=13)

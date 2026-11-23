@@ -13,6 +13,7 @@ from geotransfer_gap.evaluation.map_metrics import measure_map_metrics
 from geotransfer_gap.evaluation.safety import measure_safety
 from geotransfer_gap.evaluation.interactions import measure_interactions
 from geotransfer_gap.evaluation.semantics import measure_semantics
+from geotransfer_gap.evaluation.compatibility import measure_secondary
 from geotransfer_gap.evaluation.tasks import (
     _load_annotation,
     finalize_safe_completion,
@@ -27,7 +28,7 @@ def _code_identity():
     package = Path(__file__).parent
     owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
               "context.py", "map_metrics.py", "tasks.py", "interactions.py",
-              "semantics.py", "episode.py", "commands.py")
+              "semantics.py", "compatibility.py", "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
     files["maps/lanelet.py"] = sha256(package.parent / "maps/lanelet.py")
@@ -129,6 +130,20 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
                 "efficiency.completion_time", "task.outcome", "task.safe_completion"}:
             refs.extend(dict(item) for item in selected_task.evidence_refs)
         metric["evidence_refs"] = refs
+    secondary = measure_secondary(
+        frames, saved.ego_source_id, report, profile,
+        task_context=selected_task, task_result=task_measurement["task"],
+        task_metrics=task_measurement["metrics"], safety_metrics=safety["metrics"],
+    )
+    secondary["provenance"].update({
+        "trace_sha256": saved.playback.hashes["trace"],
+        "bound_sidecar_sha256": {
+            key: value for key, value in saved.playback.hashes.items() if key != "trace"},
+        "evidence_level": saved.evidence_level.value,
+        "trace_sidecar_bound": saved.playback.bound,
+        "producer_revision": saved.producer_revision,
+        "effective_profile_sha256": profile.effective_sha256,
+    })
     event_channels = measured["exposure"]["event_observation_coverage"]["windows"]["full"]["channels"]
     has_event_channel = any(row["status"] == "valid" for row in event_channels.values())
     event_coverage_incomplete = any(
@@ -183,6 +198,7 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
         "ego": {"source_id": saved.ego_source_id,
                 "binary_index": report["ego_binary_index"]},
         "metrics": measured["metrics"],
+        "secondary_metrics": secondary,
         "exposure": measured["exposure"],
         "observed_events": {
             "status": "valid" if event_evidence_present else "unavailable",
