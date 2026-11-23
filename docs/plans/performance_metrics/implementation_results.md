@@ -214,3 +214,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE14 — Integrated verification and diagnostic pilot
 
 **Dispatch.** Base `bbcdd8bde7003b46af1652f9acb2d6b55902dd1d`. Verify the integrated revision with copied native inputs, existing historical oracles, real saved pilot, and browser checks. Seven missing pinned admissions still block the full inventory. Keep outstanding evidence gates separate from code readiness.
+
+**Review pending repair.** Candidate `1d9ebeb` and evidence under `runs/pe_campaign/pe14/agent/`. Full optional-geometry suite (556 passed), 13 native checks, both 16-scene migrations, fresh capture/parity and two browser probes passed. Pilot evaluated 112 predeclared matrix slots and 16 legacy diagnostic traces. Review requested optional geometry test collection behavior, final diff cleanup, explicit legacy oracle verification and expert-task uncertainty in the report.
