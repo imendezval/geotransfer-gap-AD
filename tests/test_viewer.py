@@ -100,6 +100,74 @@ def matrix_bundle(tmp_path, monkeypatch):
     return root, folder, report, evidence
 
 
+def _write_evaluation_bundle(tmp_path, root, folder, report, *, status="valid", profile_hash=None,
+                             event=None, limitation="fixture limitation"):
+    from geotransfer_gap.artifacts import sha256, write_json
+
+    digest = sha256(folder / "trace.json")
+    binary_digest = sha256(root / "testing/map_000000.bin")
+    profile_hash = profile_hash or "a" * 64
+    profile = {"raw_sha256": "b" * 64, "effective_sha256": profile_hash,
+               "definition_version": "1.0.0"}
+    event = event or {
+        "event_id": "terminal:ego_removed:0", "channel": "trace_terminal",
+        "observation": "terminal_recorded", "attribution": "terminal_status_only",
+        "step": 0, "time_s": 0.0, "actor": {"source_id": 41, "lifetime_generation": 0},
+        "pose_present": False, "terminal_reason": "ego_removed",
+        "evidence": "trace_terminal_reason", "cause_established": False,
+    }
+    output = tmp_path / ("evaluation-" + profile_hash[:6])
+    output.mkdir()
+    write_json(output / "input_snapshot.json", {"synthetic": True})
+    write_json(output / "episodes/test/events.json", {"schema_version": 1, "events": [event]})
+    events_hash = sha256(output / "episodes/test/events.json")
+    protocol = {"ego": "expert", "traffic": "idm", "startup": "source_hold"}
+    trace_protocol = {
+        "ego_controller": protocol["ego"], "traffic_controller": protocol["traffic"],
+        "traffic_startup": protocol["startup"],
+    }
+    metrics = [{
+        "metric_id": "safety.native_vehicle_collision_onsets", "definition_version": "1.0.0",
+        "status": status, "reason": limitation, "value": 0 if status == "valid" else None,
+        "units": "onsets", "criterion_outcome": "not_assessed", "limitations": [limitation],
+    }]
+    episode_metrics = {
+        "input": {"trace_sha256": digest, "binary_sha256": binary_digest,
+                  "scene": report.get("scene"), "protocol": trace_protocol},
+        "evaluator": {"effective_profile_sha256": profile_hash,
+                      "definition_version": profile["definition_version"]},
+        "metrics": metrics,
+        "exposure": {"transition_count": 0, "transition_count_status": "valid",
+                     "recorded_duration_s": 0.0, "controlled_transition_count": 0,
+                     "controlled_duration_s": 0.0, "unknown_transition_count": 0},
+        "limitations": [limitation], "context_limitations": [],
+    }
+    result = {
+        "result_schema_version": 1, "episode_id": "scene:expert:idm:source_hold",
+        "scene_id": root.name, "protocol": protocol,
+        "accounting": {"execution_status": "passed", "campaign_status": "PASS"},
+        "evidence": {"status": "valid", "level": "archived_attested", "trace_sha256": digest},
+        "metric_validity": {"status": "computed"},
+        "task_result": {"outcome": "failed"}, "encounter_result": {"status": "unavailable"},
+        "driving_outcome": {"status": "assessed", "outcome": "failed"},
+        "event_accounting": {"status": "valid", "limitations": []},
+        "episode_metrics": episode_metrics, "input_profile": profile,
+        "events_sha256": events_hash,
+    }
+    write_json(output / "episodes/test/result.json", result)
+    snapshot_hash = sha256(output / "input_snapshot.json")
+    entry = {"episode_id": result["episode_id"], "trace_sha256": digest,
+             "trace_path": str(folder / "trace.json"), "result_file": "episodes/test/result.json",
+             "result_sha256": sha256(output / "episodes/test/result.json"),
+             "events_file": "episodes/test/events.json", "events_sha256": events_hash}
+    write_json(output / "index.json", {
+        "schema_version": 1, "complete": True, "expected_episodes": 1,
+        "profile": profile, "input_snapshot": {"file": "input_snapshot.json", "sha256": snapshot_hash},
+        "episodes": [entry],
+    })
+    return output
+
+
 @pytest.mark.parametrize("changes", [
     {"ego": "smart"},
     {"traffic": "ppo"},
@@ -234,3 +302,147 @@ def test_campaign_gallery_cannot_follow_page_symlink_into_evidence(tmp_path, sav
         viewer.main(["--campaign", str(campaign), "--output", str(gallery)])
     assert "outside the saved campaign" in capsys.readouterr().err
     assert report.read_bytes() == before
+
+
+def test_matching_saved_evaluation_attaches_and_seeks_terminal_without_pose(
+        tmp_path, matrix_bundle):
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    root, folder, report, _ = matrix_bundle
+    # A stable actor can be retained in the observation table while the terminal
+    # event explicitly records that no pose was available at its time.
+    trace_path = folder / "trace.json"
+    trace = read_json(trace_path)
+    state = trace["frames"][0]["state"]
+    state["actors"][0].update(present=False, x=None, y=None)
+    write_json(trace_path, trace)
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, trace)
+    payload = viewer.view_payload(root, [trace_path], evaluations=[evaluation])
+    attached = payload["runs"][0]["evaluation"]
+    assert attached["status"] == "attached"
+    assert attached["campaign"]["status"] == "PASS"
+    assert attached["driving_outcome"]["outcome"] == "failed"
+    assert attached["events"][0]["step"] == 0 and attached["events"][0]["pose_present"] is False
+    page = viewer.build(root, tmp_path / "view.html", [trace_path], evaluations=[evaluation]).read_text()
+    assert '"status": "PASS"' in page and "integration/parity only" in page
+    assert "Recorded trace terminal status." in page
+    assert '"pose_present": false' in page
+
+
+def test_old_trace_without_metrics_remains_viewable(tmp_path, matrix_bundle):
+    root, folder, _, _ = matrix_bundle
+    payload = viewer.view_payload(root, [folder / "trace.json"])
+    assert payload["runs"][0]["evaluation"]["status"] == "unavailable"
+    page = viewer.build(root, tmp_path / "old.html", [folder / "trace.json"]).read_text()
+    assert "No evaluation attachment" in page
+    assert '"name": "expert / idm / source_hold"' in page
+
+
+def test_stale_trace_hash_is_not_attached(tmp_path, matrix_bundle):
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    root, folder, report, _ = matrix_bundle
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
+    trace_path = folder / "trace.json"
+    write_json(trace_path, dict(read_json(trace_path), harmless_later_metadata=True))
+    attachment = viewer.view_payload(root, [trace_path], evaluations=[evaluation])["runs"][0]["evaluation"]
+    assert attachment["status"] == "stale"
+    assert "different trace hash" in attachment["reason"]
+
+
+def test_same_trace_with_conflicting_protocol_is_rejected(tmp_path, matrix_bundle):
+    from geotransfer_gap.artifacts import read_json, sha256, write_json
+
+    root, folder, report, _ = matrix_bundle
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
+    result_path = evaluation / "episodes/test/result.json"
+    result = read_json(result_path)
+    result["protocol"]["traffic"] = "ppo"
+    write_json(result_path, result)
+    index_path = evaluation / "index.json"
+    index = read_json(index_path)
+    index["episodes"][0]["result_sha256"] = sha256(result_path)
+    write_json(index_path, index)
+    with pytest.raises(ValueError, match="scene/protocol identity"):
+        viewer.view_payload(root, [folder / "trace.json"], evaluations=[evaluation])
+
+
+@pytest.mark.parametrize("file,expected", [
+    ("episodes/test/result.json", "result is missing or has changed"),
+    ("episodes/test/events.json", "events are missing or have changed"),
+])
+def test_tampered_saved_evaluation_files_are_rejected(tmp_path, matrix_bundle, file, expected):
+    from geotransfer_gap.artifacts import read_json, write_json
+
+    root, folder, report, _ = matrix_bundle
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
+    path = evaluation / file
+    write_json(path, dict(read_json(path), tampered=True))
+    with pytest.raises(ValueError, match=expected):
+        viewer.view_payload(root, [folder / "trace.json"], evaluations=[evaluation])
+
+
+def test_unavailable_metric_stays_null_and_conflicting_profiles_are_suppressed(
+        tmp_path, matrix_bundle):
+    root, folder, report, _ = matrix_bundle
+    first = _write_evaluation_bundle(tmp_path, root, folder, report, status="unavailable")
+    unavailable = viewer.view_payload(root, [folder / "trace.json"], evaluations=[first])["runs"][0]["evaluation"]
+    assert unavailable["metrics"][0]["value"] is None
+    page = viewer.build(root, tmp_path / "unavailable.html", [folder / "trace.json"],
+                        evaluations=[first]).read_text()
+    assert '"status": "unavailable"' in page and "not available" in page
+
+    second = _write_evaluation_bundle(tmp_path, root, folder, report,
+                                      profile_hash="c" * 64)
+    conflict = viewer.view_payload(root, [folder / "trace.json"],
+                                   evaluations=[first, second])["runs"][0]["evaluation"]
+    assert conflict["status"] == "conflict"
+    assert "conflicting metric profiles" in conflict["reason"]
+    assert "metrics suppressed" in conflict["reason"]
+
+
+def test_evaluation_text_is_not_interpreted_as_html(tmp_path, matrix_bundle):
+    root, folder, report, _ = matrix_bundle
+    hostile = "</script><img src=x onerror=alert(1)>"
+    event = {"event_id": "hostile", "channel": "native_vehicle_collision", "step": 0,
+             "time_s": 0.0, "actor": {"source_id": 41}, "pose_present": True,
+             "evidence": hostile, "cause_established": False}
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report, event=event,
+                                          limitation=hostile)
+    html = viewer.build(root, tmp_path / "escaped.html", [folder / "trace.json"],
+                        evaluations=[evaluation]).read_text()
+    assert "</script><img" not in html
+    assert "<\\/script><img" in html
+
+
+def test_campaign_evaluation_attachment_respects_filtered_output_isolation(
+        tmp_path, saved_campaign):
+    from geotransfer_gap.artifacts import read_json, sha256
+    from geotransfer_gap.visualization.campaign_gallery import render_campaign
+
+    campaign, folder = saved_campaign
+    # Use the existing fixture trace as the exact evaluation input.
+    root = folder.parent / "scene"
+    trace = folder / "trace.json"
+    report = read_json(trace)
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
+    evidence_before = {p: sha256(p) for p in (campaign / "campaign.json",
+                                               campaign / "verification_matrix.json",
+                                               evaluation / "index.json",
+                                               evaluation / "episodes/test/result.json",
+                                               evaluation / "episodes/test/events.json")}
+    output = tmp_path / "selected"
+    page = render_campaign(campaign, output, scene="scene", ego="expert",
+                           traffic="idm", startup="source_hold", evaluations=[evaluation])
+    assert page.is_file()
+    assert '"status": "PASS"' in page.read_text() and "integration/parity only" in page.read_text()
+    assert all(sha256(path) == digest for path, digest in evidence_before.items())
+
+
+def test_viewer_output_cannot_be_written_inside_evaluation_evidence(tmp_path, matrix_bundle):
+    root, folder, report, _ = matrix_bundle
+    evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
+    with pytest.raises(ValueError, match="outside attached evaluation"):
+        viewer.build(root, evaluation / "viewer.html", [folder / "trace.json"],
+                     evaluations=[evaluation])
+    assert not (evaluation / "viewer.html").exists()

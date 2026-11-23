@@ -13,6 +13,8 @@ small{display:block;margin:8px 0}.state{min-height:2.5em}.scroll{overflow:auto;m
 table{border-collapse:collapse;width:100%;font-size:.82rem;text-align:left}
 th,td{padding:.45rem;border-bottom:1px solid #d2d9e3;vertical-align:top}
 th{position:sticky;top:0;background:#edf2f8}.ego{font-weight:bold}h1,h2{margin:0 0 .5rem}
+.evaluation{margin-top:14px}.evaluation table{font-size:.8rem}.evaluation select{max-width:100%}
+.event-actor{background:#fff1bf}.metric-value{max-width:32rem;overflow-wrap:anywhere}
 </style>
 <header><h1 id="title"></h1><small id="notice"></small><p id="limitations"></p></header>
 <nav>
@@ -26,6 +28,20 @@ th{position:sticky;top:0;background:#edf2f8}.ego{font-weight:bold}h1,h2{margin:0
   <section><h2><select id="mode" aria-label="Comparison view"></select></h2>
     <p class="state" id="right-status"></p><canvas id="right" width="700" height="560"></canvas></section>
 </main>
+<section class="evaluation" aria-labelledby="evaluation-heading">
+  <h2 id="evaluation-heading">Saved evaluation</h2>
+  <p id="evaluation-status" aria-live="polite">No evaluation attachment. Playback remains available.</p>
+  <p id="evaluation-outcomes"></p>
+  <p id="evaluation-exposure"></p>
+  <small>These records show trace-flag-derived onsets and terminal statuses, separate from raw native event logs. Event order does not establish cause.</small>
+  <label for="evaluation-event">Recorded evaluation event</label>
+  <select id="evaluation-event" aria-label="Recorded evaluation event"><option value="">No event selected</option></select>
+  <p id="evaluation-event-detail" aria-live="polite"></p>
+  <ul id="evaluation-limitations"></ul>
+  <div class="scroll"><table><thead><tr><th>Metric</th><th>Assessment</th><th>Criterion</th>
+    <th>Stored value</th><th>Units</th><th>Reason / support</th></tr></thead><tbody id="evaluation-metrics"></tbody></table></div>
+  <details><summary>Evaluation hashes and source files</summary><pre id="evaluation-provenance"></pre></details>
+</section>
 <p id="difference" aria-live="polite"></p>
 <label>Actor details for <select id="details-for" aria-label="Actor details panel">
   <option value="right">Comparison</option><option value="left">Reference</option>
@@ -67,7 +83,10 @@ function limits(key){let min=Infinity,max=-Infinity;for(const p of points){min=M
 const [xmin,xmax]=limits('x'),[ymin,ymax]=limits('y');
 const scale=Math.min(680/(xmax-xmin),540/(ymax-ymin));
 const X=x=>350+(x-(xmin+xmax)/2)*scale,Y=y=>280-(y-(ymin+ymax)/2)*scale;
-function draw(id,run,frame){
+let selectedEvaluationEvent=null,lastEvaluationRun=null,lastEvaluationEvent=null;
+const eventMatches=(actor,event)=>(event?.actor_refs||[]).some(ref=>ref.source_id===actor.id&&
+ (ref.lifetime_generation==null||actor.lifetime_generation==null||ref.lifetime_generation===actor.lifetime_generation));
+function draw(id,run,frame,event=null){
  const c=el(id).getContext('2d');c.fillStyle='#f8fafc';c.fillRect(0,0,700,560);
  const reg=D.registration;
  if(reg&&img.complete&&img.naturalWidth&&el('aerial').checked){
@@ -95,6 +114,10 @@ function draw(id,run,frame){
    c.beginPath();c.moveTo(0,0);c.lineTo(a.length*scale/2,0);c.stroke();
   }else{c.beginPath();c.arc(0,0,3,0,2*Math.PI);c.stroke();}
   c.restore();c.fillStyle='#101820';c.fillText(String(a.id),X(a.x)+4,Y(a.y)-4);
+  if(eventMatches(a,event)){
+   c.beginPath();c.arc(X(a.x),Y(a.y),Math.max(10,Math.max(a.length||0,a.width||0)*scale/2+5),0,2*Math.PI);
+   c.strokeStyle='#d79b00';c.lineWidth=3;c.stroke();
+  }
  }
 }
 const modeName=value=>({0:'dynamics',1:'IDM',2:'expert replay'})[value] ?? known(value);
@@ -115,7 +138,7 @@ function showActors(run,frame){
  const body=el('actors');body.replaceChildren();
  el('events').textContent=frame?frame.actors.flatMap(a=>(a.events||[]).map(e=>a.id+' '+e)).join(' · ')||'No recorded events at this step':'No recorded actor states at this step';
  for(const a of frame?.actors ?? []){
-  const row=body.insertRow();if(a.id===run.ego_id)row.className='ego';
+  const row=body.insertRow();row.className=[a.id===run.ego_id?'ego':'',eventMatches(a,selectedEvaluationEvent)?'event-actor':''].filter(Boolean).join(' ');
   const applied=a.applied_movement_mode==null && frame.transition_applied===false?'no transition':modeName(a.applied_movement_mode);
   const release=a.startup_status?.replaceAll('_',' ');
   const actual=a.actual_release_step==null&&a.scheduled_release_step!=null?'not released':known(a.actual_release_step);
@@ -130,12 +153,86 @@ function showActors(run,frame){
   for(const value of values)row.insertCell().textContent=value;
  }
 }
+const display=value=>value==null?'not available':typeof value==='object'?JSON.stringify(value):String(value);
+function showEvaluation(run){
+ const evaluation=run.evaluation||{status:'unavailable',reason:'No evaluation attachment is configured.'};
+ const status=el('evaluation-status'),outcomes=el('evaluation-outcomes'),exposure=el('evaluation-exposure');
+ const eventSelect=el('evaluation-event'),metrics=el('evaluation-metrics'),limits=el('evaluation-limitations');
+ if(lastEvaluationRun===run&&lastEvaluationEvent===selectedEvaluationEvent)return;
+ if(lastEvaluationRun!==run){
+  selectedEvaluationEvent=null;eventSelect.replaceChildren(new Option('No event selected',''));
+  if(evaluation.status==='attached')evaluation.events.forEach((event,index)=>{
+   const time=event.time_s==null?'time not recorded':String(event.time_s)+' s';
+   eventSelect.add(new Option('Step '+event.step+' · '+time+' · '+known(event.channel),String(index)));
+  });
+  lastEvaluationRun=run;
+ }
+ const campaign=evaluation.campaign||{};
+ const campaignText=campaign.status==null?'Campaign integration/parity: not recorded':
+  'Campaign '+campaign.status+' (integration/parity only)';
+ if(evaluation.status!=='attached'){
+  status.textContent='Evaluation '+evaluation.status+': '+known(evaluation.reason);
+  outcomes.textContent=campaignText+' · No driving outcome inferred from campaign status.';
+  exposure.textContent='Exposure: unavailable';metrics.replaceChildren();limits.replaceChildren();
+  el('evaluation-provenance').textContent='';
+  el('evaluation-event-detail').textContent='';
+  lastEvaluationEvent=selectedEvaluationEvent;
+  return;
+ }
+ const evidence=evaluation.evidence||{},driving=evaluation.driving_outcome||{};
+ const task=evaluation.task_result||{},encounter=evaluation.encounter_result||{};
+ const profile=evaluation.profile||{};
+ status.textContent='Attached episode '+known(evaluation.episode_id)+' · evidence '+known(evidence.status)+
+  ' / '+known(evidence.level)+' · profile '+known(profile.definition_version)+
+  ' · effective '+known(profile.effective_sha256);
+ el('evaluation-provenance').textContent=JSON.stringify({source:evaluation.source,evidence,
+  profile,protocol:evaluation.protocol},null,2);
+ outcomes.textContent='Execution '+known(evaluation.execution_status)+' · '+campaignText+
+  ' · driving '+known(driving.status)+' / '+known(driving.outcome)+' · task '+known(task.outcome)+
+  ' ('+known(task.reason)+') · encounter '+known(encounter.status)+' / '+known(encounter.reason)+
+  ' · metrics '+known(evaluation.metric_validity?.status);
+ const e=evaluation.exposure||{};
+ exposure.textContent='Exposure: '+known(e.transition_count)+' transitions ('+known(e.transition_count_status)+') · '+
+  known(e.recorded_duration_s)+' s recorded · '+known(e.controlled_transition_count)+' controlled transitions / '+
+  known(e.controlled_duration_s)+' s · unknown transitions '+known(e.unknown_transition_count);
+ limits.replaceChildren();
+ for(const limitation of evaluation.limitations||[]){const li=document.createElement('li');li.textContent=limitation;limits.append(li);}
+ metrics.replaceChildren();
+ for(const metric of evaluation.metrics||[]){
+  const row=metrics.insertRow();
+  for(const value of [metric.metric_id,metric.status,metric.criterion_outcome,
+    metric.value==null?'not available':display(metric.value),
+    display(metric.units),
+    [metric.reason,...(metric.limitations||[])].filter(Boolean).join(' · ')]){
+   row.insertCell().textContent=value;
+  }
+ }
+ const event=selectedEvaluationEvent;
+ if(!event){el('evaluation-event-detail').textContent=evaluation.events.length?
+   'Choose a saved event to seek to its recorded observation step and time.':
+   'No event records are available ('+known(evaluation.event_status)+').';lastEvaluationEvent=selectedEvaluationEvent;return;}
+ const kind=event.evidence==='trace_native_state_or_goal_flag'?
+  'Derived onset from a recorded native state/goal flag; this is not a raw native event log.':
+  event.evidence==='trace_terminal_reason'?'Recorded trace terminal status.':'Saved event record: '+known(event.evidence);
+ el('evaluation-event-detail').textContent='Event '+known(event.event_id)+' · '+kind+' · '+known(event.observation)+' · attribution '+
+  known(event.attribution)+' · '+(event.time_s==null?'time not recorded':String(event.time_s)+' s')+
+  ' · pose '+(event.pose_present===false?'absent':'present or not recorded')+
+  ' · cause established '+known(event.cause_established)+'.';
+ lastEvaluationEvent=selectedEvaluationEvent;
+}
+el('evaluation-event').addEventListener('change',()=>{
+ const right=choices[+mode.value],index=el('evaluation-event').value;
+ selectedEvaluationEvent=index===''?null:(right.evaluation?.events||[])[+index]||null;
+ if(selectedEvaluationEvent)slider.value=String(selectedEvaluationEvent.step);
+ update();
+});
 function update(){
  const tick=+slider.value,left=choices[+reference.value],right=choices[+mode.value];
+ showEvaluation(right);
  const a=left.frames.find(f=>f.step===tick),b=right.frames.find(f=>f.step===tick);
  const time=b?.time_s??a?.time_s;
  el('clock').textContent='Step '+tick+(time==null?'':' · '+time.toFixed(1)+' s');
- draw('left',left,a);draw('right',right,b);showStatus('left-status',left,a);showStatus('right-status',right,b);
+ draw('left',left,a);draw('right',right,b,selectedEvaluationEvent);showStatus('left-status',left,a);showStatus('right-status',right,b);
  const p=ego(left,a),q=ego(right,b);
  el('difference').textContent=position(p)&&position(q)?'Ego position difference '+Math.hypot(q.x-p.x,q.y-p.y).toFixed(3)+' m':'Ego position comparison unavailable at this step';
  if(el('details-for').value==='left')showActors(left,a);else showActors(right,b);

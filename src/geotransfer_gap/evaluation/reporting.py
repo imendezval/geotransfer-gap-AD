@@ -957,8 +957,8 @@ _CSV_COLUMNS = ("episode_id", "scene_id", "ego", "traffic", "startup", "executio
                 "trace_sha256", "trace_path", "result_file")
 
 
-def _presentation_rows(output, index):
-    indexed = _read_indexed_results(output, index)
+def _presentation_rows(output, index, indexed=None):
+    indexed = indexed if indexed is not None else _read_indexed_results(output, index)
     rows = []
     for episode in index["episodes"]:
         result, _ = indexed[episode["episode_id"]]
@@ -1039,6 +1039,37 @@ def _evaluation_file(output, value, label):
     return candidate
 
 
+def read_indexed_evaluation(output):
+    """Read a saved PE09 result bundle without regenerating its reports.
+
+    The offline viewer uses this boundary so its attachments inherit the same
+    index, input-snapshot, result, event and path-containment checks as reports.
+    """
+    output = Path(output).expanduser().resolve()
+    index_path = _evaluation_file(output, "index.json", "evaluation index")
+    if not index_path.is_file():
+        raise FileNotFoundError(f"Evaluation index does not exist: {index_path}")
+    index = read_json(index_path)
+    if not isinstance(index, dict):
+        raise ValueError("Saved evaluation index must be an object")
+    if (index.get("schema_version") != INDEX_SCHEMA_VERSION
+            or not isinstance(index.get("episodes"), list)):
+        raise ValueError("Unsupported saved evaluation index")
+    if index.get("complete") is not True:
+        raise ValueError("Saved evaluation index is incomplete")
+    if index.get("expected_episodes") != len(index["episodes"]):
+        raise ValueError("Evaluation index episode count is inconsistent")
+    snapshot_ref = index.get("input_snapshot")
+    if not isinstance(snapshot_ref, dict):
+        raise ValueError("Saved evaluation input snapshot reference is malformed")
+    snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
+    if (not snapshot_path.is_file() or not snapshot_ref.get("sha256")
+            or sha256(snapshot_path) != snapshot_ref["sha256"]):
+        raise ValueError("Selected input snapshot is missing or has changed")
+    _dedupe(index["episodes"])
+    return output, index, _read_indexed_results(output, index)
+
+
 def _render_csv(rows):
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=_CSV_COLUMNS, lineterminator="\n")
@@ -1091,27 +1122,8 @@ def render_report(output):
     runs = settings().runs.resolve()
     if not output.is_relative_to(runs):
         raise ValueError(f"Saved evaluation reports must remain beneath configured runs: {runs}")
-    index_path = _evaluation_file(output, "index.json", "evaluation index")
-    if not index_path.is_file():
-        raise FileNotFoundError(f"Evaluation index does not exist: {index_path}")
-    index = read_json(index_path)
-    if not isinstance(index, dict):
-        raise ValueError("Saved evaluation index must be an object")
-    if index.get("schema_version") != INDEX_SCHEMA_VERSION or not isinstance(index.get("episodes"), list):
-        raise ValueError("Unsupported saved evaluation index")
-    if index.get("complete") is not True:
-        raise ValueError("Saved evaluation index is incomplete")
-    if index.get("expected_episodes") != len(index["episodes"]):
-        raise ValueError("Evaluation index episode count is inconsistent")
-    snapshot_ref = index.get("input_snapshot", {})
-    if not isinstance(snapshot_ref, dict):
-        raise ValueError("Saved evaluation input snapshot reference is malformed")
-    snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
-    if (not snapshot_path.is_file() or not snapshot_ref.get("sha256")
-            or sha256(snapshot_path) != snapshot_ref["sha256"]):
-        raise ValueError("Selected input snapshot is missing or has changed")
-    _dedupe(index["episodes"])
-    rows = _presentation_rows(output, index)
+    _, index, indexed = read_indexed_evaluation(output)
+    rows = _presentation_rows(output, index, indexed)
     csv_text = _render_csv(rows)
     markdown = _render_markdown(index, rows)
     csv_path = _evaluation_file(output, "episodes.csv", "CSV report")
