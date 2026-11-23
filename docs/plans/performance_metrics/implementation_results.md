@@ -172,3 +172,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `e80dddd8cd1f6c1106c7c0347d515813bcb80b45`. Measure only supported obligations on the actual route. Retain independent source admission and explicit gaps in rule evidence.
 
 **Review pending repair.** Candidate `b268e08`. Sol's explicit Python 3.11 venv with the isolated Shapely wheel passed 48 semantic/map/episode tests (`runs/pe_campaign/pe08/sol_review.log`), resolving the agent's Python 3.12 wheel mismatch for this configuration. Repair requested for the frozen safe completion contract and unsupported priority-actor absence.
+
+**Accepted.** Implementation `b268e08`, safe-completion and priority coverage repair `20d1637`. Reviewed actual-lane evidence scope, critical applicability, and unavailable signals independent of reviewed exemptions. `PYTHONPATH=runs/pe_campaign/pe05/agent/deps_no_numpy .venv/bin/pytest -q tests/test_evaluation_tasks.py tests/test_evaluation_semantics.py tests/test_evaluation_episode.py tests/test_evaluation_map_metrics.py tests/test_evaluation_interactions.py` passed 96 tests (`runs/pe_campaign/pe08/sol_review_final.log`). Saved archived trace executes offline. The corpus lacks authoritative dynamic signal evidence; rule coverage remains conditional. Next PE09.
+
+## PE09 — Saved run accounting and reports
+
+**Dispatch.** Base `20d16377268df97a11960d3396d4679d75037f0c`. Read existing ledger/campaign/manifest results using their established identities and the shared evidence reader. No worker execution or campaign regeneration is needed.
