@@ -154,3 +154,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE06 — Route progress, tasks and efficiency
 
 **Dispatch.** Base `f0e187a174ed8b941c1de9f25efbd3b5f3491185`. Use the existing source task/route owners and conservative offline outcomes. Do not infer successful completion from a native goal or failure from a horizon.
+
+**Review pending repair.** Candidate `11fd1a0`; Sol's task/episode/safety/map check passed 75 tests (`runs/pe_campaign/pe06/sol_review.log`). Repair required for nonzero/reordered source ego identity, native goal versus bounded source goal binding, and deadline timing/censoring. Real r07 smoke remains scoped to its source certificates.
