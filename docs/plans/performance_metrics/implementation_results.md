@@ -186,3 +186,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE10 — Aggregation and sensitivity
 
 **Dispatch.** Base `372d3dba2b7dd0d0ffcd4220e6575aae9daa16e1`. Use immutable PE09 results or saved evidence. Make metric-specific denominators, dependence and sensitivity coverage explicit.
+
+**Review pending repair.** Candidate `c41a8bc`. Sol's aggregate/reporting suite passed 31 tests (`runs/pe_campaign/pe10/sol_review.log`). Review found per-scene route certificate hashes were treated as independent clusters ahead of recording ID, and the production episode output did not supply checkpoint hashes to strata. Repair requested for recording dependence and hash-bound checkpoint provenance, including paired planner contrast rules.
