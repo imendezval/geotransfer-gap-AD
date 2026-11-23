@@ -188,3 +188,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `372d3dba2b7dd0d0ffcd4220e6575aae9daa16e1`. Use immutable PE09 results or saved evidence. Make metric-specific denominators, dependence and sensitivity coverage explicit.
 
 **Review pending repair.** Candidate `c41a8bc`. Sol's aggregate/reporting suite passed 31 tests (`runs/pe_campaign/pe10/sol_review.log`). Review found per-scene route certificate hashes were treated as independent clusters ahead of recording ID, and the production episode output did not supply checkpoint hashes to strata. Repair requested for recording dependence and hash-bound checkpoint provenance, including paired planner contrast rules.
+
+**Accepted.** Implementation `c41a8bc`, source-cluster and checkpoint repair `9ba684f`. Reviewed distinct episode/event/exposure denominators, matched strata, sensitivity from continuous evidence, recording-first clustering, and checkpoint provenance with both controller roles. `.venv/bin/pytest -q tests/test_evaluation_aggregate.py tests/test_evaluation_reporting.py tests/test_saved_evidence.py` passed 65 tests (`runs/pe_campaign/pe10/sol_review_final.log`). The saved four-episode cohort produced four strata and 192 sensitivity variants with no exact paired scenes and unchanged input hashes. Evidence under `runs/pe_campaign/pe10/agent/`. Next PE11.
+
+## PE11 — Existing offline viewer attachments
+
+**Dispatch.** Base `9ba684fa1116b61691c833bd4e4bf8d520291c09`. Attach saved evaluation evidence to the existing playback and preserve current viewer behavior. Verify browser seek and display with the existing offline probe.
