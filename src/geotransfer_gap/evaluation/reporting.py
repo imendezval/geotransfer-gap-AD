@@ -6,8 +6,10 @@ import csv
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
+import tempfile
 
 from geotransfer_gap.artifacts import (
     read_json,
@@ -638,34 +640,21 @@ def _driving_outcome(result, events=()):
     }
 
 
-def _trace_identity(episode, trace_path):
-    try:
-        trace = read_json(trace_path)
-        scene = trace.get("scene")
-        if episode.get("expected_scene") is not None and scene != episode["expected_scene"]:
-            raise SavedEvidenceError("Trace scene differs from selected run/campaign identity")
-        if episode.get("expected_binary_sha256") and trace.get("binary_sha256") != episode["expected_binary_sha256"]:
-            raise SavedEvidenceError("Trace binary differs from selected run/campaign identity")
-        protocol = ((episode.get("ego"), "ego_controller"),
-                    (episode.get("traffic"), "traffic_controller"),
-                    (episode.get("startup"), "traffic_startup"))
-        for expected, field in protocol:
-            actual = trace.get(field)
-            if field == "ego_controller" and actual is None and trace.get("planner") != "controller_matrix":
-                actual = trace.get("planner")
-            if expected is not None and actual != expected:
-                raise SavedEvidenceError(f"Trace {field} differs from selected ledger identity")
-        return trace
-    except (OSError, ValueError, TypeError) as exc:
-        if isinstance(exc, SavedEvidenceError):
-            raise
-        raise SavedEvidenceError(f"Unable to inspect selected trace: {exc}") from exc
+def _check_trace_protocol(episode, trace):
+    protocol = ((episode.get("ego"), "ego_controller"),
+                (episode.get("traffic"), "traffic_controller"),
+                (episode.get("startup"), "traffic_startup"))
+    for expected, field in protocol:
+        actual = trace.get(field)
+        if field == "ego_controller" and actual is None and trace.get("planner") != "controller_matrix":
+            actual = trace.get("planner")
+        if expected is not None and actual != expected:
+            raise SavedEvidenceError(f"Trace {field} differs from selected ledger identity")
 
 
 def _load_evidence(selection, episode, trace_path):
     if _attempt_status_mismatch(episode.get("attempt_history", []), trace_path):
         raise SavedEvidenceError("Attempt ledger status disagrees with its saved attempt record")
-    trace = _trace_identity(episode, trace_path)
     kwargs = {
         "expected_files": episode.get("expected_files"),
         "expected_binary_sha256": episode.get("expected_binary_sha256"),
@@ -679,7 +668,8 @@ def _load_evidence(selection, episode, trace_path):
     # The trace reader verifies the recorded sidecar bindings. Binary data is
     # optional for trace-only diagnostics; absence lowers context capability.
     saved = load_saved_trace(trace_path, **kwargs)
-    return saved, trace
+    _check_trace_protocol(episode, saved.playback.report)
+    return saved, saved.playback.report
 
 
 def _attempt_status_mismatch(history, trace_path):
@@ -970,10 +960,10 @@ _CSV_COLUMNS = ("episode_id", "scene_id", "ego", "traffic", "startup", "executio
 def _presentation_rows(output, index):
     rows = []
     for episode in index["episodes"]:
-        path = output / episode["result_file"]
+        path = _evaluation_file(output, episode.get("result_file"), "saved evaluation result")
         if not path.is_file() or sha256(path) != episode["result_sha256"]:
             raise ValueError(f"Saved evaluation result is missing or has changed: {path}")
-        event_path = output / episode["events_file"]
+        event_path = _evaluation_file(output, episode.get("events_file"), "saved evaluation events")
         if not event_path.is_file() or sha256(event_path) != episode["events_sha256"]:
             raise ValueError(f"Saved evaluation events are missing or have changed: {event_path}")
         result = read_json(path)
@@ -999,6 +989,23 @@ def _presentation_rows(output, index):
             "result_file": episode["result_file"],
         })
     return rows
+
+
+def _evaluation_file(output, value, label):
+    """Resolve an index path while keeping both its spelling and target in output."""
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} path is missing or malformed")
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"{label} path must be relative to its evaluation directory")
+    candidate = output / relative
+    try:
+        resolved = candidate.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Unable to resolve {label} path: {value}") from exc
+    if not resolved.is_relative_to(output):
+        raise ValueError(f"{label} path escapes its evaluation directory: {value}")
+    return candidate
 
 
 def _render_csv(rows):
@@ -1033,21 +1040,42 @@ def _render_markdown(index, rows):
     return "\n".join(lines)
 
 
+def _atomic_write_text(path, content):
+    """Replace a report inside its evaluation directory without following links."""
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def render_report(output):
     output = Path(output).expanduser().resolve()
     runs = settings().runs.resolve()
     if not output.is_relative_to(runs):
         raise ValueError(f"Saved evaluation reports must remain beneath configured runs: {runs}")
-    index_path = output / "index.json"
+    index_path = _evaluation_file(output, "index.json", "evaluation index")
     if not index_path.is_file():
         raise FileNotFoundError(f"Evaluation index does not exist: {index_path}")
     index = read_json(index_path)
+    if not isinstance(index, dict):
+        raise ValueError("Saved evaluation index must be an object")
     if index.get("schema_version") != INDEX_SCHEMA_VERSION or not isinstance(index.get("episodes"), list):
         raise ValueError("Unsupported saved evaluation index")
+    if index.get("complete") is not True:
+        raise ValueError("Saved evaluation index is incomplete")
     if index.get("expected_episodes") != len(index["episodes"]):
         raise ValueError("Evaluation index episode count is inconsistent")
     snapshot_ref = index.get("input_snapshot", {})
-    snapshot_path = output / snapshot_ref.get("file", "")
+    if not isinstance(snapshot_ref, dict):
+        raise ValueError("Saved evaluation input snapshot reference is malformed")
+    snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
     if (not snapshot_path.is_file() or not snapshot_ref.get("sha256")
             or sha256(snapshot_path) != snapshot_ref["sha256"]):
         raise ValueError("Selected input snapshot is missing or has changed")
@@ -1055,8 +1083,10 @@ def render_report(output):
     rows = _presentation_rows(output, index)
     csv_text = _render_csv(rows)
     markdown = _render_markdown(index, rows)
-    (output / "episodes.csv").write_text(csv_text, encoding="utf-8", newline="")
-    (output / "report.md").write_text(markdown, encoding="utf-8", newline="")
+    csv_path = _evaluation_file(output, "episodes.csv", "CSV report")
+    markdown_path = _evaluation_file(output, "report.md", "Markdown report")
+    _atomic_write_text(csv_path, csv_text)
+    _atomic_write_text(markdown_path, markdown)
     return {"episodes": len(rows), "csv": str(output / "episodes.csv"),
             "markdown": str(output / "report.md")}
 

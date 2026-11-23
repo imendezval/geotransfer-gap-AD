@@ -87,6 +87,22 @@ def _evaluation_output(runs, suffix):
     return runs / f"evaluation-{suffix}"
 
 
+def _saved_legacy_evaluation(monkeypatch, tmp_path, suffix):
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, manifest = _scene_and_manifest(artifacts, tmp_path)
+    run_dir = runs / f"{suffix}-run"
+    run_dir.mkdir()
+    trace_folder = run_dir / "synthetic"
+    trace_folder.mkdir()
+    write_json(trace_folder / "trace.json", _trace(scene_ref, sha256(binary), planner="expert"))
+    write_json(run_dir / "run.json", {"schema_version": 2, "results": [{
+        "scene": scene_ref, "name": "synthetic", "output": str(trace_folder), "planner": "expert"
+    }]})
+    output = _evaluation_output(runs, suffix)
+    reporting.evaluate_run(run=run_dir, manifest=manifest, output=output)
+    return runs, output
+
+
 def _attested_matrix(folder, scene_ref, binary):
     folder.mkdir(parents=True, exist_ok=True)
     trace_path = folder / "trace.json"
@@ -355,6 +371,38 @@ def test_mismatched_trace_sidecar_remains_an_invalid_accounting_row(monkeypatch,
     assert record["metric_validity"]["status"] == "unavailable"
 
 
+def test_ledger_protocol_is_checked_on_the_shared_reader_result_once(monkeypatch, tmp_path):
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, manifest = _scene_and_manifest(artifacts, tmp_path)
+    run_dir = runs / "protocol-mismatch-run"
+    attempt_dir = run_dir / "attempt"
+    attempt_dir.mkdir(parents=True)
+    trace_path = attempt_dir / "trace.json"
+    trace = _trace(scene_ref, sha256(binary))
+    trace["ego_controller"] = "smart"
+    for frame in trace["frames"]:
+        frame["actors"][0]["effective_owner"] = "ego:smart"
+    write_json(trace_path, trace)
+    write_json(attempt_dir / "attempt.json", {"schema_version": 1, "status": "failed",
+                                               "classification": "worker_exit"})
+    _batch_run(run_dir, "synthetic", scene_ref, binary, status="failed",
+               attempts=[{"number": 1, "status": "failed", "record": "attempt/attempt.json"}])
+    original_reader = reporting.load_saved_trace
+    calls = []
+
+    def counted_reader(*args, **kwargs):
+        calls.append(args[0])
+        return original_reader(*args, **kwargs)
+
+    monkeypatch.setattr(reporting, "load_saved_trace", counted_reader)
+    output = _evaluation_output(runs, "protocol-mismatch")
+    index = reporting.evaluate_run(run=run_dir, manifest=manifest, output=output)
+    record = json.loads((output / index["episodes"][0]["result_file"]).read_text())
+    assert len(calls) == 1
+    assert record["evidence"]["status"] == "invalid"
+    assert "ego_controller differs" in record["evidence"]["reason"]
+
+
 def test_event_order_and_nonexclusive_taxonomy_do_not_claim_cause(monkeypatch, tmp_path):
     artifacts, runs = _environment(monkeypatch, tmp_path)
     _, _, binary, scene_ref, manifest = _scene_and_manifest(artifacts, tmp_path)
@@ -407,25 +455,73 @@ def test_stale_manifest_duplicate_ids_and_output_overlap_are_rejected(monkeypatc
 
 
 def test_report_rerenders_saved_results_without_metric_recomputation(monkeypatch, tmp_path):
-    artifacts, runs = _environment(monkeypatch, tmp_path)
-    _, _, binary, scene_ref, manifest = _scene_and_manifest(artifacts, tmp_path)
-    run_dir = runs / "report-run"
-    run_dir.mkdir()
-    trace_folder = run_dir / "synthetic"
-    trace_folder.mkdir()
-    trace = trace_folder / "trace.json"
-    write_json(trace, _trace(scene_ref, sha256(binary), planner="expert"))
-    write_json(run_dir / "run.json", {"schema_version": 2, "results": [{
-        "scene": scene_ref, "name": "synthetic", "output": str(trace_folder), "planner": "expert"
-    }]})
-    output = _evaluation_output(runs, "rerender")
-    reporting.evaluate_run(run=run_dir, manifest=manifest, output=output)
+    _, output = _saved_legacy_evaluation(monkeypatch, tmp_path, "rerender")
     before = ((output / "episodes.csv").read_bytes(), (output / "report.md").read_bytes())
     monkeypatch.setattr(reporting, "evaluate_episode", lambda *args, **kwargs: pytest.fail("metrics reran"))
     rendered = reporting.render_report(output)
     after = ((output / "episodes.csv").read_bytes(), (output / "report.md").read_bytes())
     assert before == after
     assert rendered["episodes"] == 1
+
+
+def test_report_rejects_incomplete_index(monkeypatch, tmp_path):
+    _, output = _saved_legacy_evaluation(monkeypatch, tmp_path, "incomplete")
+    index_path = output / "index.json"
+    index = json.loads(index_path.read_text())
+    index["complete"] = False
+    write_json(index_path, index)
+    with pytest.raises(ValueError, match="incomplete"):
+        reporting.render_report(output)
+
+
+@pytest.mark.parametrize("snapshot_path", ["../escaped-snapshot.json", None])
+def test_report_rejects_escaped_snapshot_paths(monkeypatch, tmp_path, snapshot_path):
+    runs, output = _saved_legacy_evaluation(monkeypatch, tmp_path, "escaped-snapshot")
+    index_path = output / "index.json"
+    index = json.loads(index_path.read_text())
+    snapshot = output / index["input_snapshot"]["file"]
+    escaped = runs / "escaped-snapshot.json"
+    escaped.write_bytes(snapshot.read_bytes())
+    index["input_snapshot"]["file"] = str(escaped) if snapshot_path is None else snapshot_path
+    index["input_snapshot"]["sha256"] = sha256(escaped)
+    write_json(index_path, index)
+    with pytest.raises(ValueError, match="relative|escapes"):
+        reporting.render_report(output)
+
+
+@pytest.mark.parametrize("target", ["index", "snapshot", "result", "events"])
+def test_report_rejects_symlinked_input_paths_escaping_evaluation(
+        monkeypatch, tmp_path, target):
+    runs, output = _saved_legacy_evaluation(monkeypatch, tmp_path, f"symlink-{target}")
+    index_path = output / "index.json"
+    index = json.loads(index_path.read_text())
+    if target == "index":
+        original = index_path
+    elif target == "snapshot":
+        original = output / index["input_snapshot"]["file"]
+    else:
+        episode = index["episodes"][0]
+        original = output / episode[f"{target}_file"]
+    outside = runs / f"outside-{target}.json"
+    outside.write_bytes(original.read_bytes())
+    original.unlink()
+    original.symlink_to(outside)
+    with pytest.raises(ValueError, match="escapes its evaluation directory"):
+        reporting.render_report(output)
+
+
+@pytest.mark.parametrize("filename", ["episodes.csv", "report.md"])
+def test_report_refuses_output_symlink_to_external_file(monkeypatch, tmp_path, filename):
+    runs, output = _saved_legacy_evaluation(monkeypatch, tmp_path, f"output-link-{filename}")
+    outside = runs / f"protected-{filename}"
+    outside.write_bytes(b"preserve this file")
+    output_file = output / filename
+    output_file.unlink()
+    output_file.symlink_to(outside)
+    with pytest.raises(ValueError, match="escapes its evaluation directory"):
+        reporting.render_report(output)
+    assert outside.read_bytes() == b"preserve this file"
+    assert output_file.is_symlink()
 
 
 def test_campaign_duplicate_slot_is_rejected(monkeypatch, tmp_path):
