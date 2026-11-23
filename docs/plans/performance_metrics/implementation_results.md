@@ -138,3 +138,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE04 — Collision, clearance and TTC
 
 **Dispatch.** Base `46984996870d3bdc0e242b9c0e3c629d17346d38`. Reuse PE02 exposure/events, the PE03 bound sidecar and existing geometry helpers. Evaluate the native, sampled geometry, and predictive channels separately.
+
+**Review pending repair.** Candidate `5dae2c1`, 106 focused tests passed (agent and Sol). Existing geometric overlap must yield TTC zero even without velocity. Review also requested reuse of the existing corner helper and removal of redundant timebase inference. Evidence under `runs/pe_campaign/pe04/`.
