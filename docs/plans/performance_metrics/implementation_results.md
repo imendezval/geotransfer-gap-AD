@@ -120,3 +120,7 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Remaining block.** The seven original admissions from PE00 remain unavailable at their pinned hashes. They still block the full native verification inventory. They were not used as attestations for PE01. The historical campaign and producer fingerprints remain intact. Native single/manifest parity passed for the two unaffected PE00.5 scenes.
 
 **PE02 handoff.** Use `load_profile`, `load_saved_trace` and `SavedTrace.frames()` from the new boundary. Bind outputs to the checked trace and sidecar hashes, effective profile hash, and known producer revision. Compute the frozen full-window and controlled-window exposure from recorded timestamps, lifetimes, and applied transitions. Keep legacy unknown transition flags explicit. Add kinematics and only the initial episode command in PE02. Use fresh output directories beneath configured runs.
+
+## PE02 — Exposure, kinematics and episode CLI
+
+**Dispatch.** Base `23889876ca47b384d0b1c85540191e312e88720d` on `performance-evaluation/pe02-pe14`. PE01 preflight `.venv/bin/pytest -q tests/test_saved_evidence.py tests/test_viewer.py tests/test_run_trace.py` passed 59 tests. Seven missing pinned admissions remain an independent native inventory block. PE02 is eligible for offline implementation. Campaign verification outputs go under `runs/pe_campaign/`.
