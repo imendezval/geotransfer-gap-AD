@@ -136,6 +136,12 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
         for row in event_channels.values()
     )
     event_evidence_present = has_event_channel or bool(measured["events"])
+    checkpoint_identity = getattr(saved, "model_checkpoint_identity", None)
+    if not isinstance(checkpoint_identity, dict):
+        checkpoint_identity = {
+            role: {"status": "not_recorded", "sha256": None}
+            for role in ("ego", "traffic")
+        }
     result = {
         "result_schema_version": RESULT_SCHEMA_VERSION,
         "input": {
@@ -158,6 +164,10 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
                 key: report.get(key) for key in
                 ("ego_controller", "traffic_controller", "traffic_startup", "warmup_replay_frames")
                 if key in report
+            },
+            "checkpoint_identity": {
+                role: checkpoint_identity.get(role, {"status": "not_recorded", "sha256": None})
+                for role in ("ego", "traffic")
             },
             "traffic_protocol": report.get("traffic_protocol"),
             "startup_policy": report.get("startup_policy"),

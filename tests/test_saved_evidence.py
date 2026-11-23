@@ -65,6 +65,8 @@ def attest(path, trace, verification):
         key: {"path": name, "sha256": sha256(path.with_name(name))}
         for key, name in (("trace", "trace.json"), ("provenance", "verification.json"))
     }
+    for key, name in verification.get("model_provenance", {}).items():
+        files[key] = {"path": name, "sha256": sha256(path.with_name(name))}
     config = {key: trace[key] for key in ("scene", "ego_controller", "traffic_controller", "traffic_startup")}
     config.update(inputs=verification["inputs"], steps=trace["requested_observation_frames"])
     attempt = dict(schema_version=1, status="passed", exit_code=0, scene_config=config,
@@ -128,6 +130,77 @@ def test_archived_bundle_binds_bytes_and_joins_identity(bundle):
             for frame in frames] == [0, None, 1]
     assert frames[0]["actors"][1]["effective_owner"] == "warmup_replay"
     assert {p: p.read_bytes() for p in path.parent.iterdir()} == before
+
+
+def test_learned_checkpoint_identity_flows_from_bound_provenance_into_episode_result(bundle):
+    from geotransfer_gap.evaluation.context import MapContext
+    from geotransfer_gap.evaluation.episode import evaluate_episode
+
+    path, trace, verification, _ = bundle
+    trace.update(ego_controller="ppo", traffic_controller="smart")
+    verification.update(ego="ppo", traffic="smart",
+                       model_provenance={"ppo": "ppo_provenance.json",
+                                         "smart": "smart_provenance.json"})
+    write_json(path, trace)
+    write_json(path.with_name("verification.json"), verification)
+    checkpoint_hashes = {"ppo": "a" * 64, "smart": "b" * 64}
+    for model, digest in checkpoint_hashes.items():
+        write_json(path.with_name(f"{model}_provenance.json"), {"checkpoint_sha256": digest})
+    files = attest(path, trace, verification)["evidence"]["files"]
+
+    saved = load_saved_trace(path)
+    expected = {
+        "ego": {"status": "recorded_hash_bound", "sha256": checkpoint_hashes["ppo"]},
+        "traffic": {"status": "recorded_hash_bound", "sha256": checkpoint_hashes["smart"]},
+    }
+    assert saved.model_checkpoint_identity == expected
+    path.with_name("attempt.json").unlink()
+    trace_only = load_saved_trace(path, expected_files=files)
+    assert trace_only.evidence_level is EvidenceLevel.TRACE_ONLY_DIAGNOSTIC
+    assert trace_only.model_checkpoint_identity == expected
+    result, _ = evaluate_episode(saved, load_profile(), map_context=MapContext(
+        "unavailable", "synthetic map not supplied"))
+    assert result["input"]["checkpoint_identity"] == expected
+
+
+def test_unbound_learned_checkpoint_and_unknown_legacy_role_are_not_inferred(bundle):
+    path, trace, verification, _ = bundle
+    original_trace, original_verification = dict(trace), dict(verification)
+    trace.update(ego_controller="ppo", traffic_controller="smart")
+    verification.update(ego="ppo", traffic="smart",
+                        model_provenance={"ppo": "ppo_provenance.json",
+                                          "smart": "smart_provenance.json"})
+    write_json(path, trace)
+    write_json(path.with_name("verification.json"), verification)
+    write_json(path.with_name("ppo_provenance.json"), {"checkpoint_sha256": "a" * 64})
+    write_json(path.with_name("smart_provenance.json"), {"checkpoint_sha256": "b" * 64})
+
+    saved = load_saved_trace(path)
+    assert saved.model_checkpoint_identity == {
+        "ego": {"status": "unavailable_unbound_provenance", "sha256": None},
+        "traffic": {"status": "unavailable_unbound_provenance", "sha256": None},
+    }
+    write_json(path, original_trace)
+    write_json(path.with_name("verification.json"), original_verification)
+    assert load_saved_trace(bundle[0]).model_checkpoint_identity == {
+        "ego": {"status": "not_applicable", "sha256": None},
+        "traffic": {"status": "not_applicable", "sha256": None},
+    }
+
+
+def test_changed_bound_model_provenance_is_rejected(bundle):
+    path, trace, verification, _ = bundle
+    trace.update(ego_controller="ppo", traffic_controller="expert")
+    verification.update(ego="ppo", traffic="expert",
+                        model_provenance={"ppo": "ppo_provenance.json"})
+    write_json(path, trace)
+    write_json(path.with_name("verification.json"), verification)
+    model_path = path.with_name("ppo_provenance.json")
+    write_json(model_path, {"checkpoint_sha256": "a" * 64})
+    attest(path, trace, verification)
+    model_path.write_bytes(model_path.read_bytes() + b" ")
+    with pytest.raises(SavedEvidenceError, match="Playback hash"):
+        load_saved_trace(path)
 
 
 def test_campaign_can_attest_detached_single(bundle):

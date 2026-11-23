@@ -149,13 +149,12 @@ def _identity(result):
     if not isinstance(identity, dict):
         identity = {}
     location, recording = identity.get("location"), identity.get("recording")
-    sequence = identity.get("source_route_sequence_sha256")
-    if isinstance(sequence, str) and sequence:
-        cluster = "sequence:" + sequence
-    elif location is not None and recording is not None:
+    if type(recording) in (str, int) and str(recording):
         cluster = f"recording:{location}:{recording}"
     else:
-        cluster = None
+        sequence = identity.get("source_sequence_id")
+        cluster = (f"sequence:{sequence}" if type(sequence) in (str, int) and str(sequence)
+                   else None)
     return identity, cluster
 
 
@@ -200,11 +199,38 @@ def _stratum(result):
     evidence = result.get("evidence") or {}
     if not isinstance(evidence, dict):
         raise ValueError(f"Episode {result.get('episode_id')} evidence identity is malformed")
+    checkpoint_identity = inp.get("checkpoint_identity") or {}
+    if not isinstance(checkpoint_identity, dict):
+        raise ValueError(f"Episode {result.get('episode_id')} checkpoint identity is malformed")
+
+    def checkpoint(role):
+        record = checkpoint_identity.get(role)
+        if record is None:
+            return "not_recorded", None
+        if not isinstance(record, dict) or not isinstance(record.get("status"), str):
+            raise ValueError(f"Episode {result.get('episode_id')} {role} checkpoint identity is malformed")
+        digest = record.get("sha256")
+        status = record["status"]
+        if status not in {"recorded_hash_bound", "not_applicable", "not_recorded",
+                          "unavailable_unbound_provenance"}:
+            raise ValueError(f"Episode {result.get('episode_id')} {role} checkpoint status is unsupported")
+        if digest is not None and (not isinstance(digest, str) or len(digest) != 64
+                                   or any(char not in "0123456789abcdef" for char in digest)):
+            raise ValueError(f"Episode {result.get('episode_id')} {role} checkpoint hash is malformed")
+        if (status == "recorded_hash_bound") != (digest is not None):
+            raise ValueError(f"Episode {result.get('episode_id')} {role} checkpoint status/hash conflict")
+        return status, digest
+
+    ego_checkpoint_status, ego_checkpoint = checkpoint("ego")
+    traffic_checkpoint_status, traffic_checkpoint = checkpoint("traffic")
     profile_hash, definition = _profile_identity(result)
     return {
         "planner": protocol.get("ego") or input_protocol.get("ego_controller"),
         "planner_layout": inp.get("planner_layout"),
-        "checkpoint_sha256": inp.get("checkpoint_sha256"),
+        "ego_checkpoint_sha256": ego_checkpoint,
+        "ego_checkpoint_status": ego_checkpoint_status,
+        "traffic_checkpoint_sha256": traffic_checkpoint,
+        "traffic_checkpoint_status": traffic_checkpoint_status,
         "traffic": protocol.get("traffic") or input_protocol.get("traffic_controller"),
         "startup": protocol.get("startup") or input_protocol.get("traffic_startup"),
         "requested_horizon_observations": censoring.get("requested_observations"),
@@ -570,16 +596,25 @@ def _accounting(rows):
 def paired_condition_summary(records, *, dimension, left, right, metric_id, window,
                              definition_version, units, uncertainty_profile):
     """Return strict-nuisance-stratum intersections and paired right-minus-left estimates."""
-    if dimension not in {"planner", "traffic", "startup", "checkpoint_sha256"}:
+    if dimension not in {"planner", "traffic", "startup", "ego_checkpoint_sha256",
+                         "traffic_checkpoint_sha256"}:
         raise ValueError("Unsupported paired condition dimension")
     if left == right:
         raise ValueError("Paired condition values must differ")
     uncertainty = uncertainty_profile.get("uncertainty", uncertainty_profile)
-    nuisance_dimensions = ("planner", "planner_layout", "checkpoint_sha256", "traffic", "startup",
+    nuisance_dimensions = ("planner", "planner_layout", "ego_checkpoint_sha256",
+                           "ego_checkpoint_status", "traffic_checkpoint_sha256",
+                           "traffic_checkpoint_status", "traffic", "startup",
                            "requested_horizon_observations", "trace_schema_version",
                            "live_validation_status", "evidence_status", "evidence_level",
                            "definition_version", "effective_profile_sha256")
     nuisance_dimensions = tuple(key for key in nuisance_dimensions if key != dimension)
+    if dimension == "planner":
+        nuisance_dimensions = tuple(key for key in nuisance_dimensions
+                                    if key not in {"ego_checkpoint_sha256", "ego_checkpoint_status"})
+    elif dimension == "traffic":
+        nuisance_dimensions = tuple(key for key in nuisance_dimensions
+                                    if key not in {"traffic_checkpoint_sha256", "traffic_checkpoint_status"})
     sides = {left: defaultdict(lambda: defaultdict(list)),
              right: defaultdict(lambda: defaultdict(list))}
     for result, _ in records:
@@ -646,7 +681,8 @@ def _paired_intersections(records, uncertainty_profile):
     metric_keys = set()
     for result, _ in records:
         stratum = _stratum(result)
-        for dimension in ("planner", "checkpoint_sha256", "traffic", "startup"):
+        for dimension in ("planner", "ego_checkpoint_sha256", "traffic_checkpoint_sha256",
+                          "traffic", "startup"):
             if stratum[dimension] is not None:
                 values[dimension].add(stratum[dimension])
         for metric in _metrics(result):
@@ -655,7 +691,8 @@ def _paired_intersections(records, uncertainty_profile):
                                  metric.get("definition_version"),
                                  json.dumps(metric.get("units"), sort_keys=True)))
     output = []
-    for dimension in ("planner", "checkpoint_sha256", "traffic", "startup"):
+    for dimension in ("planner", "ego_checkpoint_sha256", "traffic_checkpoint_sha256",
+                      "traffic", "startup"):
         conditions = sorted(values[dimension])
         for index, left in enumerate(conditions):
             for right in conditions[index + 1:]:

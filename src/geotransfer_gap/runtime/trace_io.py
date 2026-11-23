@@ -1,6 +1,6 @@
 """Read saved episode evidence without importing the execution stack."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 import hashlib
 import json
@@ -42,6 +42,7 @@ class SavedTrace:
     evidence_level: EvidenceLevel
     ego_source_id: int
     producer_revision: str | None
+    model_checkpoint_identity: dict = field(default_factory=dict)
 
     def frames(self):
         """Return recorded values with lifecycle and assignment fields joined by ID."""
@@ -416,8 +417,44 @@ def load_saved_trace(path, *, expected_files=None, expected_binary_sha256=None,
             for model, filename in models.items():
                 if binding.get(model, {}).get("path") != filename:
                     raise SavedEvidenceError(f"Missing bound model provenance: {model}")
-        return SavedTrace(saved, level, ego_id, producer_revision)
+        model_identity = _model_checkpoint_identity(path, saved, level)
+        return SavedTrace(saved, level, ego_id, producer_revision, model_identity)
     except SavedEvidenceError:
         raise
     except (OSError, KeyError, TypeError, ValueError, AttributeError, OverflowError) as exc:
         raise SavedEvidenceError(f"Malformed or unreadable saved evidence at {path}: {exc}") from exc
+
+
+def _model_checkpoint_identity(path, saved, evidence_level):
+    """Expose only role-specific checkpoint hashes from bound producer sidecars."""
+    report = saved.report
+    verification = saved.verification or {}
+    model_files = verification.get("model_provenance") or {}
+    identities = {}
+    for role, key in (("ego", "ego_controller"), ("traffic", "traffic_controller")):
+        model = report.get(key)
+        if model is None and report.get("schema_version") == 2:
+            model = report.get("planner") if role == "ego" else None
+        if model not in {"ppo", "smart"}:
+            status = ("not_applicable" if model in {"expert", "idm"}
+                      else "not_recorded")
+            identities[role] = {"status": status, "sha256": None}
+            continue
+        filename = model_files.get(model)
+        bound_hash = saved.hashes.get(model)
+        if (not isinstance(filename, str) or Path(filename).name != filename
+                or not _digest(bound_hash)):
+            if evidence_level is EvidenceLevel.ARCHIVED_ATTESTED:
+                raise SavedEvidenceError(f"Missing hash-bound {model} checkpoint provenance")
+            identities[role] = {"status": "unavailable_unbound_provenance", "sha256": None}
+            continue
+        provenance_path = Path(path).with_name(filename)
+        if not provenance_path.is_file() or sha256(provenance_path) != bound_hash:
+            raise SavedEvidenceError(f"Hash-bound {model} checkpoint provenance changed")
+        provenance = _json_object(provenance_path.read_bytes(), provenance_path)
+        _check_finite(provenance)
+        digest = provenance.get("checkpoint_sha256")
+        if not _digest(digest):
+            raise SavedEvidenceError(f"Invalid recorded {model} checkpoint identity")
+        identities[role] = {"status": "recorded_hash_bound", "sha256": digest}
+    return identities

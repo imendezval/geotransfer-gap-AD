@@ -4,6 +4,7 @@ import pytest
 
 from geotransfer_gap.evaluation.aggregate import (
     _bootstrap,
+    _identity,
     _load_evaluation,
     aggregate_records,
     _paired_intersections,
@@ -134,6 +135,55 @@ def test_bootstrap_clusters_repeated_scenes_missing_and_degenerate_are_explicit(
                             resamples=50, confidence_level=.95)
     assert all_events["status"] == "degenerate_resamples"
     assert all_events["interval"] is None
+
+
+def test_recording_cluster_precedes_route_hash_and_route_only_is_unknown():
+    first = episode("a", 12)
+    second = episode("b", 12)
+    first["episode_metrics"]["task"]["context"]["identity"].update(
+        source_route_sequence_sha256="a" * 64)
+    second["episode_metrics"]["task"]["context"]["identity"].update(
+        source_route_sequence_sha256="b" * 64)
+    assert _identity(first)[1] == _identity(second)[1] == "recording:1:12"
+
+    route_only = episode("c", None)
+    identity = route_only["episode_metrics"]["task"]["context"]["identity"]
+    identity["recording"] = None
+    identity["source_route_sequence_sha256"] = "c" * 64
+    assert _identity(route_only)[1] is None
+    identity["source_sequence_id"] = "ind:1:12:100"
+    assert _identity(route_only)[1] == "sequence:ind:1:12:100"
+
+
+def test_planner_pairing_treats_varying_ego_checkpoint_as_condition():
+    expert = episode("expert-row", 12, distance=10)
+    ppo = episode("ppo-row", 12, distance=13)
+    expert["scene_id"] = ppo["scene_id"] = "same-logical-scene"
+    expert["episode_metrics"]["input"]["checkpoint_identity"] = {
+        "ego": {"status": "not_applicable", "sha256": None},
+        "traffic": {"status": "recorded_hash_bound", "sha256": "b" * 64},
+    }
+    ppo["episode_metrics"]["input"]["checkpoint_identity"] = {
+        "ego": {"status": "recorded_hash_bound", "sha256": "a" * 64},
+        "traffic": {"status": "recorded_hash_bound", "sha256": "b" * 64},
+    }
+    expert["protocol"]["ego"] = "expert"
+    ppo["protocol"]["ego"] = "ppo"
+    expert["episode_metrics"]["input"]["protocol"]["ego_controller"] = "expert"
+    ppo["episode_metrics"]["input"]["protocol"]["ego_controller"] = "ppo"
+    comparison = paired_condition_summary(
+        [(expert, []), (ppo, [])], dimension="planner", left="expert", right="ppo",
+        metric_id="trajectory.route_progress", window="full",
+        definition_version="1.0.0", units="m", uncertainty_profile=PROFILE)
+    [matched] = comparison["comparisons"]
+    assert matched["shared_logical_scene_ids"] == ["same-logical-scene"]
+    assert matched["paired_valid_scene_count"] == 1
+    assert matched["paired_difference_summary"]["mean"] == 3
+    grouped = aggregate_records([(expert, []), (ppo, [])], uncertainty_profile=PROFILE)
+    assert len(grouped["strata"]) == 2
+    assert {row["stratum"]["ego_checkpoint_sha256"] for row in grouped["strata"]} == {
+        None, "a" * 64,
+    }
 
 
 def test_paired_bootstrap_is_deterministic_and_reports_few_cluster_limits():
