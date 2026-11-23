@@ -194,3 +194,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE11 — Existing offline viewer attachments
 
 **Dispatch.** Base `9ba684fa1116b61691c833bd4e4bf8d520291c09`. Attach saved evaluation evidence to the existing playback and preserve current viewer behavior. Verify browser seek and display with the existing offline probe.
+
+**Accepted.** Implementation `bef5882`. Reviewed shared indexed read, compatible attachment binding, conflict handling, text-only display and event seeking in the existing viewer. `.venv/bin/pytest -q tests/test_viewer.py tests/test_evaluation_reporting.py tests/test_saved_evidence.py` passed 83 tests (`runs/pe_campaign/pe11/sol_review.log`). Existing Chromium probe passed offline on archived r12 with the PE09 attachment, including an absent-pose terminal event. Browser and hash evidence under `runs/pe_campaign/pe11/agent/`. Next PE12.
+
+## PE12 — Secondary metrics and benchmark compatibility
+
+**Dispatch.** Base `bef58820b2546c4f9db628aa466258f994752314`. Add separately labeled secondary outputs from verified reference and rollout evidence. Explicitly record unsupported official benchmark components.
