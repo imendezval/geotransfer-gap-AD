@@ -141,6 +141,33 @@ def test_parallel_separating_stationary_and_overlap_now(other_x, other_vx,
         assert result["value"]["minimum_ttc_s"] is None
 
 
+def test_existing_overlap_needs_no_velocity_but_separated_pair_does():
+    overlapping = two_actor_frames(
+        [state(0, vx=None)] * 2,
+        [state(1, vx=None)] * 2,
+    )
+    for frame in overlapping:
+        for row in frame["actors"]:
+            row["vx"] = row["vy"] = None
+    result = ttc(overlapping)
+    assert result["status"] == "valid"
+    assert result["value"]["minimum_ttc_s"] == 0.0
+    assert result["value"]["interpretation"] == "overlap_now"
+    pair = result["value"]["pair_samples"][0]["actor_pairs"][0]
+    assert pair["velocity_support"]["status"] == "not_required_overlap_now"
+
+    separated = two_actor_frames(
+        [state(0, vx=None)] * 2,
+        [state(5, vx=None)] * 2,
+    )
+    for frame in separated:
+        for row in frame["actors"]:
+            row["vx"] = row["vy"] = None
+    unavailable = ttc(separated)
+    assert unavailable["status"] == "unavailable"
+    assert unavailable["value"] is None
+
+
 def test_horizon_boundary_is_inclusive_and_beyond_it_is_not_a_collision():
     exactly_five = two_actor_frames(
         [state(0, vx=1)] * 2,
@@ -392,4 +419,20 @@ def test_near_miss_threshold_exposure_keeps_ttc_and_clearance_separate():
     near = metric(clearance_result, "safety.near_miss_exposure")["value"]
     assert near["clearance_thresholds"]["below_0.5m"][
         "observed_lower_bound_duration_s"] == pytest.approx(0.1)
+
+
+
+
+def test_safety_does_not_infer_a_matrix_timebase_outside_pe02_exposure():
+    frames = two_actor_frames([state(0), state(0.1)], [state(5), state(5)])
+    for frame in frames:
+        frame["time_s"] = None
+    report = {"schema_version": 3, "planner": "controller_matrix",
+              "ego_binary_index": 1, "requested_observation_frames": 2,
+              "terminal_reason": "horizon"}
+    measured = measure_kinematics(frames, EGO, report, PROFILE)
+    result = measure_safety(frames, EGO, report, PROFILE, measured["events"],
+                            {"observation_masks": []})
+    assert metric(result, "safety.near_miss_exposure")["status"] == "unavailable"
+    assert metric(result, "safety.near_miss_exposure")["value"] is None
 

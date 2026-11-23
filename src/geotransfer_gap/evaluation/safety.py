@@ -116,14 +116,17 @@ def _rectangle(actor, dimensions):
     if dims is None:
         return None
     length, width = dims
-    c, s = math.cos(actor["heading"]), math.sin(actor["heading"])
-    cx, cy = actor["x"], actor["y"]
-    # Match the corner convention used by validation.audit_physical_source.
-    return [
-        (cx + a * length / 2 * c - b * width / 2 * s,
-         cy + a * length / 2 * s + b * width / 2 * c)
-        for a, b in ((-1, -1), (-1, 1), (1, 1), (1, -1))
-    ]
+    # Adapt one saved actor row to the existing audited footprint owner.
+    # Import lazily so config/trace-only and no-geometry reads stay lightweight.
+    from geotransfer_gap.validation.audit_physical_source import corners
+
+    source_object = {
+        "position": [{"x": actor["x"], "y": actor["y"]}],
+        "heading": [actor["heading"]],
+        "length": length,
+        "width": width,
+    }
+    return corners(source_object, 0)
 
 
 def _geometry_helpers():
@@ -217,17 +220,12 @@ def _status_metric(metric_id, version, status, reason, value=None, *, units=None
     ).to_dict()
 
 
-def _time_values(frames, profile, exposure):
+def _time_values(frames, exposure):
     masks = exposure.get("observation_masks", ())
     supplied = [row.get("time_s") for row in masks]
     if len(supplied) == len(frames):
         return supplied
-    nominal = profile.values["time"]["nominal_sample_interval_s"]
-    if frames and all(frame.get("time_s") is None for frame in frames) \
-            and frames[0].get("step") is not None:
-        return [float(frame.get("step", index)) * nominal
-                for index, frame in enumerate(frames)]
-    return [frame.get("time_s") for frame in frames]
+    return [None] * len(frames)
 
 
 def _interval_dt(index, frames, times):
@@ -447,6 +445,17 @@ def _window_metrics(frames, ego_id, report, profile, events, exposure, times, wi
             gap = float(box_distance(ego_box, other_box))
             overlap = bool(polygon_overlap(ego_box, other_box))
             geometry_pairs.append({**base, "clearance_m": gap, "overlap": overlap})
+            if overlap:
+                per_horizon = {
+                    str(float(horizon)): {"interpretation": "overlap_now", "ttc_s": 0.0}
+                    for horizon in horizon_values
+                }
+                ttc_pairs.append({
+                    **base,
+                    "velocity_support": {"status": "not_required_overlap_now"},
+                    "horizons": per_horizon,
+                })
+                continue
             ego_velocity, ego_velocity_method = _velocity(ego, index, frames, times, ego_id)
             actor_velocity, actor_velocity_method = _velocity(actor, index, frames, times, ego_id)
             if ego_velocity is None or actor_velocity is None:
@@ -873,7 +882,7 @@ def measure_safety(frames, ego_id, report, profile, events, exposure, *,
     """Measure saved-trace collision, clearance, overlap, TTC, and exposure."""
     frames = list(frames)
     capture_by_step = _event_capture_index(evaluation_capture, evaluation_capture_bound)
-    times = _time_values(frames, profile, exposure)
+    times = _time_values(frames, exposure)
     _enrich_collision_events(events, frames, ego_id, report, capture_by_step,
                              evaluation_capture_bound, times)
     metrics = []
