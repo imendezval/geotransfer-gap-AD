@@ -200,3 +200,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE12 — Secondary metrics and benchmark compatibility
 
 **Dispatch.** Base `bef58820b2546c4f9db628aa466258f994752314`. Add separately labeled secondary outputs from verified reference and rollout evidence. Explicitly record unsupported official benchmark components.
+
+**Accepted.** Implementation `4bda240`. Reviewed fixed ADE/FDE windows and source reference alignment, required All-Core criteria, observed traffic diagnostics and the benchmark availability gate. `PYTHONPATH=runs/pe_campaign/pe05/agent/deps_no_numpy .venv/bin/pytest -q tests/test_evaluation_compatibility.py tests/test_evaluation_aggregate.py tests/test_evaluation_episode.py` passed 43 tests. Agent full pytest: 542 passed, one upstream warning. Saved trace and logs under `runs/pe_campaign/pe12/agent/`. Official BehaviorBench/WOSAC and nuPlan scores remain unavailable without benchmark distribution, map, scorer and aligned rollout evidence. Next PE13.
+
+## PE13 — Geographic comparison and readiness
+
+**Dispatch.** Base `4bda24014c7200568dac53e3ebd3b65c0aefa8fa`. Reuse PE09/10 result identities, the source-only matching policy, and clustered statistics. Implement synthetic matched comparison and report the currently diagnostic-only US evidence status.
