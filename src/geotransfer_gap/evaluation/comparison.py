@@ -514,7 +514,9 @@ def compare_records(left_records, right_records, left_manifest_rows, right_manif
             expected_manifest = config["cohorts"][side]["manifest_sha256"]
             if recorded_manifest is not None and recorded_manifest != expected_manifest:
                 raise ValueError(f"{side} task manifest identity conflicts with frozen cohort manifest")
-            episode_input = result.get("episode_metrics", {}).get("input")
+            episode_metrics = result.get("episode_metrics")
+            episode_metrics = episode_metrics if isinstance(episode_metrics, dict) else {}
+            episode_input = episode_metrics.get("input")
             episode_input = episode_input if isinstance(episode_input, dict) else {}
             result_binary = task_identity.get("binary_sha256") or episode_input.get("binary_sha256")
             if binary is not None and not _sha256(binary):
@@ -602,7 +604,8 @@ def compare_records(left_records, right_records, left_manifest_rows, right_manif
             campaign_status = accounting.get("campaign_status")
             if (accounting.get("execution_status") != "passed"
                     or (campaign_status is not None and campaign_status != "PASS")
-                    or (accounting.get("campaign_integration_validity") not in (None, "valid"))):
+                    or (accounting.get("campaign_integration_validity")
+                        not in (None, "valid", "validated_exact"))):
                 invalid_execution.append({
                     "episode_id": result.get("episode_id"),
                     "execution_status": accounting.get("execution_status"),

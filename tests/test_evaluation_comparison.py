@@ -189,6 +189,45 @@ def test_archived_but_failed_execution_is_not_comparable():
     assert result["metrics"] == []
 
 
+def test_blocked_pe09_row_without_episode_metrics_is_preserved_and_excluded():
+    left_binary, right_binary = "b" * 64, "c" * 64
+    blocked = {
+        "episode_id": "us:blocked", "scene_id": "us",
+        "protocol": {"ego": "SMART", "traffic": "IDM", "startup": "immediate"},
+        "accounting": {"execution_status": "blocked", "campaign_status": "BLOCKED",
+                       "campaign_integration_validity": None},
+        "evidence": {"status": "unavailable", "level": None},
+        "episode_metrics": None,
+    }
+    result = compare_records(
+        [(_record("de", 1, 1, left_binary, 1.0), [])], [(blocked, [])],
+        {"de": _feature_row("de", left_binary)},
+        {"us": _feature_row("us", right_binary)}, _config(),
+    )
+    assert result["status"] == "baseline_not_ready"
+    assert result["metrics"] == []
+    failure = result["protocol_compatibility"]["differences"]["right_execution_validity"][0]
+    assert failure["execution_status"] == "blocked"
+    assert failure["campaign_status"] == "BLOCKED"
+
+
+def test_campaign_pass_with_validated_exact_integration_is_comparable():
+    left_binary, right_binary = "d" * 64, "e" * 64
+    right = _record("us", 2, 2, right_binary, 4.0)
+    right["accounting"]["campaign_status"] = "PASS"
+    right["accounting"]["campaign_integration_validity"] = "validated_exact"
+    result = compare_records(
+        [(_record("de", 1, 1, left_binary, 1.0), [])], [(right, [])],
+        {"de": _feature_row("de", left_binary)},
+        {"us": _feature_row("us", right_binary)}, _config(),
+    )
+    assert result["protocol_compatibility"]["status"] == "compatible"
+    assert "right_execution_validity" not in result["protocol_compatibility"]["differences"]
+    metric = next(row for row in result["metrics"]
+                  if row["metric_id"] == "trajectory.route_progress")
+    assert metric["estimate_right_minus_left"] == 3.0
+
+
 def test_invalid_metric_coverage_is_not_emitted_as_zero_or_a_pass():
     left_binary, right_binary = "1" * 64, "2" * 64
     left = [(_record("de", 1, 1, left_binary, 2.0), [])]
