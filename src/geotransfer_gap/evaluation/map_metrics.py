@@ -42,6 +42,12 @@ def _generation(actor):
     return value if type(value) is int and value >= 0 else None
 
 
+def _actor_refs(actors):
+    """Return stable source-identity references, ordering unknown generations first."""
+    refs = {(row.get("id"), _generation(row)) for row in actors if row is not None}
+    return tuple(sorted(refs, key=lambda ref: (ref[0], -1 if ref[1] is None else ref[1])))
+
+
 def _same_lifetime(first, second):
     if not first or not second or first.get("id") != second.get("id"):
         return False
@@ -167,8 +173,7 @@ def _measure_road_metric(frames, actors, times, context, version, window,
                                           "maximum_boundary_excursion": "m"},
             window=window, evidence_refs=context.evidence_refs,
             limitations=("Native off-road event measurements remain an independent channel",),
-            actors=tuple(sorted({(row.get("id"), _generation(row)) for row in actors
-                                 if row is not None})),
+            actors=_actor_refs(actors),
         )
 
     samples = []
@@ -313,8 +318,7 @@ def _measure_road_metric(frames, actors, times, context, version, window,
                "maximum_boundary_excursion": "m"},
         samples=len(valid_rows), duration=supported_duration, window=window,
         limitations=limitations, evidence_refs=context.evidence_refs,
-        actors=tuple(sorted({(row.get("id"), _generation(row)) for row in actors
-                             if row is not None})),
+        actors=_actor_refs(actors),
     )
 
 
@@ -487,8 +491,7 @@ def _lane_metric(metric_id, version, samples, statuses, key, units, window, cont
     return _metric(metric_id, version, status=status, reason=reason, value=value,
                    units=units, samples=len(supported), window=window,
                    limitations=limitations, evidence_refs=context.evidence_refs,
-                   actors=tuple(sorted({(row.get("id"), _generation(row)) for row in actors
-                                        if row is not None})))
+                   actors=_actor_refs(actors))
 
 
 def measure_map_metrics(frames, ego_id, profile, exposure, context):

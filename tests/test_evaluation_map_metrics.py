@@ -151,6 +151,29 @@ def test_missing_map_context_keeps_spatial_results_null():
     assert metric(rows, "trajectory.lane_lateral_offset")["value"] is None
 
 
+def test_mixed_known_and_missing_lifetime_refs_work_with_both_map_contexts():
+    frames, exposure, _ = episode([
+        actor(0, 0, generation=None),
+        actor(0.1, 0, generation=0),
+    ])
+    expected_refs = [[EGO, None], [EGO, 0]]
+
+    unavailable_rows = result(
+        frames, exposure, MapContext(status="unavailable", reason="map unavailable")
+    )
+    assert metric(unavailable_rows, "safety.map_footprint_outside")["actors"] == expected_refs
+    assert metric(unavailable_rows, "trajectory.lane_lateral_offset")["actors"] == expected_refs
+
+    road = box(-10, -5, 10, 5)
+    lane = LaneCenterline(7, ((-10, 0), (10, 0)), 3.0, ())
+    supported_rows = result(frames, exposure, context(road, road, [lane]))
+    outside = metric(supported_rows, "safety.map_footprint_outside")
+    lateral = metric(supported_rows, "trajectory.lane_lateral_offset")
+    assert outside["status"] == "valid"
+    assert outside["actors"] == expected_refs
+    assert lateral["actors"] == expected_refs
+
+
 def test_outside_duration_uses_supported_left_intervals_and_terminal_removal_censors():
     road = box(0, -5, 10, 5)
     coverage = box(-5, -10, 15, 10)
