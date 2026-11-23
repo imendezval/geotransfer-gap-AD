@@ -140,3 +140,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `46984996870d3bdc0e242b9c0e3c629d17346d38`. Reuse PE02 exposure/events, the PE03 bound sidecar and existing geometry helpers. Evaluate the native, sampled geometry, and predictive channels separately.
 
 **Review pending repair.** Candidate `5dae2c1`, 106 focused tests passed (agent and Sol). Existing geometric overlap must yield TTC zero even without velocity. Review also requested reuse of the existing corner helper and removal of redundant timebase inference. Evidence under `runs/pe_campaign/pe04/`.
+
+**Accepted.** Implementation `5dae2c1`, binding and reuse repair `45caf1e`. Reviewed present-pair coverage, causal motion fallback, terminal native evidence, oriented rectangle SAT, threshold exposure and absence of legal responsibility inference. `.venv/bin/pytest -q tests/test_evaluation_safety.py tests/test_evaluation_episode.py tests/test_saved_evidence.py tests/test_viewer.py tests/test_run_trace.py tests/test_evaluation_capture.py` passed 108 tests on the integrated revision (`runs/pe_campaign/pe04/sol_review_final.log`). Offline CLI smoke on saved legacy and bound matrix traces under `runs/pe_campaign/pe04/agent/`. Native collision evidence remains synthetic only for this pilot. Next PE05.
+
+## PE05 — Map context and spatial metrics
+
+**Dispatch.** Base `45caf1e7bc767c45354f032a74ea7833c6671dd1`. Reuse the inD map owner and PE04 physical footprint support. Verify optional geometry and supported coverage separately from rule applicability.
