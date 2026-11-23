@@ -1,0 +1,65 @@
+# Outcome-blind PE13 comparison policy. Scene membership and fixed source labels
+# remain owned by the referenced manifests; this file contains no scene list.
+schema_version = 1
+comparison_id = "geotransfer_geographic_readiness_v1"
+
+[freeze]
+canonical_sha256 = "7a1f1338da3be1856748e556d127e21d041badf000fd7889ac6078ca9d0ee869"
+
+[cohorts.left]
+label = "Germany candidate"
+manifest = "configs/current_manifest.json"
+manifest_sha256 = "316438458c537adfd6b3347a8387844c95ac806d2067365fdc0d72abe2b3992c"
+status = "research_candidate"
+
+[cohorts.right]
+label = "US diagnostic fixtures"
+manifest = "runs/post_m9_hardening/us_generation/manifests/expert_idm_source_hold.json"
+manifest_sha256 = "0fbb2f3f4c89617c2d2e79594b65b7a63bd8705a1e62173292c8042ff9d27f25"
+status = "diagnostic_only"
+
+[matching]
+# Matching keys are source-only. Missing keys exclude a scene from matched
+# estimates and are listed; no outcome-based imputation or forced matches.
+strata = [
+  "interaction_family",
+  "interaction_subtype",
+  "initial_speed_m_s",
+  "route_length_m",
+  "route_curvature_per_m",
+  "traffic_composition",
+  "traffic_density_actors_per_km",
+  "horizon_observations",
+  "geometry_class",
+]
+initial_speed_edges_m_s = [0.0, 2.0, 5.0, 10.0, 20.0, 60.0]
+route_length_edges_m = [0.0, 25.0, 50.0, 100.0, 250.0, 1000.0]
+route_curvature_edges_per_m = [0.0, 0.005, 0.015, 0.04, 1.0]
+traffic_density_edges_actors_per_km = [0.0, 5.0, 10.0, 25.0, 100.0]
+
+[metric_directions]
+"trajectory.route_progress" = "higher_is_better"
+"trajectory.normalized_route_progress" = "higher_is_better"
+"safety.footprint_clearance" = "higher_is_better"
+"safety.ttc" = "higher_is_better"
+"safety.native_vehicle_collision_onsets" = "lower_is_better"
+"safety.native_offroad_onsets" = "lower_is_better"
+"efficiency.completion_time" = "lower_is_better"
+
+[precision]
+confidence_level = 0.95
+target_half_width_pooled_sd = 0.25
+minimum_independent_sites_per_domain = 3
+site_floor_is_power_claim = false
+
+[readiness]
+diagnostic_fixtures_are_geographic_evidence = false
+source_only_acquisition_needs = [
+  "recording-disjoint US scenarios from multiple independently identified sites",
+  "reviewed source interaction family and subtype labels matched to the German task taxonomy",
+  "source-only initial speed, route length and curvature, traffic composition and density, horizon, and geometry fields",
+  "recording-bound source-track, map and legal-semantics certificates plus measured-versus-imputed dimension provenance",
+  "matched task-goal meaning, goal visibility, interaction timing, and relevant semantic applicability",
+  "common evidence admission, checkpoint, startup, traffic, exposure, metric definition, and profile identities",
+  "a blinded pilot estimate of recording/site variance to size cohorts for the stated confidence-interval precision target",
+]

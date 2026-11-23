@@ -153,6 +153,13 @@ def main(argv=None):
     sensitivity.add_argument("--evaluation", required=True, type=Path)
     sensitivity.add_argument("--output", required=True, type=Path,
                              help="new output directory beneath configured runs")
+    compare = sub.add_parser("compare", help="compare two hash-checked saved cohorts under a frozen source-only match")
+    compare.add_argument("--left", required=True, type=Path, help="left PE09 evaluation directory")
+    compare.add_argument("--right", required=True, type=Path, help="right PE09 evaluation directory")
+    compare.add_argument("--config", type=Path,
+                         help="frozen PE13 config (defaults to configs/evaluation/geographic_comparison.toml)")
+    compare.add_argument("--output", required=True, type=Path,
+                         help="new comparison directory beneath configured runs")
     args = parser.parse_args(argv)
     if args.action == "episode":
         return _episode(args)
@@ -188,4 +195,14 @@ def main(argv=None):
         result = sensitivity_evaluation(args.evaluation, args.output)
         print(json.dumps({"sensitivity": str(result)}, indent=2))
         return result
+    if args.action == "compare":
+        from geotransfer_gap.evaluation.comparison import compare_saved_evaluations
+
+        result = compare_saved_evaluations(args.left, args.right, args.output,
+                                           config_path=args.config)
+        summary = json.loads(result.read_text())
+        print(json.dumps({"comparison": str(result), "status": summary["status"],
+                          "matched_strata": summary["matching"]["matched_stratum_count"],
+                          "reasons": summary["baseline_not_ready_reasons"]}, indent=2))
+        return summary
     parser.error("unsupported evaluation action")
