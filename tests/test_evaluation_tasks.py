@@ -106,7 +106,7 @@ def get_metric(result, metric_id, window="full"):
 
 
 def source_task_scene(tmp_path, monkeypatch, *, object_ids=(99, 57), manifest_ego=(57, 1),
-                      contract_ego=(57, 1)):
+                      contract_ego=(57, 1), scene_name="synthetic_scene"):
     scene_root = tmp_path / "scene"
     testing = scene_root / "testing"
     testing.mkdir(parents=True)
@@ -122,10 +122,10 @@ def source_task_scene(tmp_path, monkeypatch, *, object_ids=(99, 57), manifest_eg
                                                          {"x": 2.0, "y": 0.0}],
                         "valid": [1, 1, 1], "goalPosition": goal})
     scene_path = testing / "ind_synthetic.json"
-    write_json(scene_path, {"name": "synthetic_scene", "objects": objects})
+    write_json(scene_path, {"name": scene_name, "objects": objects})
     validation_path = testing / "validation.json"
     write_json(validation_path, {"binary_sha256": sha256(binary), "recording": 7,
-                                 "location": 1, "ego_track": 57,
+                                 "location": 1, "ego_track": 57, "first_frame": 100,
                                  "ego_goal_sample": 2, "ego_goal": goal})
     write_json(testing / "evaluation_contract_expert.json", {
         "schema_version": 2, "scene_root": str(scene_root), "recording": 7,
@@ -136,7 +136,7 @@ def source_task_scene(tmp_path, monkeypatch, *, object_ids=(99, 57), manifest_eg
     })
     row = {"name": "synthetic_scene", "recording": 7, "location": 1,
            "ego_track_id": manifest_ego[0], "ego_binary_index": manifest_ego[1],
-           "binary_sha256": sha256(binary)}
+           "first_frame": 100, "binary_sha256": sha256(binary)}
     monkeypatch.setattr(context_module, "_manifest_scene",
                         lambda root, digest: (row, manifest, None))
     return scene_root, binary
@@ -169,6 +169,26 @@ def test_task_context_resolves_nonzero_ego_by_manifest_and_binary_identity(tmp_p
     assert task.status == "valid"
     assert task.goal_source_step == 2
     assert task.goal_xy == (2.0, 0.0)
+
+
+def test_task_context_accepts_only_converter_name_derived_from_bound_identity(
+        tmp_path, monkeypatch):
+    expected = "ind_07_track_57_frame_100"
+    scene_root, binary = source_task_scene(
+        tmp_path, monkeypatch, scene_name=expected)
+    task = context_module.build_task_context(
+        scene_root, sha256(binary), 57, expected_ego_binary_index=1,
+    )
+    assert task.status == "valid", task.reason
+    assert task.scene_id == "synthetic_scene"
+
+    conflicting_root, conflicting_binary = source_task_scene(
+        tmp_path / "conflict", monkeypatch, scene_name="ind_07_track_58_frame_100")
+    rejected = context_module.build_task_context(
+        conflicting_root, sha256(conflicting_binary), 57, expected_ego_binary_index=1,
+    )
+    assert rejected.status == "invalid"
+    assert "scene name differs" in rejected.reason
 
 
 @pytest.mark.parametrize("object_ids,manifest_ego,contract_ego", [

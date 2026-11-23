@@ -13,6 +13,8 @@ from geotransfer_gap.evaluation.interactions import (
     InteractionContext,
     _crossing_measure,
     _following_measure,
+    _occupancy_runs,
+    _state_occupancy,
     build_interaction_context,
     measure_interactions,
 )
@@ -176,6 +178,45 @@ def test_ordered_passage_without_supported_clock_has_null_pet():
     assert result["outcome"] == "resolved"
     assert row["pet_status"] == "unavailable"
     assert row["post_encroachment_times"][0]["pet_s"] is None
+
+
+@pytest.mark.parametrize("boundary_evidence", ["missing_footprint", "unknown_lifetime"])
+def test_unknown_clear_or_lifetime_boundary_cannot_produce_pet(boundary_evidence):
+    n = 16
+    frames = crossing_frames(
+        path(n, lambda i: (0, 0) if 3 <= i <= 5 else (-5, 0)),
+        path(n, lambda i: (0, 0) if 9 <= i <= 11 else (0, 5)))
+    ego_exit = next(item for item in frames[6]["actors"] if item["id"] == EGO)
+    ego_exit["lifetime_generation"] = None
+    if boundary_evidence == "missing_footprint":
+        ego_exit.pop("length")
+        ego_exit.pop("width")
+    result = direct_crossing(frames)
+    row = result["actors"][0]
+    assert result["outcome"] == "unresolved"
+    assert row["ego_occupancy_runs"][0]["exit_censored"] is True
+    assert row["ego_occupancy_runs"][0]["exit_observation_index"] is None
+    assert row["post_encroachment_times"] == []
+    assert row["pet_status"] == "unavailable"
+
+
+def test_unknown_footprint_support_is_not_an_observed_clear_boundary():
+    present = actor(OTHER, 0.0, 0.0)
+    missing = dict(present, length=None, width=None)
+    occupied, reason = _state_occupancy(
+        missing, [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)], {})
+    assert occupied is None
+    assert reason == "dimensions_unavailable"
+    runs = _occupancy_runs(
+        [False, True, occupied, False], [present, present, missing, present],
+        [0.0, 0.1, 0.2, 0.3])
+    assert runs[0]["exit_censored"] is True
+    assert runs[0]["exit_observation_index"] is None
+
+    unknown_lifetime = dict(present, lifetime_generation=None)
+    entry = _occupancy_runs(
+        [False, True], [present, unknown_lifetime], [0.0, 0.1])
+    assert entry[0]["entry_censored"] is True
 
 
 def test_after_ego_cyclist_has_no_yielding_obligation():
@@ -379,7 +420,7 @@ def test_source_context_binds_manifest_scene_binary_and_fidelity(tmp_path, monke
         "binary_sha256": sha(binary), "source_scene_sha256": sha(scene_path),
         "manifest_sha256": sha(manifest_path)})
     context = build_interaction_context(tmp_path, task, {
-        "ego_source_id": EGO, "ego_binary_index": 0})
+        "ego_binary_index": 0}, ego_source_id=EGO)
     assert context.status == "valid", context.reason
     assert context.specs[0]["actor_ids"] == [OTHER]
     assert context.specs[0]["subtype"] == "pedestrian_crossing_ahead"
@@ -390,6 +431,6 @@ def test_source_context_binds_manifest_scene_binary_and_fidelity(tmp_path, monke
     scene["objects"][1]["position"][0]["x"] = 999
     write_json(scene_path, scene)
     invalid = build_interaction_context(tmp_path, task, {
-        "ego_source_id": EGO, "ego_binary_index": 0})
+        "ego_binary_index": 0}, ego_source_id=EGO)
     assert invalid.status == "invalid"
     assert "source scene differs" in invalid.reason

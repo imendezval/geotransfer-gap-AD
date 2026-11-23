@@ -478,7 +478,15 @@ def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
         if ego["id"] != expected_ego_source_id:
             return TaskContext("invalid", "Recorded ego source ID does not occupy its binary index",
                                scene_id=scene_id)
-        if scene.get("name") not in (None, scene_id):
+        first_frame = validation.get("first_frame")
+        producer_scene_name = (
+            f"ind_{validation['recording']:02d}_track_{expected_ego_source_id}_frame_{first_frame}"
+            if type(validation.get("recording")) is int
+            and type(first_frame) is int and first_frame >= 0
+            and type(row.get("first_frame")) is int
+            and row.get("first_frame") == first_frame else None
+        )
+        if scene.get("name") not in (None, scene_id, producer_scene_name):
             return TaskContext("invalid", "Converted scene name differs from the selected manifest ID",
                                scene_id=scene_id)
         contracts = sorted(testing.glob("evaluation_contract_*.json"))

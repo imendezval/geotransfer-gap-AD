@@ -89,9 +89,11 @@ def _source_family_spec(row, source_scene):
                           "supported": False,
                           "reason": "Interaction family is outside PE07's admitted scope"})
             continue
-        expected_type = {"pedestrian_crossing": 2, "cyclist_crossing": 3,
-                         "longitudinal_following": 1}[family]
-        if any(actor_id not in objects or objects[actor_id].get("type") != expected_type
+        from geotransfer_gap.evaluation.safety import _typed_actor
+
+        expected_type = {"pedestrian_crossing": "pedestrian", "cyclist_crossing": "cyclist",
+                         "longitudinal_following": "vehicle"}[family]
+        if any(actor_id not in objects or _typed_actor(objects[actor_id]) != expected_type
                for actor_id in actor_ids):
             raise ValueError("Manifest interaction actor identity/type differs from converted source")
         specs.append({"family": family, "subtype": subtype,
@@ -151,8 +153,10 @@ def _validate_fidelity(testing, row, task, ego_source_id):
         return {"status": "invalid", "reason": f"Invalid source interaction-fidelity certificate: {exc}"}, path
 
 
-def build_interaction_context(scene_root, task_context, report):
+def build_interaction_context(scene_root, task_context, report, ego_source_id=None):
     """Load fixed source opportunities without consulting admission decisions."""
+    ego_source_id = (report.get("ego_source_id") if ego_source_id is None
+                     else ego_source_id)
     if task_context is None or task_context.status != "valid":
         status = "invalid" if task_context and task_context.status == "invalid" else "unavailable"
         return InteractionContext(status, "Hash-bound task/source identity is unavailable")
@@ -180,7 +184,7 @@ def build_interaction_context(scene_root, task_context, report):
                 f"No selected source interaction manifest row: {problem}",
                 scene_id=task_context.scene_id, source_root=root)
         if (row.get("name") != task_context.scene_id
-                or row.get("ego_track_id") != report.get("ego_source_id")
+                or row.get("ego_track_id") != ego_source_id
                 or row.get("ego_binary_index") != report.get("ego_binary_index")
                 or sha256(manifest_path) != task_context.identity.get("manifest_sha256")):
             return InteractionContext("invalid", "Selected interaction row differs from task manifest identity",
@@ -194,7 +198,7 @@ def build_interaction_context(scene_root, task_context, report):
                         "source_body_path_conflict": {"status": "not_required"},
                         "source_following_scope": {"status": "not_required"}}
         fidelity, fidelity_path = (
-            _validate_fidelity(testing, row, task_context, report.get("ego_source_id"))
+            _validate_fidelity(testing, row, task_context, ego_source_id)
             if any(spec["family"] != _CONTROL for spec in specs)
             else ({"status": "not_applicable",
                    "reason": "Control row has no interaction obligation"}, None)
@@ -517,13 +521,13 @@ def _state_occupancy(actor, regions, dimensions):
     from geotransfer_gap.evaluation.safety import _dimensions, _rectangle
 
     if not _present_pose(actor):
-        return False, "actor_pose_missing"
+        return None, "actor_pose_missing"
     dims, source, imputed, invalid = _dimensions(actor, dimensions or {})
     if dims is None:
-        return False, "invalid_dimensions" if invalid else "dimensions_unavailable"
+        return None, "invalid_dimensions" if invalid else "dimensions_unavailable"
     box = _rectangle(actor, dimensions or {})
     if box is None:
-        return False, "footprint_unavailable"
+        return None, "footprint_unavailable"
     return any(_convex_overlap(box, region) for region in regions), None
 
 
@@ -532,48 +536,70 @@ def _occupancy_runs(occupied, actors, times):
     start = None
     previous_life = None
     entry_supported = False
+    last_occupied = None
+
+    def finish(exit_index=None):
+        nonlocal start, entry_supported, previous_life, last_occupied
+        end = last_occupied
+        observed_clear = exit_index is not None
+        runs.append({"start_index": start, "end_index": end,
+                     "entry_time_s": times[start],
+                     "last_occupied_time_s": times[end],
+                     "entry_censored": not entry_supported,
+                     "exit_censored": not observed_clear,
+                     "exit_observation_time_s": times[exit_index] if observed_clear else None,
+                     "exit_observation_index": exit_index,
+                     "lifetime_generation": previous_life})
+        start = None
+        entry_supported = False
+        previous_life = None
+        last_occupied = None
+
     for index in range(len(occupied) + 1):
-        active = index < len(occupied) and occupied[index]
-        life = _generation(actors[index]) if index < len(actors) else None
-        same = (index < len(occupied)
-                and (start is None or index == start
-                     or _same_lifetime(actors[index - 1], actors[index])))
-        if active and start is not None and not same:
-            runs.append({"start_index": start, "end_index": index - 1,
-                         "entry_time_s": times[start], "last_occupied_time_s": times[index - 1],
-                         "entry_censored": not entry_supported,
-                         "exit_censored": True, "exit_observation_index": None,
-                         "lifetime_generation": previous_life})
-            start = None
-        if active and start is None:
-            start = index
-            previous_life = life
-            before = actors[index - 1] if index > 0 else None
-            entry_supported = bool(before and before.get("present") is True
-                                   and _present_pose(before)
-                                   and _same_lifetime(before, actors[index]))
-        if not active and start is not None:
-            actor_at_exit = actors[index] if index < len(actors) else None
-            observed_clear = bool(actor_at_exit and actor_at_exit.get("present") is True
-                                  and _present_pose(actor_at_exit))
-            runs.append({"start_index": start, "end_index": index - 1,
-                         "entry_time_s": times[start],
-                         "last_occupied_time_s": times[index - 1],
-                         "entry_censored": not entry_supported,
-                         "exit_censored": not observed_clear,
-                         "exit_observation_time_s": times[index] if observed_clear else None,
-                         "exit_observation_index": index if observed_clear else None,
-                         "lifetime_generation": previous_life})
-            start = None
+        active = index < len(occupied) and occupied[index] is True
+        if active:
+            if start is not None:
+                continuous = (occupied[index - 1] is True
+                              and _same_lifetime(actors[index - 1], actors[index]))
+                if not continuous:
+                    finish()
+            if start is None:
+                start = index
+                previous_life = _generation(actors[index])
+                before = actors[index - 1] if index > 0 else None
+                entry_supported = bool(
+                    occupied[index - 1] is False and before
+                    and before.get("present") is True and _present_pose(before)
+                    and actors[index] and actors[index].get("present") is True
+                    and _present_pose(actors[index])
+                    and _same_lifetime(before, actors[index])
+                ) if index > 0 else False
+            last_occupied = index
+        elif start is not None:
+            if index < len(occupied) and occupied[index] is False:
+                previous = actors[index - 1] if index > 0 else None
+                current = actors[index]
+                observed_clear = bool(
+                    previous and current and _present_pose(previous)
+                    and current.get("present") is True
+                    and _present_pose(current) and _same_lifetime(previous, current)
+                )
+                finish(index if observed_clear else None)
+            else:
+                # Unknown footprint support and the trace boundary censor exit.
+                finish()
     return runs
 
 
-def _crossing_measure(frames, times, spec, context, task, report, events, dimensions, profile):
+def _crossing_measure(frames, times, spec, context, task, report, events, dimensions,
+                      profile, ego_source_id=None):
     from geotransfer_gap.evaluation.safety import _actor_map
 
+    ego_source_id = (report.get("ego_source_id") if ego_source_id is None
+                     else ego_source_id)
     try:
         regions, region_status, region_reason = _reference_conflict_regions(
-            context, spec, task, report.get("ego_source_id"))
+            context, spec, task, ego_source_id)
     except (KeyError, TypeError, ValueError, IndexError, AttributeError) as exc:
         regions, region_status, region_reason = [], "invalid", f"Source conflict geometry is malformed: {exc}"
     empty = {"outcome": "indeterminate", "reason": region_reason,
@@ -585,7 +611,7 @@ def _crossing_measure(frames, times, spec, context, task, report, events, dimens
     if region_status != "valid":
         return {**empty, "measurement_status": region_status}, (), None
     maps = [_actor_map(frame) for frame in frames]
-    ego_id = report.get("ego_source_id")
+    ego_id = ego_source_id
     ego_rows = [row.get(ego_id) for row in maps]
     actor_results = []
     actor_refs = []
@@ -626,7 +652,7 @@ def _crossing_measure(frames, times, spec, context, task, report, events, dimens
                 and _generation(actor_rows[i]) is not None
                 and _generation(actor_rows[i - 1]) != _generation(actor_rows[i])
                 for i in range(1, len(actor_rows)))
-        simultaneous = any(a and b for a, b in zip(ego_occ, actor_occ))
+        simultaneous = any(a is True and b is True for a, b in zip(ego_occ, actor_occ))
         ordered_pets = []
         for ego_run in ego_runs:
             if ego_run.get("exit_censored") or ego_run.get("exit_observation_index") is None:
@@ -1025,7 +1051,8 @@ def _following_measure(frames, times, spec, context, report, profile, map_contex
 def measure_interactions(frames, ego_id, report, profile, exposure, task_context,
                          map_context, events, *, scene_root, risk_metrics=()):
     """Assess each fixed source opportunity against actual saved observations."""
-    context = build_interaction_context(scene_root, task_context, report)
+    context = build_interaction_context(scene_root, task_context, report,
+                                        ego_source_id=ego_id)
     times, timebase = _times(frames, exposure, report)
     metrics = []
     rows = []
@@ -1079,7 +1106,8 @@ def measure_interactions(frames, ego_id, report, profile, exposure, task_context
                 frames, times, spec, context, report, profile, map_context)
         else:
             measured, actors, duration = _crossing_measure(
-                frames, times, spec, context, task_context, report, events, dimensions, profile)
+                frames, times, spec, context, task_context, report, events, dimensions,
+                profile, ego_source_id=ego_id)
         for actor_result in measured.get("actors", ()):
             actor_result["clearance_ttc_channels"] = _risk_channels(
                 risk_metrics, ego_id, actor_result.get("actor_id"))
