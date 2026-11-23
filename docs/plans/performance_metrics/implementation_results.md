@@ -164,3 +164,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `5889267fb031a89d7f72fbea7a06e35d9faada28`. Build separate source opportunity and actual realization for following, pedestrian and cyclist crossing and existing controls. Keep unrealized encounters in the result.
 
 **Review pending repair.** Candidate `c42ae21`, 163 focused tests reported by Luna. Real r07 archived smoke exposed a mismatch between the manifest scene ID and the converter's canonical scene name. Review also found PET entry/exit could treat unknown footprint occupancy as clear and join across a lifetime boundary. The first repair turn hit a usage limit before changing the workspace. Redispatched after usage was replenished. Evidence under `runs/pe_campaign/pe07/agent/`.
+
+**Accepted.** Implementation `c42ae21`, evidence/occupancy repair `db9aae3`, stable following ego ID repair `e80dddd`. Reviewed fixed source opportunities, actual footprints and PET censoring, following route support and identities, and failure retention. `PYTHONPATH=src:runs/pe_campaign/pe05/agent/deps_no_numpy .venv/bin/pytest -q tests/test_evaluation_interactions.py tests/test_evaluation_tasks.py tests/test_evaluation_episode.py` passed 63 tests. Archived r07 crossing and r01 following smokes loaded valid source context, with indeterminate crossing due to missing terminal pose and encountered/unresolved following. Evidence and commands under `runs/pe_campaign/pe07/`. Next PE08.
+
+## PE08 — Conditional semantic compliance
+
+**Dispatch.** Base `e80dddd8cd1f6c1106c7c0347d515813bcb80b45`. Measure only supported obligations on the actual route. Retain independent source admission and explicit gaps in rule evidence.
