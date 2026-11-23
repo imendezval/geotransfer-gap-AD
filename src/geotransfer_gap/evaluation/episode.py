@@ -11,6 +11,7 @@ from geotransfer_gap.evaluation.context import MapContext, build_task_context
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
 from geotransfer_gap.evaluation.map_metrics import measure_map_metrics
 from geotransfer_gap.evaluation.safety import measure_safety
+from geotransfer_gap.evaluation.interactions import measure_interactions
 from geotransfer_gap.evaluation.tasks import measure_tasks
 
 
@@ -20,7 +21,8 @@ RESULT_SCHEMA_VERSION = 1
 def _code_identity():
     package = Path(__file__).parent
     owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
-              "context.py", "map_metrics.py", "tasks.py", "episode.py", "commands.py")
+              "context.py", "map_metrics.py", "tasks.py", "interactions.py",
+              "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
     files["maps/lanelet.py"] = sha256(package.parent / "maps/lanelet.py")
@@ -68,6 +70,18 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
         evaluation_capture_bound=saved.playback.evaluation_capture_bound,
     )
     measured["metrics"].extend(task_measurement["metrics"])
+    interactions = measure_interactions(
+        frames, saved.ego_source_id, report, profile, measured["exposure"],
+        selected_task, map_context, measured["events"], scene_root=scene_root,
+        risk_metrics=safety["metrics"],
+    )
+    measured["metrics"].extend(interactions["metrics"])
+    task_measurement["task"]["encounter_completion"] = {
+        "status": interactions["status"],
+        "reason": interactions["reason"],
+        "interactions": interactions["interactions"],
+        "separate_from_bounded_task_completion": True,
+    }
     map_evidence_refs = [dict(item) for item in
                          (map_context.evidence_refs if map_context else ())]
     for metric in measured["metrics"]:
@@ -144,6 +158,14 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
             "Native collision partner and detector-center details require a hash-bound evaluation capture.",
         ],
         "task": task_measurement["task"],
+        "interactions": {
+            "status": interactions["status"],
+            "reason": interactions["reason"],
+            "timebase": interactions["timebase"],
+            "results": interactions["interactions"],
+            "source_admission_decision_used": interactions.get("source_admission_decision_used", False),
+            "compliance_criterion": interactions.get("compliance_criterion"),
+        },
         "scene_context": (scene if scene is not None else
                           {"status": "trace_only_no_map_or_task_context"}),
         "map_context": spatial["context"],
@@ -151,6 +173,7 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
             "A readable trace does not attest to its execution; evidence level is reported separately.",
             "Observed event timing does not establish root cause or responsibility.",
             "Missing task/map annotations are unavailable and are not treated as zero or pass.",
+            "Interaction realization is measured separately from source opportunity, task completion, and core driving events.",
         ],
     }
     return result, measured["events"]
