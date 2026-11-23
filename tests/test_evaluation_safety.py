@@ -435,4 +435,3 @@ def test_safety_does_not_infer_a_matrix_timebase_outside_pe02_exposure():
                             {"observation_masks": []})
     assert metric(result, "safety.near_miss_exposure")["status"] == "unavailable"
     assert metric(result, "safety.near_miss_exposure")["value"] is None
-

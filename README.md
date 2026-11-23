@@ -155,6 +155,18 @@ result and driving outcome remain separate. Missing evidence stays unavailable
 or blocked, never zero or pass. Read [the metric definitions](docs/performance_evaluation.md)
 before interpreting thresholds, exposures or geographic comparisons.
 
+Mapped-footprint and lane-geometry measurements need the optional Shapely extra:
+install it with `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
+Without Shapely, those geometry assessments remain unavailable; their synthetic
+test module is explicitly skipped. To inspect a saved evaluation beside its
+trace, pass `--evaluation` to the existing viewer, for example:
+
+```bash
+.venv/bin/geotransfer view --scene r07_e200_f25439 \
+  --trace runs/example/trace.json --evaluation runs/evaluation/example \
+  --output runs/views/example.html
+```
+
 ## Convert and admit a new scene
 
 ```bash

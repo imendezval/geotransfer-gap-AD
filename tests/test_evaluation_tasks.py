@@ -556,4 +556,3 @@ def test_tampered_annotation_evidence_invalidates_task_context(tmp_path, monkeyp
     result, _ = run(frames([0, 0]), task)
     assert result["task"]["context"]["status"] == "invalid"
     assert result["task"]["bounded_task_completion"]["outcome"] == "unassessable"
-

@@ -120,3 +120,10 @@ hash-bound cohorts and source-only matching features; the currently configured
 US fixtures are diagnostic and cannot support a country-level gap claim. The
 metric definitions, output schemas and interpretation limits live in
 [`docs/performance_evaluation.md`](performance_evaluation.md).
+
+Map footprint and lane geometry assessments require the optional Shapely
+dependency: `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
+Without it, these measurements are unavailable and the Shapely-specific
+synthetic test module explicitly skips. Attach a saved result to an existing
+offline scene view by passing `--evaluation EVALUATION_DIR` to the viewer; the
+README has a complete command example.

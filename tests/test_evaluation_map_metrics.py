@@ -7,6 +7,9 @@ import xml.etree.ElementTree as ET
 from types import SimpleNamespace
 
 import pytest
+pytest.importorskip(
+    "shapely", reason="install the optional evaluation-geometry extra for map metrics"
+)
 from shapely.affinity import rotate, translate
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
@@ -470,4 +473,3 @@ def test_episode_composition_keeps_native_offroad_and_map_metrics_separate():
     assert native["value"]["observed_onset_count"] == 1
     assert native["value"]["geometry_channel"] == "independent_from_safety.map_footprint_outside"
     assert metric(result_value["metrics"], "safety.map_footprint_outside")["status"] == "unavailable"
-
