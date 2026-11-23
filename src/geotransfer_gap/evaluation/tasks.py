@@ -753,15 +753,327 @@ def _safe_completion(task_outcome, events, exposure):
     elif any(item["outcome"] != "pass" for item in results.values()):
         outcome, reason = "not_assessed", "One or more required native safety channels are unassessed"
     else:
-        # PE07/PE08 own applicable interaction and rule criteria. Until those
-        # criteria can be checked, a safe-completion pass is not supportable.
-        outcome, reason = "not_assessed", "Applicable interaction/rule criteria are not yet assessed"
-    results["interaction_and_rule_criteria"] = {
-        "status": "not_assessed", "outcome": "not_assessed",
-        "reason": "Encounter and conditional rule criteria are owned by PE07/PE08",
-    }
+        # The episode composer adds any explicitly designated PE07/PE08
+        # criteria once those owners have produced their evidence.
+        outcome, reason = "not_assessed", "Encounter and conditional criteria await episode composition"
     return {"outcome": outcome, "reason": reason,
             "criterion_set_id": "safe_completion_core_v1", "criteria": results}
+
+
+def _claim_is_bound(row):
+    claim = row.get("claim", {})
+    return (claim.get("decision_status") == "supported"
+            and claim.get("review", {}).get("status") == "reviewed"
+            and type(claim.get("decision")) is dict
+            and bool(row.get("selected_evidence"))
+            and all(any(type(evidence) is dict and evidence.get(key) == value
+                        for evidence in row["selected_evidence"])
+                    for key, value in claim["decision"].items()))
+
+
+def _criterion_record(outcome, reason, *, status=None, evidence_refs=()):
+    if status is None:
+        status = "valid" if outcome in {"pass", "fail"} else "unavailable"
+    return {"status": status, "outcome": outcome, "reason": reason,
+            "evidence_refs": list(evidence_refs)}
+
+
+def _scope_covers_lane_samples(decision, lane_samples, profile, *, rule,
+                               applicability, require_reason=False):
+    """Require an explicit lane/time decision to cover the actual primary route."""
+    if (type(decision) is not dict or decision.get("rule") != rule
+            or decision.get("applicability") != applicability
+            or (require_reason and (not isinstance(decision.get("reason"), str)
+                                    or not decision["reason"].strip()))
+            or ("safe_completion_critical" in decision
+                and type(decision["safe_completion_critical"]) is not bool)):
+        return False
+    start = profile.values["time"]["primary_start_observation"]
+    end = profile.values["time"]["primary_last_observation_index"]
+    selected = list(lane_samples[start:min(end + 1, len(lane_samples))])
+    if not selected or any(row.get("status") != "valid" for row in selected):
+        return False
+    step_range = decision.get("valid_step_range")
+    lane_ids = decision.get("approach_lanelet_ids")
+    if (not isinstance(step_range, list) or len(step_range) != 2
+            or any(type(value) is not int for value in step_range)
+            or step_range[0] > step_range[1]
+            or not isinstance(lane_ids, list) or not lane_ids
+            or any(type(value) is not int for value in lane_ids)
+            or len(set(lane_ids)) != len(lane_ids)):
+        return False
+    return (all(type(row.get("step")) is int for row in selected)
+            and all(right["step"] == left["step"] + 1
+                    for left, right in zip(selected, selected[1:]))
+            and all(step_range[0] <= row["step"] <= step_range[1]
+                    and set(row.get("lanelet_ids", ())) & set(lane_ids)
+                    for row in selected))
+
+
+def finalize_safe_completion(task_measurement, *, annotation, map_metrics,
+                             interactions, semantics, lane_assignment_samples,
+                             profile):
+    """Apply the PE07/PE08 designated criteria to the task owner's core result.
+
+    Diagnostic failures are not promoted to critical criteria. A supported
+    reviewed designation is required, and missing or unresolved evidence stays
+    not assessed.
+    """
+    task = task_measurement["task"]
+    safe = task.get("safe_completion")
+    if not isinstance(safe, dict):
+        return None
+    criteria = safe["criteria"]
+    designated = []
+    claims = annotation.get("claims_data", ()) if annotation.get("status") == "valid" else ()
+    for row in claims:
+        claim = row.get("claim", {})
+        decision = claim.get("decision")
+        scope = claim.get("scope", {})
+        is_critical = ((type(decision) is dict
+                        and decision.get("safe_completion_critical") is True)
+                       or scope.get("safe_completion_critical") is True)
+        if is_critical:
+            designated.append(row)
+
+    supplemental = []
+    signal_claims = []
+    for row in claims:
+        claim = row.get("claim", {})
+        decision = claim.get("decision")
+        if (claim.get("claim_type") == "rule_applicability"
+                and type(decision) is dict and decision.get("rule") == "traffic_signal"):
+            signal_claims.append(row)
+    signal_pass = False
+    signal_unknown_reason = "No reviewed actual-approach signal-applicability decision is supplied"
+    for row in signal_claims:
+        claim = row.get("claim", {})
+        decision = claim.get("decision")
+        if not _claim_is_bound(row):
+            signal_unknown_reason = "Signal-applicability claim lacks reviewed hash-bound support"
+            continue
+        if (type(decision) is dict and decision.get("applicability") == "not_applicable"
+                and _scope_covers_lane_samples(
+                    decision, lane_assignment_samples, profile, rule="traffic_signal",
+                    applicability="not_applicable", require_reason=True)):
+            signal_pass = True
+            break
+        signal_unknown_reason = (
+            "Signal applicability is supported or claimed, but the dynamic signal timeline is unavailable"
+        )
+    signal_criterion = _criterion_record(
+        "pass" if signal_pass else "not_assessed",
+        "Reviewed signal exemption covers the observed directed approach"
+        if signal_pass else signal_unknown_reason,
+        status="not_applicable" if signal_pass else "unavailable",
+        evidence_refs=(signal_claims[0].get("claim", {}).get("evidence_refs", ())
+                       if signal_pass and signal_claims else ()),
+    )
+    criteria["traffic_signal_applicability"] = signal_criterion
+    for row in designated:
+        claim = row.get("claim", {})
+        decision = claim.get("decision")
+        refs = claim.get("evidence_refs", ())
+        claim_type = claim.get("claim_type")
+        if (claim_type == "rule_applicability" and type(decision) is dict
+                and decision.get("rule") == "traffic_signal"):
+            continue
+        if not _claim_is_bound(row):
+            supplemental.append(_criterion_record(
+                "not_assessed", "Critical designation or decision lacks reviewed hash-bound support",
+                evidence_refs=refs))
+            continue
+        decision = dict(decision)
+        if claim_type == "rule_applicability":
+            rule = decision.get("rule")
+            family = {"wrong_way": "wrong_way", "speed_limit": "speed_limit",
+                      "stop_sign": "stop_sign", "priority_yield": "priority_yielding",
+                      "traffic_signal": "traffic_signal"}.get(rule)
+            applicability = decision.get("applicability")
+            if family is None:
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical rule criterion has an unsupported rule family",
+                    evidence_refs=refs))
+                continue
+            if applicability == "not_applicable":
+                if rule == "traffic_signal":
+                    # The mandatory signal criterion above consumes this
+                    # exemption; the dynamic signal verdict remains unavailable.
+                    continue
+                observed = semantics.get("criteria", {}).get(family, {})
+                if observed.get("status") == "not_applicable":
+                    supplemental.append(_criterion_record(
+                        "pass", "Reviewed rule exemption matches the measured actual approach",
+                        status="not_applicable", evidence_refs=refs))
+                else:
+                    supplemental.append(_criterion_record(
+                        "not_assessed", "Reviewed rule exemption does not establish actual-scope nonapplicability",
+                        evidence_refs=refs))
+                continue
+            if applicability != "applicable":
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical rule applicability is unknown",
+                    evidence_refs=refs))
+                continue
+            if (rule == "wrong_way"
+                    and not _scope_covers_lane_samples(
+                        decision, lane_assignment_samples, profile, rule="wrong_way",
+                        applicability="applicable")):
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical wrong-way scope does not cover the observed primary route",
+                    evidence_refs=refs))
+                continue
+            observed = semantics.get("criteria", {}).get(family, {})
+            outcome = observed.get("criterion_outcome")
+            if outcome not in {"pass", "fail"}:
+                supplemental.append(_criterion_record(
+                    "not_assessed", observed.get("reason", "Critical rule evidence is incomplete"),
+                    status=observed.get("status"), evidence_refs=refs))
+            else:
+                supplemental.append(_criterion_record(
+                    outcome, observed.get("reason", "Critical rule criterion was assessed"),
+                    status=observed.get("status"), evidence_refs=refs))
+        elif claim_type == "physical_map_coverage":
+            if (decision.get("criterion") != "map_footprint_boundary"
+                    or decision.get("safe_completion_critical") is not True):
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical map criterion is unsupported",
+                    evidence_refs=refs))
+                continue
+            if decision.get("applicability") == "not_applicable":
+                if isinstance(decision.get("reason"), str) and decision["reason"].strip():
+                    supplemental.append(_criterion_record(
+                        "pass", "Reviewed evidence declares the map criterion not applicable",
+                        status="not_applicable", evidence_refs=refs))
+                else:
+                    supplemental.append(_criterion_record(
+                        "not_assessed", "Map criterion nonapplicability lacks an explicit reason",
+                        evidence_refs=refs))
+                continue
+            if decision.get("applicability") != "applicable":
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical map criterion applicability is unknown",
+                    evidence_refs=refs))
+                continue
+            metric = next((item for item in map_metrics
+                           if item.get("metric_id") == "safety.map_footprint_outside"
+                           and item.get("window") == "primary"), None)
+            value = metric.get("value") if metric else None
+            if (type(value) is dict and type(value.get("outside_observation_count")) is int
+                    and value["outside_observation_count"] > 0):
+                supplemental.append(_criterion_record(
+                    "fail", "An observed mapped-footprint boundary violation occurred",
+                    evidence_refs=refs))
+            elif (metric and metric.get("status") == "valid" and type(value) is dict
+                  and value.get("coverage", {}).get("complete_for_selected_window") is True
+                  and value.get("outside_observation_count") == 0):
+                supplemental.append(_criterion_record(
+                    "pass", "Complete primary map observations show no footprint outside the mapped surface",
+                    evidence_refs=refs))
+            else:
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical map-footprint evidence is incomplete",
+                    status=metric.get("status") if metric else "unavailable",
+                    evidence_refs=refs))
+        elif claim_type == "interaction_criterion":
+            if (decision.get("criterion") != "yielding_compliance"
+                    or decision.get("safe_completion_critical") is not True
+                    or decision.get("applicability") not in {"applicable", "not_applicable"}
+                    or not isinstance(decision.get("family"), str)
+                    or not isinstance(decision.get("subtype"), str)
+                    or not isinstance(decision.get("source_actor_ids"), list)
+                    or not decision["source_actor_ids"]
+                    or any(type(value) is not int for value in decision["source_actor_ids"])
+                    or len(set(decision["source_actor_ids"])) != len(decision["source_actor_ids"])):
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical encounter criterion is unsupported",
+                    evidence_refs=refs))
+                continue
+            matches = [item for item in interactions.get("interactions", ())
+                       if item.get("family") == decision.get("family")
+                       and item.get("subtype") == decision.get("subtype")
+                       and item.get("source_actor_ids") == decision.get("source_actor_ids")]
+            if len(matches) != 1:
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical encounter does not uniquely match a measured source interaction",
+                    evidence_refs=refs))
+                continue
+            measurement = matches[0].get("measurement", {})
+            actor_results = [row for row in measurement.get("actors", ())
+                             if row.get("actor_id") in decision["source_actor_ids"]]
+            actor_results_by_id = {row.get("actor_id"): row for row in actor_results}
+            if set(actor_results_by_id) != set(decision["source_actor_ids"]):
+                supplemental.append(_criterion_record(
+                    "not_assessed", "Critical encounter lacks a measured yielding result for every actor",
+                    evidence_refs=refs))
+                continue
+            yielding = [row.get("yielding_compliance", {})
+                        for row in actor_results_by_id.values()]
+            if (decision["applicability"] == "not_applicable"
+                    and all(row.get("status") == "not_applicable" for row in yielding)):
+                supplemental.append(_criterion_record(
+                    "pass", "PE07 confirms yielding is not applicable to this actual encounter",
+                    status="not_applicable", evidence_refs=refs))
+            elif any(row.get("outcome") == "fail" for row in yielding):
+                supplemental.append(_criterion_record(
+                    "fail", "A measured critical yielding criterion failed",
+                    evidence_refs=refs))
+            elif (decision["applicability"] == "applicable"
+                  and all(row.get("status") == "valid" and row.get("outcome") == "pass"
+                          for row in yielding)):
+                supplemental.append(_criterion_record(
+                    "pass", "The measured critical yielding criteria passed",
+                    evidence_refs=refs))
+            else:
+                supplemental.append(_criterion_record(
+                    "not_assessed", matches[0].get("reason", "Critical encounter criterion remains unresolved"),
+                    evidence_refs=refs))
+        else:
+            supplemental.append(_criterion_record(
+                "not_assessed", "Critical designation uses an unsupported annotation type",
+                evidence_refs=refs))
+
+    criteria["designated_critical_criteria"] = {
+        "status": ("valid" if all(item["outcome"] in {"pass", "fail"}
+                                  for item in supplemental) else
+                   "unavailable" if supplemental else "not_applicable"),
+        "outcome": ("fail" if any(item["outcome"] == "fail" for item in supplemental)
+                    else "pass" if all(item["outcome"] == "pass" for item in supplemental)
+                    else "not_assessed"),
+        "criteria": supplemental,
+        "reason": ("All reviewed designated critical criteria were assessed"
+                   if supplemental and all(item["outcome"] in {"pass", "fail"}
+                                           for item in supplemental)
+                   else "No additional reviewed critical criteria were designated"
+                   if not supplemental else
+                   "One or more designated critical criteria remain unassessed"),
+    }
+    required = [item for item in criteria.values() if isinstance(item, dict)
+                and "outcome" in item]
+    failures = [item for item in required if item.get("outcome") == "fail"]
+    unknown = [item for item in required if item.get("outcome") != "pass"]
+    if failures:
+        safe.update(outcome="fail", reason="A required safe-completion criterion failed")
+    elif task["bounded_task_completion"]["outcome"] != "completed":
+        safe.update(outcome="not_assessed",
+                    reason="Validated bounded-task completion was not observed")
+    elif unknown:
+        safe.update(outcome="not_assessed",
+                    reason="One or more applicable safe-completion criteria remain unassessed")
+    else:
+        safe.update(outcome="pass",
+                    reason="Task completion and all applicable designated critical criteria passed")
+    metric = next((item for item in task_measurement["metrics"]
+                   if item.get("metric_id") == "task.safe_completion"), None)
+    if metric is not None:
+        outcome = safe["outcome"]
+        metric.update(
+            status="valid" if outcome in {"pass", "fail"} else "unavailable",
+            value={"outcome": outcome} if outcome in {"pass", "fail"} else None,
+            criterion_outcome=outcome if outcome in {"pass", "fail"} else "not_assessed",
+            reason=safe["reason"],
+        )
+    return safe
 
 
 def _deadline_support(frames, actors, times, deadline_s, profile):

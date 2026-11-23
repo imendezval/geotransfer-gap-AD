@@ -144,6 +144,7 @@ def test_warmup_is_excluded_and_truncated_horizon_cannot_pass_absence():
 def test_speed_limit_requires_reviewed_lane_scoped_evidence_and_detects_overspeed():
     decision = {"rule": "speed_limit", "applicability": "applicable",
                 "approach_lanelet_ids": [7], "limit_kmh": 36.0,
+                "safe_completion_critical": True,
                 "valid_step_range": [10, 30]}
     fast = measure(frames(ego_speed=[15.0] * 31), [claim("speed_limit", decision)])
     assert rule(fast, "speed_limit")["criterion_outcome"] == "fail"
@@ -228,6 +229,29 @@ def test_priority_yielding_uses_explicit_actors_and_conflict_not_collision():
         next(row for row in frame["actors"] if row["id"] == PRIORITY)["lifetime_generation"] = None
     unresolved = measure(unknown_lifetime, [criterion])
     assert rule(unresolved, "priority_yielding")["status"] == "unavailable"
+
+    unknown_absence = frames(priority_x=actor_path)
+    absent = next(row for row in unknown_absence[13]["actors"]
+                  if row["id"] == PRIORITY)
+    absent.update(present=False, x=None, y=None, vx=None, vy=None, heading=None)
+    unresolved_absence = measure(unknown_absence, [criterion])
+    assert rule(unresolved_absence, "priority_yielding")["criterion_outcome"] == "not_assessed"
+
+    lifecycle_gap = frames(priority_x=actor_path)
+    absent = next(row for row in lifecycle_gap[13]["actors"]
+                  if row["id"] == PRIORITY)
+    absent.update(present=False, x=None, y=None, vx=None, vy=None, heading=None,
+                  source_valid=False, native_present=False, lifetime_generation=None)
+    unresolved_lifecycle = measure(lifecycle_gap, [criterion])
+    assert rule(unresolved_lifecycle, "priority_yielding")["criterion_outcome"] == "not_assessed"
+
+    evidenced_absence = frames(priority_x=actor_path)
+    absent = next(row for row in evidenced_absence[13]["actors"]
+                  if row["id"] == PRIORITY)
+    absent.update(present=False, x=None, y=None, vx=None, vy=None, heading=None,
+                  source_valid=False, native_present=False)
+    resolved_absence = measure(evidenced_absence, [criterion])
+    assert rule(resolved_absence, "priority_yielding")["criterion_outcome"] == "pass"
 
 
 def test_unbound_semantic_claim_is_invalid_and_dynamic_signal_is_explicitly_unavailable():

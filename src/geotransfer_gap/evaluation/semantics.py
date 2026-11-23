@@ -89,22 +89,32 @@ def _valid_rule_decision(rule, decision):
             or len(set(decision["approach_lanelet_ids"])) != len(decision["approach_lanelet_ids"])
             or not _valid_steps(decision)):
         return False
+    if ("safe_completion_critical" in decision
+            and type(decision["safe_completion_critical"]) is not bool):
+        return False
     if decision.get("applicability") == "not_applicable":
-        return (set(decision) == {"rule", "applicability", "approach_lanelet_ids",
-                                  "valid_step_range", "reason"}
+        expected = {"rule", "applicability", "approach_lanelet_ids",
+                    "valid_step_range", "reason"}
+        return (set(decision) in (expected, expected | {"safe_completion_critical"})
                 and isinstance(decision["reason"], str) and bool(decision["reason"].strip()))
     if decision.get("applicability") != "applicable":
         return False
+    if rule == "wrong_way":
+        expected = {"rule", "applicability", "approach_lanelet_ids",
+                    "valid_step_range"}
+        return set(decision) in (expected, expected | {"safe_completion_critical"})
     if rule == "speed_limit":
-        return (set(decision) == {"rule", "applicability", "approach_lanelet_ids",
-                                  "limit_kmh", "valid_step_range"}
+        expected = {"rule", "applicability", "approach_lanelet_ids",
+                    "limit_kmh", "valid_step_range"}
+        return (set(decision) in (expected, expected | {"safe_completion_critical"})
                 and _finite(decision["limit_kmh"]) and decision["limit_kmh"] > 0)
     if rule == "stop_sign":
         line, direction = decision.get("stop_line_world_xy"), decision.get("approach_direction")
-        return (set(decision) == {"rule", "applicability", "approach_lanelet_ids",
-                                  "valid_step_range", "stop_line_world_xy",
-                                  "approach_direction", "required_stop_speed_m_s",
-                                  "required_dwell_s", "stop_zone_m", "line_tolerance_m"}
+        expected = {"rule", "applicability", "approach_lanelet_ids",
+                    "valid_step_range", "stop_line_world_xy", "approach_direction",
+                    "required_stop_speed_m_s", "required_dwell_s", "stop_zone_m",
+                    "line_tolerance_m"}
+        return (set(decision) in (expected, expected | {"safe_completion_critical"})
                 and isinstance(line, list) and len(line) == 2
                 and all(isinstance(point, list) and len(point) == 2
                         and all(_finite(value) for value in point) for point in line)
@@ -125,9 +135,10 @@ def _valid_rule_decision(rule, decision):
     if rule == "priority_yield":
         polygon, actor_ids = (decision.get("conflict_polygon_world_xy"),
                               decision.get("priority_actor_source_ids"))
-        return (set(decision) == {"rule", "applicability", "approach_lanelet_ids",
-                                  "valid_step_range", "conflict_polygon_world_xy",
-                                  "priority_actor_source_ids", "required_behavior"}
+        expected = {"rule", "applicability", "approach_lanelet_ids",
+                    "valid_step_range", "conflict_polygon_world_xy",
+                    "priority_actor_source_ids", "required_behavior"}
+        return (set(decision) in (expected, expected | {"safe_completion_critical"})
                 and isinstance(polygon, list) and len(polygon) >= 3
                 and all(isinstance(point, list) and len(point) == 2
                         and all(_finite(value) for value in point) for point in polygon)
@@ -750,8 +761,20 @@ def _priority_assessment(frames, ego_id, rows, annotation, profile, version, evi
             for actor_id in actors:
                 priority = _actor(frame, actor_id)
                 if priority is not None and priority.get("present") is False:
-                    inside = False
-                    previous_priority[actor_id] = None
+                    known_absence = (
+                        priority.get("source_valid") is False
+                        and priority.get("native_present") is False
+                        and _generation(priority) is not None
+                    )
+                    if known_absence:
+                        inside = False
+                        previous_priority[actor_id] = None
+                    else:
+                        # A stored `present=False` row alone can mean a source
+                        # validity gap or missing lifecycle join, not a known
+                        # clear conflict region.
+                        inside = None
+                        incomplete = True
                 else:
                     inside = _footprint_occupancy(priority, conflict, dimensions)
                     if priority is not None and priority.get("present") is True:

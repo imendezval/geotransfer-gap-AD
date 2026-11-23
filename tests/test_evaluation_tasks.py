@@ -11,7 +11,11 @@ from geotransfer_gap.evaluation.context import TaskContext
 from geotransfer_gap.evaluation import context as context_module
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
 from geotransfer_gap.evaluation.profile import load_profile
-from geotransfer_gap.evaluation.tasks import measure_tasks
+from geotransfer_gap.evaluation.tasks import (
+    _safe_completion,
+    finalize_safe_completion,
+    measure_tasks,
+)
 from geotransfer_gap.evaluation import tasks as task_module
 
 
@@ -103,6 +107,125 @@ def frames(xs, *, ys=None, speeds=None, goals=(), collisions=(), missing_collisi
 def get_metric(result, metric_id, window="full"):
     return next(metric for metric in result["metrics"]
                 if metric["metric_id"] == metric_id and metric["window"] == window)
+
+
+def _safe_fixture():
+    safe = _safe_completion("completed", [], {
+        "event_observation_coverage": {"windows": {"full": {"channels": {
+            "collision_state": {"fraction": 1.0},
+        }}}},
+    })
+    return {"task": {"safe_completion": safe,
+                     "bounded_task_completion": {"outcome": "completed"}},
+            "metrics": [{"metric_id": "task.safe_completion", "status": "unavailable",
+                         "value": None, "criterion_outcome": "not_assessed"}]}
+
+
+def _safe_claim(claim_type, decision):
+    return {"claim": {"claim_id": f"safe-{claim_type}-{len(str(decision))}",
+                       "claim_type": claim_type, "decision_status": "supported",
+                       "scope": {"target": "synthetic primary episode"},
+                       "decision": decision,
+                       "evidence_refs": [{"sha256": "a" * 64}],
+                       "review": {"status": "reviewed"}},
+            "selected_evidence": [dict(decision)]}
+
+
+def _signal_exemption():
+    return _safe_claim("rule_applicability", {
+        "rule": "traffic_signal", "applicability": "not_applicable",
+        "approach_lanelet_ids": [7], "valid_step_range": [10, 90],
+        "reason": "Reviewed map evidence shows no signal control on the actual route",
+    })
+
+
+def _signal_lane_samples():
+    return [{"step": step, "status": "valid", "lanelet_ids": [7]}
+            for step in range(91)]
+
+
+def _finalize_fixture(task, claims=(), *, map_metrics=(), interactions=(), semantics=None):
+    semantics = semantics or {"criteria": {}, "capabilities": {
+        "traffic_signal": {"status": "unavailable"}}}
+    return finalize_safe_completion(
+        task, annotation={"status": "valid", "claims_data": list(claims)},
+        map_metrics=list(map_metrics),
+        interactions={"interactions": list(interactions)}, semantics=semantics,
+        lane_assignment_samples=_signal_lane_samples(), profile=PROFILE,
+    )
+
+
+def test_safe_completion_passes_native_task_and_reviewed_signal_exemption_only():
+    task = _safe_fixture()
+    diagnostic_failure = {"wrong_way": {"criterion_outcome": "fail",
+                                        "status": "valid"}}
+    safe = _finalize_fixture(task, [_signal_exemption()], semantics={
+        "criteria": diagnostic_failure,
+        "capabilities": {"traffic_signal": {"status": "unavailable"}},
+    })
+    assert safe["outcome"] == "pass"
+    assert safe["criteria"]["traffic_signal_applicability"]["outcome"] == "pass"
+    assert task["metrics"][0]["criterion_outcome"] == "pass"
+    unresolved = _finalize_fixture(_safe_fixture())
+    assert unresolved["outcome"] == "not_assessed"
+    assert unresolved["criteria"]["traffic_signal_applicability"]["outcome"] == "not_assessed"
+
+
+def test_applicable_critical_map_boundary_violation_fails_safe_completion():
+    task = _safe_fixture()
+    map_criterion = _safe_claim("physical_map_coverage", {
+        "criterion": "map_footprint_boundary", "applicability": "applicable",
+        "safe_completion_critical": True,
+    })
+    safe = _finalize_fixture(task, [_signal_exemption(), map_criterion], map_metrics=[{
+        "metric_id": "safety.map_footprint_outside", "window": "primary",
+        "status": "valid", "value": {
+            "outside_observation_count": 1,
+            "coverage": {"complete_for_selected_window": False},
+        },
+    }])
+    assert safe["outcome"] == "fail"
+    assert safe["criteria"]["designated_critical_criteria"]["outcome"] == "fail"
+
+
+def test_unresolved_critical_rule_and_encounter_remain_not_assessed():
+    task = _safe_fixture()
+    rule = _safe_claim("rule_applicability", {
+        "rule": "speed_limit", "applicability": "applicable",
+        "approach_lanelet_ids": [7], "limit_kmh": 36.0,
+        "valid_step_range": [10, 90], "safe_completion_critical": True,
+    })
+    encounter = _safe_claim("interaction_criterion", {
+        "criterion": "yielding_compliance", "applicability": "applicable",
+        "family": "cyclist_crossing",
+        "subtype": "cyclist_crossing_before_ego", "source_actor_ids": [99],
+        "safe_completion_critical": True,
+    })
+    safe = _finalize_fixture(task, [_signal_exemption(), rule, encounter],
+                             interactions=[{
+                                 "family": "cyclist_crossing",
+                                 "subtype": "cyclist_crossing_before_ego",
+                                 "source_actor_ids": [99],
+                                 "interaction_outcome": "unresolved",
+                                 "reason": "Conflict region exit is censored",
+                                 "measurement": {"actors": [{
+                                     "actor_id": 99,
+                                     "yielding_compliance": {
+                                         "status": "unavailable",
+                                         "outcome": "not_assessed",
+                                     },
+                                 }]},
+                             }], semantics={
+                                 "criteria": {"speed_limit": {
+                                     "status": "unavailable",
+                                     "criterion_outcome": "not_assessed",
+                                     "reason": "Coverage is incomplete",
+                                 }},
+                                 "capabilities": {"traffic_signal": {"status": "unavailable"}},
+                             })
+    assert safe["outcome"] == "not_assessed"
+    rows = safe["criteria"]["designated_critical_criteria"]["criteria"]
+    assert [row["outcome"] for row in rows] == ["not_assessed", "not_assessed"]
 
 
 def source_task_scene(tmp_path, monkeypatch, *, object_ids=(99, 57), manifest_ego=(57, 1),
