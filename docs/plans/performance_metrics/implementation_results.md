@@ -146,3 +146,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE05 — Map context and spatial metrics
 
 **Dispatch.** Base `45caf1e7bc767c45354f032a74ea7833c6671dd1`. Reuse the inD map owner and PE04 physical footprint support. Verify optional geometry and supported coverage separately from rule applicability.
+
+**Review pending repair.** Candidate `fe7f6b5`. Reviewed actual Lanelet surfaces and supported-footprint coverage. Sol's map/episode/run-trace set passed 52 tests with isolated Shapely. Mixed missing and known generations for one actor expose a sort failure in map output actor references. Repair requested. Evidence under `runs/pe_campaign/pe05/`.
