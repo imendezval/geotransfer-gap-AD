@@ -133,7 +133,39 @@ def main(argv=None):
     episode.add_argument("--output", required=True, type=Path)
     episode.add_argument("--profile", type=Path)
     episode.add_argument("--scene", help="scene ID or scene root for identity checking")
+    run = sub.add_parser("run", help="account for and evaluate an existing saved run or campaign")
+    source = run.add_mutually_exclusive_group(required=True)
+    source.add_argument("--run", type=Path, help="existing run directory with run.json")
+    source.add_argument("--campaign", type=Path, help="existing campaign directory with campaign.json")
+    run.add_argument("--manifest", type=Path,
+                     help="existing schema-2 scene manifest used by a saved run")
+    run.add_argument("--output", required=True, type=Path,
+                     help="new evaluation directory beneath configured runs")
+    run.add_argument("--profile", type=Path)
+    report = sub.add_parser("report", help="rerender CSV and Markdown from saved evaluation results")
+    report.add_argument("--evaluation", required=True, type=Path,
+                        help="existing evaluation directory containing index.json")
     args = parser.parse_args(argv)
     if args.action == "episode":
         return _episode(args)
+    if args.action == "run":
+        from geotransfer_gap.evaluation.reporting import evaluate_run
+
+        if args.run is not None and args.manifest is None:
+            parser.error("evaluate run --run requires --manifest")
+        if args.campaign is not None and args.manifest is not None:
+            parser.error("--manifest applies to --run, not --campaign")
+        index = evaluate_run(run=args.run, manifest=args.manifest,
+                             campaign=args.campaign, output=args.output,
+                             profile=args.profile)
+        print(json.dumps({"index": str(args.output.resolve() / "index.json"),
+                          "episodes": index["expected_episodes"],
+                          "complete": index["complete"]}, indent=2))
+        return index
+    if args.action == "report":
+        from geotransfer_gap.evaluation.reporting import render_report
+
+        rendered = render_report(args.evaluation)
+        print(json.dumps(rendered, indent=2))
+        return rendered
     parser.error("unsupported evaluation action")
