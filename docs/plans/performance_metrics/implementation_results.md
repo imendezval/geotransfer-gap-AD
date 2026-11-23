@@ -124,3 +124,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE02 — Exposure, kinematics and episode CLI
 
 **Dispatch.** Base `23889876ca47b384d0b1c85540191e312e88720d` on `performance-evaluation/pe02-pe14`. PE01 preflight `.venv/bin/pytest -q tests/test_saved_evidence.py tests/test_viewer.py tests/test_run_trace.py` passed 59 tests. Seven missing pinned admissions remain an independent native inventory block. PE02 is eligible for offline implementation. Campaign verification outputs go under `runs/pe_campaign/`.
+
+**Accepted.** Implementation `9cc69c5562c60a5ed00f057179458dbca98d1ff5`. Review checked outgoing-owner attribution, separate yaw/world-jerk supports, summed irregular interval threshold exposure, null missing evidence and the shared reader/CLI boundary. `.venv/bin/pytest -q tests/test_evaluation_episode.py tests/test_saved_evidence.py tests/test_viewer.py tests/test_run_trace.py` passed 77 tests. `.venv/bin/geotransfer evaluate episode --trace "$trace" --output runs/pe_campaign/pe02/sol_archive` on the archived US SMART/IDM source-hold trace reported archived attestation, 90 transitions/9 s and 80 controlled transitions/8 s. Logs and synthetic no-native-import evidence under `runs/pe_campaign/pe02/`. Native inventory block carries forward. Next PE03.
+
+## PE03 — Optional native event capture
+
+**Dispatch.** Base `9cc69c5562c60a5ed00f057179458dbca98d1ff5`. Use the existing worker pre-step hook and parent batch validation. Verify capture on/off and representative single/manifest parity independently of the blocked full inventory.
