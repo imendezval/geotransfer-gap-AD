@@ -3,16 +3,25 @@
 import argparse
 from pathlib import Path
 
-from geotransfer_gap.artifacts import read_json, write_json
+from geotransfer_gap.artifacts import read_json, sha256, write_json
+from geotransfer_gap.evaluation.reporting import read_indexed_evaluation
 from geotransfer_gap.visualization.viewer import build, normalize_trace
 
 
-def probe(root, traces, output, browser_path):
+def probe(root, traces, output, browser_path, evaluations=()):
     from playwright.sync_api import sync_playwright
 
     output.mkdir(parents=True, exist_ok=True)
-    artifact = build(root, output / "index.html", traces)
+    artifact = build(root, output / "index.html", traces, evaluations=evaluations)
     evidence = []
+    attached_events, attached_results = {}, {}
+    for evaluation in evaluations:
+        _, _, indexed = read_indexed_evaluation(evaluation)
+        for result, events in indexed.values():
+            digest = result.get("evidence", {}).get("trace_sha256")
+            if digest:
+                attached_events.setdefault(digest, events)
+                attached_results.setdefault(digest, result)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=browser_path, headless=True,
                                              args=["--no-sandbox"])
@@ -30,6 +39,35 @@ def probe(root, traces, output, browser_path):
             sidecar, diagnostic = (read_json(path) if path.is_file() else None for path in paths)
             expected = normalize_trace(record, sidecar, diagnostic)
             page.select_option("#mode", str(index))
+            if evaluations:
+                assert page.locator("#evaluation-status").inner_text().startswith("Attached episode ")
+                assert "profile " in page.locator("#evaluation-status").inner_text()
+                assert "metrics " in page.locator("#evaluation-outcomes").inner_text()
+                events = page.locator("#evaluation-event option")
+                if events.count() > 1:
+                    matching = attached_events.get(sha256(trace), [])
+                    assert matching, f"No probe event record for {trace}"
+                    expected_event = matching[0]
+                    result = attached_results[sha256(trace)]
+                    assert page.locator("#evaluation-metrics tr").count() == len(
+                        result.get("episode_metrics", {}).get("metrics", []))
+                    full_exposure = result.get("episode_metrics", {}).get("exposure", {}).get(
+                        "windows", {}).get("full", {})
+                    exposure_text = page.locator("#evaluation-exposure").inner_text()
+                    assert f"{full_exposure.get('transition_count')} transitions" in exposure_text
+                    assert f"{full_exposure.get('controlled_transition_count')} controlled transitions" in exposure_text
+                    page.select_option("#evaluation-event", "0")
+                    event_step = page.locator("#time").input_value()
+                    event_detail = page.locator("#evaluation-event-detail").inner_text()
+                    assert "attribution" in event_detail and "cause established" in event_detail
+                    assert int(event_step) == expected_event["step"]
+                    if expected_event.get("time_s") is not None:
+                        assert f"{expected_event['time_s']} s" in event_detail
+                    if "pose absent" in event_detail:
+                        assert expected_event.get("pose_present") is False
+                    event_actor = expected_event.get("actor") or {}
+                    if type(event_actor.get("source_id")) is int:
+                        assert page.locator("#actors tr.event-actor").count() >= 1
             if option_count > 1:
                 page.select_option("#baseline", str((index - 1) % option_count))
             frames = expected["frames"]
@@ -91,9 +129,10 @@ def main(argv=None):
     parser.add_argument("--scene", type=Path, required=True)
     parser.add_argument("--trace", type=Path, action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--evaluation", type=Path, action="append", default=[])
     parser.add_argument("--chrome", default="/usr/bin/google-chrome")
     args = parser.parse_args(argv)
-    probe(args.scene, args.trace, args.output, args.chrome)
+    probe(args.scene, args.trace, args.output, args.chrome, args.evaluation)
 
 
 if __name__ == "__main__":

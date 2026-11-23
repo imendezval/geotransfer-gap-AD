@@ -27,6 +27,7 @@ def run_episode(
     frame_fn=None,
     startup=None,
     capture_lifecycle=None,
+    capture_evaluation=None,
 ):
     """Capture each pre-step frame and advance at most ``steps - 1`` times."""
     if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 91:
@@ -52,6 +53,8 @@ def run_episode(
         snapshot = index.capture_pre_step(step, state, env.observations)
         if capture_lifecycle is not None:
             capture_lifecycle(snapshot, state)
+        if capture_evaluation is not None:
+            capture_evaluation(snapshot, state)
         ego = snapshot.actor_for(snapshot.ego_id)
         if ego.removed:
             terminal_reason = "ego_removed"
@@ -119,6 +122,8 @@ def build_parser():
     parser.add_argument("--traffic", choices=("expert", "idm", "ppo", "smart"), required=True)
     parser.add_argument("--traffic-startup", choices=("immediate", "source_hold"), default="immediate")
     parser.add_argument("--steps", type=int, default=91)
+    parser.add_argument("--capture-evaluation", action="store_true",
+                        help="Write optional hash-bound native evaluation evidence")
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -175,9 +180,12 @@ def main(argv=None):
     import numpy as np
 
     from geotransfer_gap.runtime.run_trace import lifecycle_frame, run_provenance
+    if args.capture_evaluation:
+        from geotransfer_gap.evaluation.capture import EvaluationCapture
 
     np.random.seed(0)
     lifecycle = []
+    evaluation_capture = None
     env = evaluation_env(root)
     native_settings = {
         "ini": env.ini_file, "dynamics_model": env.dynamics_model,
@@ -186,6 +194,8 @@ def main(argv=None):
         "observation_width": env.single_observation_space.shape[0],
         "goal_behavior": env.goal_behavior,
     }
+    if args.capture_evaluation:
+        evaluation_capture = EvaluationCapture(binary, native_settings)
     try:
         provenance = None
         factories = {"expert": ExpertController, "idm": IDMController}
@@ -219,6 +229,8 @@ def main(argv=None):
             binary_sha256=sha256(binary_file),
             startup=startup,
             capture_lifecycle=lambda snapshot, native: lifecycle.append(lifecycle_frame(snapshot, native)),
+            capture_evaluation=(evaluation_capture.capture_pre_step
+                                if evaluation_capture is not None else None),
         )
     finally:
         env.close()
@@ -237,6 +249,11 @@ def main(argv=None):
             "research_admission_status": "not_established",
         }
     write_json(args.output, report)
+    if evaluation_capture is not None:
+        from geotransfer_gap.evaluation.capture import CAPTURE_FILENAME
+
+        write_json(args.output.with_name(CAPTURE_FILENAME),
+                   evaluation_capture.build(report, sha256(args.output)))
     if provenance is not None:
         if args.traffic == "ppo":
             provenance["traffic_ppo"] = _traffic_ppo_provenance(report, provenance["observation"])

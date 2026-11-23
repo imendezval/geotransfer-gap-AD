@@ -12,6 +12,7 @@ dependencies = ["numpy", "pandas", "matplotlib", "Pillow"]
 [project.optional-dependencies]
 test = ["pytest"]
 native-map = ["lanelet2==1.2.3"]
+evaluation-geometry = ["shapely>=2.0,<3"]
 
 [project.scripts]
 geotransfer = "geotransfer_gap.cli:main"

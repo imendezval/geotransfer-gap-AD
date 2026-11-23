@@ -6,7 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from geotransfer_gap.config import ensure_bench
+from geotransfer_gap.config import ensure_bench, settings
+from geotransfer_gap.conversion.binary import load_source_writer
 from geotransfer_gap.planners.smart_controller import load_smart_controller
 from geotransfer_gap.runtime import late_spawn_runtime
 from geotransfer_gap.runtime.episode_worker import run_episode
@@ -98,14 +99,57 @@ def audit(env, binary, binding):
     row = next(r for r in report["frames"][14]["actors"] if r["source_id"] == 1035)
     assert row["applied_movement_mode"] == 0
     assert row["slot"] == 2
+    assert row["effective_owner"] == "traffic:smart"
+    assert row["lifetime_generation"] == 1 and row["action"] is not None
     return dict(graph_equality_steps=common, num_observations=report["observation_frames"],
                 histories=[ego.planner.history.num_steps, traffic.planner.history.num_steps],
                 refreshes={c.role: c.refreshes for c in (ego, traffic)}, reentry_action=row)
 
 
+def build_fixture(root):
+    root = root.resolve()
+    if root == settings().runs or not root.is_relative_to(settings().runs):
+        raise ValueError("Synthetic fixture must be a new directory under configured runs")
+    root.mkdir(parents=True, exist_ok=False)
+    testing = root / "testing"
+    testing.mkdir()
+    lane_y = (0, 5, 10)
+    objects = [
+        dict(id=sid, type="vehicle", width=2, length=4, height=1.5,
+             position=[dict(x=step * 0.5, y=y) for step in range(91)],
+             velocity=[dict(x=5, y=0)] * 91, heading=[0] * 91,
+             valid=[int(sid != 1035 or step not in (12, 13)) for step in range(91)],
+             goalPosition=dict(x=45, y=y))
+        for sid, y in zip((1000, 1001, 1035), lane_y, strict=True)
+    ]
+    roads = [
+        dict(id=2000 + i, type="lane",
+             geometry=[dict(x=x, y=y) for x in range(-20, 71, 10)])
+        for i, y in enumerate(lane_y)
+    ]
+    roads += [dict(id=2010 + i, type="road_edge",
+                   geometry=[dict(x=x, y=y) for x in range(-30, 81, 10)])
+              for i, y in enumerate((-8, 18))]
+    load_source_writer()(dict(metadata=dict(sdc_track_index=0), objects=objects, roads=roads),
+                         str(testing / "map_000000.bin"), 0)
+    return root
+
+
+def verify_fixture(binary):
+    objects = binary["objects"]
+    target = next((o for o in objects if o["id"] == 1035), None)
+    if (target is None or target["type"] != 1 or target.get("mark_as_expert")
+            or target is objects[binary["sdc_track_index"]]
+            or list(target["traj_valid"][:15]) != [1] * 12 + [0, 0, 1]):
+        raise ValueError("SMART joint fixture requires traffic vehicle 1035 present at steps "
+                         "0–11, absent at 12–13, and returning at 14. Use --fixture-dir.")
+
+
 def main():
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("--root", type=Path, required=True)
+    fixture = parser.add_mutually_exclusive_group(required=True)
+    fixture.add_argument("--root", type=Path)
+    fixture.add_argument("--fixture-dir", type=Path, help="Create a synthetic scene under runs")
     args = parser.parse_args()
     ensure_bench()
     runtime = late_spawn_runtime.load()
@@ -113,13 +157,21 @@ def main():
     from pufferlib.prediction.binary_reader import read_binary_scenario
 
     assert Path(binding.__file__).resolve() == Path(runtime["runtime_binary"]).resolve()
-    binary = read_binary_scenario(str(args.root / "testing/map_000000.bin"))
-    env = evaluation_env(args.root)
+    root = build_fixture(args.fixture_dir) if args.fixture_dir else args.root
+    binary = read_binary_scenario(str(root / "testing/map_000000.bin"))
+    verify_fixture(binary)
+    env = evaluation_env(root, num_agents=3) if args.fixture_dir else evaluation_env(root)
     try:
         env.reset()
-        print(json.dumps(audit(env, binary, binding), indent=2))
+        target_index = next(i for i, actor in enumerate(binary["objects"])
+                            if actor["id"] == 1035)
+        active = env.get_state()[0]["active_agent_indices"]
+        if len(active) <= 2 or active[2] != target_index:
+            raise ValueError("SMART joint fixture requires actor 1035 in native slot 2 at reset")
+        result = audit(env, binary, binding)
     finally:
         env.close()
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

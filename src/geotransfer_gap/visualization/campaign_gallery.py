@@ -18,13 +18,17 @@ def _protocol_order(pair):
     return pair[2], pair[0], pair[1]
 
 
-def _check_output(path, campaign):
-    if path.resolve().is_relative_to(campaign):
+def _check_output(path, campaign, evaluations=()):
+    target = path.resolve()
+    if target.is_relative_to(campaign):
         raise ValueError("Choose a viewer output outside the saved campaign")
+    for evaluation in evaluations:
+        if target.is_relative_to(Path(evaluation).resolve()):
+            raise ValueError("Choose a viewer output outside attached evaluation evidence")
 
 
-def _render_scene(scene, output, slots):
-    traces = {}
+def _render_scene(scene, output, slots, evaluations=()):
+    traces, campaign_status = {}, {}
     for slot in slots:
         if slot["status"] != "PASS":
             continue
@@ -34,7 +38,9 @@ def _render_scene(scene, output, slots):
         if path in traces:
             raise ValueError(f"multiple campaign slots reference {path}")
         traces[path] = files
-    return build(resolve_reference(scene["root"]), output, traces, files_by_trace=traces)
+        campaign_status[path] = slot["status"]
+    return build(resolve_reference(scene["root"]), output, traces, files_by_trace=traces,
+                 evaluations=evaluations, campaign_status_by_trace=campaign_status)
 
 
 def _write_index(output, campaign, scenes, pages):
@@ -92,10 +98,12 @@ thead th:first-child{{z-index:3}} small{{display:block;font-weight:normal}}
 """)
 
 
-def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, startup=None):
+def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, startup=None,
+                    evaluations=()):
     """Render accepted single-pass traces and link the persisted campaign report."""
     campaign, output = Path(campaign).resolve(), Path(output).resolve()
-    _check_output(output, campaign)
+    evaluations = tuple(Path(path).expanduser().resolve() for path in evaluations)
+    _check_output(output, campaign, evaluations)
     inventory = read_json(campaign / "campaign.json")["inventory"]["scenes"]
     inventory = {row["name"]: row for row in inventory}
     scenes = defaultdict(dict)
@@ -120,8 +128,8 @@ def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, sta
             reasons = sorted({slot.get("reason") or slot["status"] for slot in slots})
             raise ValueError(f"No passing playback for {scene}. " + "; ".join(reasons))
         path = output if output.suffix == ".html" else output / f"{scene}.html"
-        _check_output(path, campaign)
-        return _render_scene(inventory[scene], path, slots)
+        _check_output(path, campaign, evaluations)
+        return _render_scene(inventory[scene], path, slots, evaluations)
 
     if output.suffix == ".html":
         raise ValueError("Choose an output directory for the campaign gallery")
@@ -129,9 +137,9 @@ def render_campaign(campaign, output, *, scene=None, ego=None, traffic=None, sta
              if any(slot["status"] == "PASS" for slot in slots.values())}
     index = output / "index.html"
     for path in (index, *pages.values()):
-        _check_output(path, campaign)
+        _check_output(path, campaign, evaluations)
     output.mkdir(parents=True, exist_ok=True)
     for name, path in pages.items():
-        _render_scene(inventory[name], path, scenes[name].values())
+        _render_scene(inventory[name], path, scenes[name].values(), evaluations)
     _write_index(index, campaign, scenes, pages)
     return index

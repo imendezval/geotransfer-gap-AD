@@ -7,13 +7,10 @@ from pathlib import Path
 from .artifacts import read_json, reference, resolve_reference, sha256, write_json
 from .config import settings
 from .execution import CONTROLLERS, STARTUP_POLICIES
-from .runtime.matrix_inputs import fingerprint, load_binary, preflight_inputs, slot_id
+from .runtime.matrix_inputs import US_REFERENCES, fingerprint, load_binary, preflight_inputs, slot_id
 
 MANIFEST_SHA256 = "316438458c537adfd6b3347a8387844c95ac806d2067365fdc0d72abe2b3992c"
-US_REFERENCES = {
-    "us_hybrid_1002fdc9826fc6d1": "105a45498ea7edf1d92e2664814b1b94b93f772209cf36ff233c950895ed0828",
-    "us_smart_negative_world_739e0513c6f7cfe8": "a4aa356dbd348f50154dd38272518f0819084eeb1112f23b4e48be4f6e071859",
-}
+
 
 
 def enumerate_slots(scenes):

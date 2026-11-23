@@ -129,6 +129,44 @@ The BB bridge can also run upstream PPO with the checkpoint and device options
 required by the BB checkout. The verified matrix uses `--ego ppo` or
 `--traffic ppo` and the pinned policy adapter.
 
+## Evaluate saved runs offline
+
+The evaluation commands read existing run ledgers, campaign traces and their
+recorded evidence. They do not launch a simulator or planner. Choose a fresh
+output directory beneath `runs/`; an existing campaign remains an input and is
+never rewritten by evaluation.
+
+```bash
+evaluation=runs/evaluation/m9-diagnostic
+.venv/bin/geotransfer evaluate run --campaign runs/m9_acceptance \
+  --output "$evaluation" --profile configs/evaluation/default.toml
+.venv/bin/geotransfer evaluate aggregate --evaluation "$evaluation" \
+  --output runs/evaluation/m9-aggregate
+.venv/bin/geotransfer evaluate sensitivity --evaluation "$evaluation" \
+  --output runs/evaluation/m9-sensitivity
+```
+
+`evaluate run --run DIR --manifest PATH` accounts for a saved run instead of a
+campaign. `evaluate report --evaluation DIR` rebuilds its CSV and Markdown from
+the already stored results. A campaign's `PASS` means its existing single and
+manifest executions were validated and canonically equal; it is not a driving
+success. Execution validity, metric assessment, encounter realization, task
+result and driving outcome remain separate. Missing evidence stays unavailable
+or blocked, never zero or pass. Read [the metric definitions](docs/performance_evaluation.md)
+before interpreting thresholds, exposures or geographic comparisons.
+
+Mapped-footprint and lane-geometry measurements need the optional Shapely extra:
+install it with `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
+Without Shapely, those geometry assessments remain unavailable; their synthetic
+test module is explicitly skipped. To inspect a saved evaluation beside its
+trace, pass `--evaluation` to the existing viewer, for example:
+
+```bash
+.venv/bin/geotransfer view --scene r07_e200_f25439 \
+  --trace runs/example/trace.json --evaluation runs/evaluation/example \
+  --output runs/views/example.html
+```
+
 ## Convert and admit a new scene
 
 ```bash

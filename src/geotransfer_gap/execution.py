@@ -57,6 +57,7 @@ class RunProtocol:
     legacy_traffic: LegacyTraffic | None
     preset: Literal["smart_hybrid_baseline"] | None
     bb_args: tuple[str, ...]
+    capture_evaluation: bool = False
 
 
 def build_parser():
@@ -107,6 +108,8 @@ def build_parser():
     )
     parser.add_argument("--steps", type=int, default=91)
     parser.add_argument("--resume", type=Path, help="Continue an existing matrix batch")
+    parser.add_argument("--capture-evaluation", action="store_true",
+                        help="Capture optional native evaluation evidence for matrix runs")
     parser.add_argument(
         "--bb-args",
         nargs=argparse.REMAINDER,
@@ -146,7 +149,11 @@ def normalize_protocol(args) -> RunProtocol:
             legacy_traffic=None,
             preset=None,
             bb_args=(),
+            capture_evaluation=args.capture_evaluation,
         )
+
+    if args.capture_evaluation:
+        raise ValueError("--capture-evaluation requires an --ego/--traffic matrix controller pair")
 
     if args.preset is not None:
         if args.planner not in (None, "smart"):
@@ -306,6 +313,10 @@ def _run_matrix(protocol, rows, resume):
         "diagnostic_only": True, "diagnostic_requested": protocol.diagnostic,
         "research_admission_status": "not_established",
     }
+    # Keep the established schema-4 protocol and expected fields unchanged for
+    # default runs; the new field exists only in explicitly opted-in batches.
+    if protocol.capture_evaluation:
+        config["capture_evaluation"] = True
     expected = []
     for row in rows:
         root = scene_root(row["root"])
@@ -326,13 +337,16 @@ def _run_matrix(protocol, rows, resume):
         })
 
     def command_for(row, folder):
-        return [
+        command = [
             sys.executable, "-m", "geotransfer_gap.runtime.episode_worker",
             "--root", str(resolve_reference(row["scene"])),
             "--ego", protocol.ego, "--traffic", protocol.traffic,
             "--traffic-startup", protocol.traffic_startup, "--steps", str(protocol.steps),
             "--output", str(folder / "trace.json"),
         ]
+        if protocol.capture_evaluation:
+            command.append("--capture-evaluation")
+        return command
 
     if not expected or len({row["name"] for row in expected}) != len(expected):
         raise ValueError("expected at least one scene and no duplicate scene names")

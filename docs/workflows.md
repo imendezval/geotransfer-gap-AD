@@ -87,3 +87,43 @@ binary identities. `configs/reviews/` preserves their existing review records.
 `configs/current_manifest.json` is the versioned portable index for this frozen
 baseline; regenerated admissions require a freshly built manifest. Converted data,
 plots and execution traces remain local ignored artifacts.
+
+## Offline performance evaluation
+
+Evaluate saved evidence only after selecting the intended run or frozen campaign.
+The command validates the saved index, trace and sidecar bindings and writes a
+new result directory under the configured `runs` root. It does not rerun a
+planner, replace a failed attempt, or change campaign status.
+
+```bash
+evaluation=runs/evaluation/PROJECT_RUN
+.venv/bin/geotransfer evaluate run --campaign runs/m9_acceptance \
+  --output "$evaluation" --profile configs/evaluation/default.toml
+.venv/bin/geotransfer evaluate report --evaluation "$evaluation"
+.venv/bin/geotransfer evaluate aggregate --evaluation "$evaluation" \
+  --output runs/evaluation/PROJECT_RUN-aggregate
+.venv/bin/geotransfer evaluate sensitivity --evaluation "$evaluation" \
+  --output runs/evaluation/PROJECT_RUN-sensitivity
+```
+
+Use `--run DIR --manifest PATH` for one existing schema-2 or schema-4 run index.
+Campaign evaluation retains every expected slot and its attempt history; the
+campaign's single trace is the primary episode and its batch trace is a parity
+replication, not another driving sample. `valid`, `unavailable`, `not_applicable`,
+`undefined`, and `invalid` assessment statuses are distinct from `pass`, `fail`,
+and `not_assessed` criterion outcomes. A readable trace without execution
+attestation supports trace-only diagnostics, not a validated rollout claim.
+
+The saved report preserves exposure and per-metric denominators. It is not a
+weighted planner score. A geographic comparison additionally requires compatible
+hash-bound cohorts and source-only matching features; the currently configured
+US fixtures are diagnostic and cannot support a country-level gap claim. The
+metric definitions, output schemas and interpretation limits live in
+[`docs/performance_evaluation.md`](performance_evaluation.md).
+
+Map footprint and lane geometry assessments require the optional Shapely
+dependency: `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
+Without it, these measurements are unavailable and the Shapely-specific
+synthetic test module explicitly skips. Attach a saved result to an existing
+offline scene view by passing `--evaluation EVALUATION_DIR` to the viewer; the
+README has a complete command example.

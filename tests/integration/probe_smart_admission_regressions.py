@@ -5,10 +5,12 @@ import json
 import os
 import subprocess
 import hashlib
+import shutil
+import tempfile
 from pathlib import Path
 
 
-def main():
+def run_cases():
     repo = PROJECT_ROOT
     os.chdir(repo)
     py = __import__("sys").executable
@@ -330,4 +332,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cfg = settings()
+    if cfg.runs.is_relative_to(cfg.artifacts):
+        raise ValueError("Admission probe runs must be outside the input artifact tree")
+    cfg.runs.mkdir(parents=True, exist_ok=True)
+    workspace = Path(tempfile.mkdtemp(prefix="admission-regression-", dir=cfg.runs))
+    # Dereference copied links so producer writes cannot reach the input tree.
+    copied = workspace / "artifacts"
+    shutil.copytree(cfg.artifacts, copied)
+    os.environ["GEOTRANSFER_ARTIFACTS"] = str(copied.resolve())
+    print(f"Admission regression workspace: {workspace}", flush=True)
+    run_cases()

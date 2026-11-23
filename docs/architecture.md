@@ -17,6 +17,8 @@ replaced at cutover, with no permanent compatibility wrappers.
 | `config`, `artifacts` | configured roots, content hashing, artifact references, atomic JSON I/O and corpus lookup |
 | `execution` | supported single/batch runs into separate output directories |
 | `migration` | archived-baseline recovery, conversion/execution comparison and explicitly justified review carry-forward |
+| `runtime.trace_io` | shared loading and integrity checks for saved trace, sidecar and stable actor/lifecycle identities |
+| `evaluation` | offline metric composition, task/encounter assessment, accounting, aggregation, sensitivity, compatibility and geographic comparison |
 
 Some private modules retain descriptive historical names to keep producer labels
 recognizable. Public entrypoints are CLI actions and documented Python objects;
@@ -70,3 +72,14 @@ It is a runtime asset alias, rather than an additional code entrypoint.
 The configured `cache` root stores verified archived reference-code checkouts.
 Native compilation and short scene-loader aliases retain their content-keyed
 `/tmp` locations used by the validated runtime.
+
+The evaluation layer consumes the existing `execution`, `runtime.run_trace`,
+batch/campaign ledgers, artifact references and hash-bound scene certificates.
+It does not own a simulator loop, run scheduler, source manifest, admission
+producer or second viewer. `evaluation.capture` copies optional native fields at
+the existing episode-worker hook and binds them to the already written trace;
+capture is opt-in and must leave canonical trace behavior unchanged. Offline
+evaluation writes new results under `runs/`, outside selected evidence. The
+existing viewer can display compatible saved results, while metric definitions
+and status semantics have one owner in
+[`docs/performance_evaluation.md`](performance_evaluation.md).
