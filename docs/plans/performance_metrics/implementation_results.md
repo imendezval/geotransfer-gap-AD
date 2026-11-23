@@ -178,3 +178,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE09 — Saved run accounting and reports
 
 **Dispatch.** Base `20d16377268df97a11960d3396d4679d75037f0c`. Read existing ledger/campaign/manifest results using their established identities and the shared evidence reader. No worker execution or campaign regeneration is needed.
+
+**Review pending repair.** Candidate `6e0ec57`. Sol's reporting, batch and campaign check passed 30 tests. Review requires incomplete-index rejection, output containment on rerender, and checking protocol against the shared reader's verified trace. Evidence under `runs/pe_campaign/pe09/`.
