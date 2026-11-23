@@ -206,3 +206,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE13 — Geographic comparison and readiness
 
 **Dispatch.** Base `4bda24014c7200568dac53e3ebd3b65c0aefa8fa`. Reuse PE09/10 result identities, the source-only matching policy, and clustered statistics. Implement synthetic matched comparison and report the currently diagnostic-only US evidence status.
+
+**Review pending repair.** Candidate `d8a25e4`. Sol's comparison/aggregate/reporting suite passed 46 tests (`runs/pe_campaign/pe13/sol_review.log)). Requested coverage for legitimate missing episode metrics and actual archived campaign integration status.
