@@ -346,12 +346,16 @@ def test_cli_scene_context_validates_binary_and_output_is_offline(tmp_path, monk
     report["scene"] = {"root": "artifacts", "path": "scene-a"}
     report["binary_sha256"] = sha256(binary)
     write_json(trace, report)
+    modules_before = set(sys.modules)
     main(["evaluate", "episode", "--trace", str(trace), "--output", str(runs / "checked"),
           "--scene", str(scene)])
     assert read_json(runs / "checked" / "episode.json")["scene_context"]["status"] == "scene_and_binary_identity_checked"
-    import geotransfer_gap.evaluation.commands as commands
-    assert "torch" not in sys.modules
-    assert "pufferlib" not in sys.modules
+    heavy_roots = {"torch", "pufferlib", "lanelet2"}
+    newly_loaded_heavy_modules = sorted(
+        name for name in set(sys.modules) - modules_before
+        if name.split(".", 1)[0] in heavy_roots
+    )
+    assert not newly_loaded_heavy_modules, newly_loaded_heavy_modules
 
 
 def test_ancestor_run_marker_and_trace_overlap_are_refused(tmp_path, monkeypatch):
