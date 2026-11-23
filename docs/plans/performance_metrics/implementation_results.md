@@ -208,3 +208,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `4bda24014c7200568dac53e3ebd3b65c0aefa8fa`. Reuse PE09/10 result identities, the source-only matching policy, and clustered statistics. Implement synthetic matched comparison and report the currently diagnostic-only US evidence status.
 
 **Review pending repair.** Candidate `d8a25e4`. Sol's comparison/aggregate/reporting suite passed 46 tests (`runs/pe_campaign/pe13/sol_review.log)). Requested coverage for legitimate missing episode metrics and actual archived campaign integration status.
+
+**Accepted.** Implementation `d8a25e4`, accounting repair `bbcdd8b`. Reviewed manifest/config freeze, source-only selection, cohort compatibility and metric suppression for diagnostic fixtures. `.venv/bin/pytest -q tests/test_evaluation_comparison.py tests/test_evaluation_aggregate.py tests/test_evaluation_reporting.py` passed 48 tests. Saved German and two diagnostic US results yielded `baseline_not_ready`, with zero matched strata and the recorded acquisition/precision requirements. Evidence under `runs/pe_campaign/pe13/agent/`. Geographic claims **BLOCKED** pending a matched US research cohort. Next PE14.
+
+## PE14 — Integrated verification and diagnostic pilot
+
+**Dispatch.** Base `bbcdd8bde7003b46af1652f9acb2d6b55902dd1d`. Verify the integrated revision with copied native inputs, existing historical oracles, real saved pilot, and browser checks. Seven missing pinned admissions still block the full inventory. Keep outstanding evidence gates separate from code readiness.
