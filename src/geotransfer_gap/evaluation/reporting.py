@@ -958,17 +958,10 @@ _CSV_COLUMNS = ("episode_id", "scene_id", "ego", "traffic", "startup", "executio
 
 
 def _presentation_rows(output, index):
+    indexed = _read_indexed_results(output, index)
     rows = []
     for episode in index["episodes"]:
-        path = _evaluation_file(output, episode.get("result_file"), "saved evaluation result")
-        if not path.is_file() or sha256(path) != episode["result_sha256"]:
-            raise ValueError(f"Saved evaluation result is missing or has changed: {path}")
-        event_path = _evaluation_file(output, episode.get("events_file"), "saved evaluation events")
-        if not event_path.is_file() or sha256(event_path) != episode["events_sha256"]:
-            raise ValueError(f"Saved evaluation events are missing or have changed: {event_path}")
-        result = read_json(path)
-        if result.get("episode_id") != episode["episode_id"]:
-            raise ValueError("Saved evaluation result episode identity disagrees with its index")
+        result, _ = indexed[episode["episode_id"]]
         account = result.get("accounting", {})
         rows.append({
             "episode_id": episode["episode_id"], "scene_id": result.get("scene_id"),
@@ -989,6 +982,44 @@ def _presentation_rows(output, index):
             "result_file": episode["result_file"],
         })
     return rows
+
+
+def _read_indexed_results(output, index):
+    """Read PE09 result/event pairs only after checking their immutable index hashes."""
+    indexed = {}
+    for episode in index["episodes"]:
+        if not isinstance(episode, dict) or not isinstance(episode.get("episode_id"), str):
+            raise ValueError("Saved evaluation index contains a malformed episode entry")
+        path = _evaluation_file(output, episode.get("result_file"), "saved evaluation result")
+        if not path.is_file() or sha256(path) != episode.get("result_sha256"):
+            raise ValueError(f"Saved evaluation result is missing or has changed: {path}")
+        event_path = _evaluation_file(output, episode.get("events_file"), "saved evaluation events")
+        if not event_path.is_file() or sha256(event_path) != episode.get("events_sha256"):
+            raise ValueError(f"Saved evaluation events are missing or have changed: {event_path}")
+        result, event_bundle = read_json(path), read_json(event_path)
+        if (not isinstance(result, dict) or result.get("result_schema_version") != RESULT_SCHEMA_VERSION
+                or result.get("episode_id") != episode.get("episode_id")):
+            raise ValueError("Saved evaluation result episode identity disagrees with its index")
+        if (not isinstance(result.get("accounting"), dict)
+                or not isinstance(result.get("evidence"), dict)
+                or not isinstance(result.get("input_profile"), dict)
+                or result.get("episode_metrics") is not None
+                and not isinstance(result.get("episode_metrics"), dict)):
+            raise ValueError("Saved evaluation result contains malformed accounting, evidence or metric records")
+        if result.get("events_sha256") != episode.get("events_sha256"):
+            raise ValueError("Saved evaluation result event binding disagrees with its index")
+        if (not isinstance(event_bundle, dict) or event_bundle.get("schema_version") != 1
+                or not isinstance(event_bundle.get("events"), list)):
+            raise ValueError(f"Saved evaluation events are malformed: {event_path}")
+        metric_result = result.get("episode_metrics") or {}
+        observed_event_ref = metric_result.get("observed_events") if isinstance(metric_result, dict) else None
+        if observed_event_ref is not None and not isinstance(observed_event_ref, dict):
+            raise ValueError("Saved evaluation metric event binding is malformed")
+        metric_ref = observed_event_ref.get("sha256") if observed_event_ref else None
+        if metric_ref is not None and metric_ref != episode.get("events_sha256"):
+            raise ValueError("Saved metric event binding disagrees with its indexed sidecar")
+        indexed[episode["episode_id"]] = (result, event_bundle["events"])
+    return indexed
 
 
 def _evaluation_file(output, value, label):

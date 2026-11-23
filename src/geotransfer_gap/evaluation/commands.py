@@ -145,6 +145,14 @@ def main(argv=None):
     report = sub.add_parser("report", help="rerender CSV and Markdown from saved evaluation results")
     report.add_argument("--evaluation", required=True, type=Path,
                         help="existing evaluation directory containing index.json")
+    aggregate = sub.add_parser("aggregate", help="summarize a hash-checked saved evaluation")
+    aggregate.add_argument("--evaluation", required=True, type=Path)
+    aggregate.add_argument("--output", required=True, type=Path,
+                            help="new output directory beneath configured runs")
+    sensitivity = sub.add_parser("sensitivity", help="summarize frozen threshold variants from saved evidence")
+    sensitivity.add_argument("--evaluation", required=True, type=Path)
+    sensitivity.add_argument("--output", required=True, type=Path,
+                             help="new output directory beneath configured runs")
     args = parser.parse_args(argv)
     if args.action == "episode":
         return _episode(args)
@@ -168,4 +176,16 @@ def main(argv=None):
         rendered = render_report(args.evaluation)
         print(json.dumps(rendered, indent=2))
         return rendered
+    if args.action == "aggregate":
+        from geotransfer_gap.evaluation.aggregate import aggregate_evaluation
+
+        result = aggregate_evaluation(args.evaluation, args.output)
+        print(json.dumps({"aggregate": str(result)}, indent=2))
+        return result
+    if args.action == "sensitivity":
+        from geotransfer_gap.evaluation.aggregate import sensitivity_evaluation
+
+        result = sensitivity_evaluation(args.evaluation, args.output)
+        print(json.dumps({"sensitivity": str(result)}, indent=2))
+        return result
     parser.error("unsupported evaluation action")
