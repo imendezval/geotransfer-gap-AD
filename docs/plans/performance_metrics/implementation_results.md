@@ -180,3 +180,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `20d16377268df97a11960d3396d4679d75037f0c`. Read existing ledger/campaign/manifest results using their established identities and the shared evidence reader. No worker execution or campaign regeneration is needed.
 
 **Review pending repair.** Candidate `6e0ec57`. Sol's reporting, batch and campaign check passed 30 tests. Review requires incomplete-index rejection, output containment on rerender, and checking protocol against the shared reader's verified trace. Evidence under `runs/pe_campaign/pe09/`.
+
+**Accepted.** Implementation `6e0ec57`, verified-reader and rerender containment repair `372d3db`. Reviewed submitted entries and retry history, saved campaign single/batch roles, snapshot and output hashes, and independent status layers. `.venv/bin/pytest -q tests/test_evaluation_reporting.py tests/test_matrix_batch.py tests/test_matrix_campaign.py` passed 40 tests (`runs/pe_campaign/pe09/sol_review_final.log`). One real ledger row and four saved campaign rows evaluated offline; rerendered reports matched exact bytes. Evidence under `runs/pe_campaign/pe09/agent/`. Next PE10.
+
+## PE10 — Aggregation and sensitivity
+
+**Dispatch.** Base `372d3dba2b7dd0d0ffcd4220e6575aae9daa16e1`. Use immutable PE09 results or saved evidence. Make metric-specific denominators, dependence and sensitivity coverage explicit.
