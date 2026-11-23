@@ -271,6 +271,32 @@ def test_following_reports_stopped_gap_undefined_headway_and_restart():
     assert measured["actors"][0]["stop_restart"]["restarted"] is True
 
 
+def test_measure_interactions_uses_saved_ego_identity_when_report_omits_it(monkeypatch):
+    n = 14
+    frames = [{"step": i, "time_s": i / 10, "transition_applied": i < n - 1,
+               "actors": [actor(EGO, i * 0.1, 0, vx=2.0),
+                          actor(OTHER, 8 + i * 0.1, 0, vx=2.0)]}
+              for i in range(n)]
+    spec = {"family": "longitudinal_following", "subtype": "lead_vehicle_constrained_following",
+            "source_opportunity": True, "actor_ids": [OTHER], "supported": True,
+            "source_map_sha256": "map-hash"}
+    context = InteractionContext("valid", "synthetic bound source context",
+                                 specs=(spec,), evidence_refs=())
+    monkeypatch.setattr(
+        "geotransfer_gap.evaluation.interactions.build_interaction_context",
+        lambda *args, **kwargs: context)
+    report = {"schema_version": 3, "ego_binary_index": 0, "terminal_reason": "horizon"}
+    exposure = {"time_source": "recorded_time_s",
+                "observation_masks": [{"time_s": row["time_s"]} for row in frames]}
+    result = measure_interactions(
+        frames, EGO, report, PROFILE, exposure,
+        SimpleNamespace(status="valid", identity={}), lane_map(), (), scene_root=Path("."))
+    assert "ego_source_id" not in report
+    assert result["status"] == "valid"
+    assert result["interactions"][0]["actual_realization"] == "encountered"
+    assert result["interactions"][0]["measurement"]["actors"][0]["samples"]
+
+
 def test_wrong_route_leader_is_not_following():
     n = 14
     frames = [{"step": i, "time_s": i / 10, "transition_applied": i < n - 1,

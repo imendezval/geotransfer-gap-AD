@@ -871,12 +871,15 @@ def _directed_gap(ego, leader, map_context):
     return distances[0], "compatible", None
 
 
-def _following_measure(frames, times, spec, context, report, profile, map_context):
+def _following_measure(frames, times, spec, context, report, profile, map_context,
+                      ego_source_id=None):
     from geotransfer_gap.evaluation.safety import (
         _dimension_observations, _dimensions, _rectangle, _geometry_helpers,
     )
 
     box_distance, _ = _geometry_helpers()
+    ego_source_id = (report.get("ego_source_id") if ego_source_id is None
+                     else ego_source_id)
     map_identity = map_context.identity if map_context is not None else None
     if map_identity and map_identity.get("source_map_sha256") != spec.get("source_map_sha256"):
         return {"realization": "indeterminate", "outcome": "indeterminate",
@@ -886,7 +889,7 @@ def _following_measure(frames, times, spec, context, report, profile, map_contex
                 "following_duration_s": None, "physical_gap_status": "unavailable",
                 "time_headway_status": "unavailable"}, (), None
     actor_maps = [_actor_map(frame) for frame in frames]
-    ego_id = report.get("ego_source_id")
+    ego_id = ego_source_id
     ego_rows = [row.get(ego_id) for row in actor_maps]
     all_actor_rows = [actor_map.get(actor_id) for actor_map in actor_maps
                       for actor_id in spec["actor_ids"] if actor_map.get(actor_id)]
@@ -1103,7 +1106,8 @@ def measure_interactions(frames, ego_id, report, profile, exposure, task_context
             continue
         if spec["family"] == "longitudinal_following":
             measured, actors, duration = _following_measure(
-                frames, times, spec, context, report, profile, map_context)
+                frames, times, spec, context, report, profile, map_context,
+                ego_source_id=ego_id)
         else:
             measured, actors, duration = _crossing_measure(
                 frames, times, spec, context, task_context, report, events, dimensions,
