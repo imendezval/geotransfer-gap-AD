@@ -58,11 +58,14 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
                            for key, digest in saved.playback.hashes.items()
                            if key != "trace")
     selected_task = task_context or build_task_context(
-        scene_root, report.get("binary_sha256"), saved.ego_source_id, map_context
+        scene_root, report.get("binary_sha256"), saved.ego_source_id, map_context,
+        expected_ego_binary_index=report.get("ego_binary_index"),
     )
     task_measurement = measure_tasks(
         frames, saved.ego_source_id, report, profile, measured["exposure"],
         measured["events"], selected_task, evidence_refs=metric_refs,
+        evaluation_capture=saved.playback.evaluation_capture,
+        evaluation_capture_bound=saved.playback.evaluation_capture_bound,
     )
     measured["metrics"].extend(task_measurement["metrics"])
     map_evidence_refs = [dict(item) for item in

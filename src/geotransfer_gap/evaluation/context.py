@@ -413,7 +413,8 @@ def _task_refs(paths):
 
 def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
                        expected_ego_source_id: int | None = None,
-                       map_context: MapContext | None = None) -> TaskContext:
+                       map_context: MapContext | None = None, *,
+                       expected_ego_binary_index: int | None = None) -> TaskContext:
     """Resolve source goal bounds and route evidence without reading admissions.
 
     The bounded task comes from the existing evaluation contract and converted
@@ -443,7 +444,12 @@ def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
     scene_id = row.get("name")
     if (validation.get("binary_sha256") != binary_hash
             or row.get("recording") != validation.get("recording")
-            or row.get("location") != validation.get("location")):
+            or row.get("location") != validation.get("location")
+            or type(expected_ego_source_id) is not int
+            or type(expected_ego_binary_index) is not int
+            or row.get("ego_track_id") != expected_ego_source_id
+            or row.get("ego_binary_index") != expected_ego_binary_index
+            or validation.get("ego_track") != expected_ego_source_id):
         return TaskContext("invalid", "Scene validation identity differs from its binary or manifest",
                            scene_id=scene_id)
     scene_files = sorted(testing.glob("ind_*.json"))
@@ -457,27 +463,50 @@ def build_task_context(scene_root: Path | None, expected_binary_sha256: str,
         route_path = None
     try:
         scene = json.loads(scene_path.read_text())
-        if not isinstance(scene.get("objects"), list) or not scene["objects"]:
-            raise ValueError("converted scene has no ego object")
-        ego = scene["objects"][0]
+        objects = scene.get("objects")
+        if not isinstance(objects, list) or not objects:
+            raise ValueError("converted scene has no actor objects")
+        object_ids = [obj.get("id") for obj in objects if isinstance(obj, dict)]
+        if (len(object_ids) != len(objects) or any(type(value) is not int for value in object_ids)
+                or len(set(object_ids)) != len(object_ids)):
+            return TaskContext("invalid", "Converted scene has malformed or duplicate stable actor IDs",
+                               scene_id=scene_id)
+        if not 0 <= expected_ego_binary_index < len(objects):
+            return TaskContext("invalid", "Recorded ego binary index is outside converted scene",
+                               scene_id=scene_id)
+        ego = objects[expected_ego_binary_index]
+        if ego["id"] != expected_ego_source_id:
+            return TaskContext("invalid", "Recorded ego source ID does not occupy its binary index",
+                               scene_id=scene_id)
+        if scene.get("name") not in (None, scene_id):
+            return TaskContext("invalid", "Converted scene name differs from the selected manifest ID",
+                               scene_id=scene_id)
         contracts = sorted(testing.glob("evaluation_contract_*.json"))
         matching = []
+        contract_ego_conflict = False
         for contract_path in contracts:
             contract = json.loads(contract_path.read_text())
             contract_root = (resolve_reference(contract["scene_reference"])
                              if contract.get("scene_reference") else
                              Path(contract["scene_root"]).resolve())
             files = contract.get("files", {})
-            if (contract.get("schema_version") == 2
+            same_scene = (contract.get("schema_version") == 2
                     and contract_root.resolve() == root
                     and contract.get("recording") == validation.get("recording")
-                    and contract.get("ego_track_id") == ego.get("id")
                     and files.get("scene_json", {}).get("sha256") == sha256(scene_path)
-                    and files.get("scene_binary", {}).get("sha256") == binary_hash):
-                matching.append((contract_path, contract))
+                    and files.get("scene_binary", {}).get("sha256") == binary_hash)
+            if same_scene:
+                if (contract.get("ego_track_id") != expected_ego_source_id
+                        or contract.get("ego_binary_index") != expected_ego_binary_index):
+                    contract_ego_conflict = True
+                else:
+                    matching.append((contract_path, contract))
         if not matching:
-            return TaskContext("unavailable", "No evaluation contract binds this converted source task",
-                               scene_id=scene_id)
+            status = "invalid" if contract_ego_conflict else "unavailable"
+            reason = ("Evaluation contract ego identity differs from the recorded trace/manifest"
+                      if contract_ego_conflict else
+                      "No evaluation contract binds this converted source task")
+            return TaskContext(status, reason, scene_id=scene_id)
         contract_path, contract = matching[0]
         bounds = [(item[1].get("goal_sample"), item[1].get("goal_position"))
                   for item in matching]

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from geotransfer_gap.artifacts import sha256, write_json
 from geotransfer_gap.evaluation.context import TaskContext
+from geotransfer_gap.evaluation import context as context_module
 from geotransfer_gap.evaluation.kinematics import measure_kinematics
 from geotransfer_gap.evaluation.profile import load_profile
 from geotransfer_gap.evaluation.tasks import measure_tasks
@@ -48,20 +49,37 @@ def task_for(points, *, goal=None, radius=0.5, deadline=None,
     )
 
 
-def run(frames, task, *, planner="ppo", terminal="horizon", requested=None):
+def run(frames, task, *, planner="ppo", terminal="horizon", requested=None,
+        evaluation_capture=None, evaluation_capture_bound=False):
     profile = PROFILE
     for index, frame in enumerate(frames):
         frame.update(step=index, time_s=index / 10,
                      transition_applied=index < len(frames) - 1)
     report = {
         "schema_version": 3, "planner": "controller_matrix", "ego_controller": planner,
+        "ego_binary_index": 1, "ego_source_id": EGO,
+        "binary_sha256": "b" * 64, "scene": {"root": "artifacts", "path": "synthetic"},
         "requested_observation_frames": requested or len(frames),
         "terminal_reason": terminal,
     }
     measured = measure_kinematics(frames, EGO, report, profile)
     result = measure_tasks(frames, EGO, report, profile, measured["exposure"],
-                           measured["events"], task)
+                           measured["events"], task,
+                           evaluation_capture=evaluation_capture,
+                           evaluation_capture_bound=evaluation_capture_bound)
     return result, measured
+
+
+def native_goal_capture(count, goal=(3.0, 0.0), *, ego_id=EGO, binary_index=1):
+    return {
+        "schema_version": 1, "ego_source_id": ego_id, "ego_binary_index": binary_index,
+        "binary_sha256": "b" * 64, "scene": {"root": "artifacts", "path": "synthetic"},
+        "observations": [{
+            "step": step,
+            "actors": [{"source_id": ego_id, "binary_index": binary_index,
+                        "navigation_goal_world_xy": list(goal)}],
+        } for step in range(count)],
+    }
 
 
 def frames(xs, *, ys=None, speeds=None, goals=(), collisions=(), missing_collision=(),
@@ -87,6 +105,43 @@ def get_metric(result, metric_id, window="full"):
                 if metric["metric_id"] == metric_id and metric["window"] == window)
 
 
+def source_task_scene(tmp_path, monkeypatch, *, object_ids=(99, 57), manifest_ego=(57, 1),
+                      contract_ego=(57, 1)):
+    scene_root = tmp_path / "scene"
+    testing = scene_root / "testing"
+    testing.mkdir(parents=True)
+    binary = testing / "map_000000.bin"
+    binary.write_bytes(b"synthetic scene binary")
+    manifest = tmp_path / "current.json"
+    manifest.write_text("{}\n")
+    goal = {"x": 2.0, "y": 0.0}
+    objects = []
+    for source_id in object_ids:
+        objects.append({"id": source_id, "position": [{"x": 0.0, "y": 0.0},
+                                                         {"x": 1.0, "y": 0.0},
+                                                         {"x": 2.0, "y": 0.0}],
+                        "valid": [1, 1, 1], "goalPosition": goal})
+    scene_path = testing / "ind_synthetic.json"
+    write_json(scene_path, {"name": "synthetic_scene", "objects": objects})
+    validation_path = testing / "validation.json"
+    write_json(validation_path, {"binary_sha256": sha256(binary), "recording": 7,
+                                 "location": 1, "ego_track": 57,
+                                 "ego_goal_sample": 2, "ego_goal": goal})
+    write_json(testing / "evaluation_contract_expert.json", {
+        "schema_version": 2, "scene_root": str(scene_root), "recording": 7,
+        "ego_track_id": contract_ego[0], "ego_binary_index": contract_ego[1],
+        "goal_sample": 2, "goal_position": goal,
+        "files": {"scene_json": {"sha256": sha256(scene_path)},
+                  "scene_binary": {"sha256": sha256(binary)}},
+    })
+    row = {"name": "synthetic_scene", "recording": 7, "location": 1,
+           "ego_track_id": manifest_ego[0], "ego_binary_index": manifest_ego[1],
+           "binary_sha256": sha256(binary)}
+    monkeypatch.setattr(context_module, "_manifest_scene",
+                        lambda root, digest: (row, manifest, None))
+    return scene_root, binary
+
+
 def test_forward_and_reverse_report_signed_net_route_progress():
     route = [(float(i), 0.0) for i in range(21)]
     forward, _ = run(frames([i * 0.5 for i in range(12)]), task_for(route))
@@ -104,6 +159,34 @@ def test_intersecting_route_is_ambiguous_without_continuity_anchor():
     metric = get_metric(result, "trajectory.route_progress")
     assert metric["status"] == "unavailable"
     assert result["task"]["route_progress"]["windows"]["full"]["branch_ambiguity"] is True
+
+
+def test_task_context_resolves_nonzero_ego_by_manifest_and_binary_identity(tmp_path, monkeypatch):
+    scene_root, binary = source_task_scene(tmp_path, monkeypatch)
+    task = context_module.build_task_context(
+        scene_root, sha256(binary), 57, expected_ego_binary_index=1,
+    )
+    assert task.status == "valid"
+    assert task.goal_source_step == 2
+    assert task.goal_xy == (2.0, 0.0)
+
+
+@pytest.mark.parametrize("object_ids,manifest_ego,contract_ego", [
+    ((57, 57), (57, 1), (57, 1)),
+    ((99, 57), (99, 1), (57, 1)),
+    ((99, 57), (57, 0), (57, 1)),
+    ((99, 57), (57, 1), (57, 0)),
+])
+def test_task_context_rejects_duplicate_or_contradictory_ego_identity(
+        tmp_path, monkeypatch, object_ids, manifest_ego, contract_ego):
+    scene_root, binary = source_task_scene(
+        tmp_path, monkeypatch, object_ids=object_ids,
+        manifest_ego=manifest_ego, contract_ego=contract_ego,
+    )
+    task = context_module.build_task_context(
+        scene_root, sha256(binary), 57, expected_ego_binary_index=1,
+    )
+    assert task.status == "invalid"
 
 
 @pytest.mark.parametrize("route_status,span", [("unavailable", None), ("valid", 0.0)])
@@ -158,6 +241,25 @@ def test_only_an_explicit_deadline_can_make_incomplete_task_fail():
     assert beyond["task"]["bounded_task_completion"]["outcome"] == "failed"
 
 
+def test_observation_gap_censors_explicit_deadline_failure():
+    task = task_for([(float(i * 10), 0) for i in range(11)], deadline=0.5)
+    trace_frames = frames([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    trace_frames[3]["actors"][0].update(present=False, x=None, y=None)
+    result, _ = run(trace_frames, task, requested=6)
+    assert result["task"]["bounded_task_completion"]["outcome"] == "unresolved"
+    assert result["task"]["deadline_assessment"]["supported"] is False
+    assert "censors" in result["task"]["deadline_assessment"]["reason"]
+
+
+def test_completion_after_explicit_deadline_is_failure_with_continuous_coverage():
+    task = task_for([(0, 0), (1, 0), (2, 0), (3, 0)], radius=0.2, deadline=0.5)
+    result, _ = run(frames([0, 0.5, 1, 1.5, 2, 2.5, 3]), task, requested=7)
+    assert result["task"]["bounded_task_completion"]["completion"]["time_s"] == pytest.approx(0.6)
+    assert result["task"]["bounded_task_completion"]["outcome"] == "failed"
+    assert result["task"]["deadline_assessment"]["supported"] is True
+    assert result["task"]["deadline_assessment"]["late_completion_elapsed_s"] == pytest.approx(0.6)
+
+
 def test_stationary_wait_is_candidate_only_and_restart_remains_observed():
     xs = [0.0] * 31 + [float(i) for i in range(1, 12)]
     speeds = [0.0] * 30 + [1.0] * 12
@@ -189,13 +291,30 @@ def test_stationary_wait_is_candidate_only_and_restart_remains_observed():
 
 def test_native_goal_terminal_without_pose_preserves_completion_event():
     task = task_for([(float(i), 0.0) for i in range(5)])
+    trace = frames([0, 1, 2, 3], goals={3}, terminal_missing=True)
     result, _ = run(frames([0, 1, 2, 3], goals={3}, terminal_missing=True), task,
-                    terminal="ego_removed", requested=8)
+                    terminal="ego_removed", requested=8,
+                    evaluation_capture=native_goal_capture(len(trace), goal=(4.0, 0.0)),
+                    evaluation_capture_bound=True)
     task_result = result["task"]
     assert task_result["native_goal_event"]["step"] == 3
     assert task_result["bounded_task_completion"]["outcome"] == "completed"
-    assert task_result["bounded_task_completion"]["completion_basis"] == "native_goal_event"
+    assert task_result["bounded_task_completion"]["completion_basis"] == "matched_native_goal_event"
+    assert task_result["native_goal_event"]["task_goal_binding"]["matches"] is True
     assert task_result["terminal"]["truncation_status"] == "observed_before_requested_horizon"
+
+
+def test_unbound_or_contradictory_native_goal_does_not_complete_source_task():
+    task = task_for([(0, 0), (1, 0), (2, 0), (3, 0)])
+    trace = frames([0.0, 0.5, 1.0, 1.5], goals={3})
+    unbound, _ = run([dict(frame, actors=[dict(frame["actors"][0])]) for frame in trace], task)
+    contradictory, _ = run([dict(frame, actors=[dict(frame["actors"][0])]) for frame in trace], task,
+                           evaluation_capture=native_goal_capture(len(trace), goal=(9.0, 0.0)),
+                           evaluation_capture_bound=True)
+    assert unbound["task"]["native_goal_event"]["observed"] is True
+    assert unbound["task"]["bounded_task_completion"]["outcome"] == "unresolved"
+    assert contradictory["task"]["native_goal_event"]["task_goal_binding"]["matches"] is False
+    assert contradictory["task"]["bounded_task_completion"]["outcome"] == "unresolved"
 
 
 def test_smart_branch_ambiguity_and_goal_visibility_are_reported_separately():

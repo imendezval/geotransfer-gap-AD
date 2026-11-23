@@ -21,6 +21,7 @@ _PROJECTION_DISTANCE_TIE_M = 0.1
 _PROJECTION_ARC_TIE_M = 0.5
 _CONTINUITY_SLACK_M = 0.5
 _DIRECTION_EPSILON_M = 0.02
+_NATIVE_GOAL_MATCH_TOLERANCE_M = 0.1
 
 
 def _finite(value):
@@ -642,7 +643,7 @@ def _low_progress(frames, times, route_output, profile, evidence_refs):
     return metrics
 
 
-def _native_goal(events, exposure):
+def _native_goal(events, exposure, goal_binding):
     goals = [row for row in events if row.get("channel") == "goal_reached"]
     coverage = exposure.get("event_observation_coverage", {}).get("windows", {}).get("full", {})
     channel = coverage.get("channels", {}).get("reached_goal", {})
@@ -658,6 +659,64 @@ def _native_goal(events, exposure):
         "attribution": first.get("attribution") if first else None,
         "source": first.get("evidence") if first else "no_active_goal_flag_observed",
         "coverage": channel,
+        "task_goal_binding": goal_binding,
+    }
+
+
+def _captured_task_goal_binding(capture, capture_bound, ego_id, ego_binary_index,
+                                task, report, frame_count):
+    if not capture_bound or capture is None:
+        return {"status": "unavailable", "matches": None,
+                "reason": "No hash-bound native navigation-goal capture is available"}
+    if (type(capture.get("schema_version")) is not int or capture.get("schema_version") != 1
+            or capture.get("ego_source_id") != ego_id
+            or capture.get("ego_binary_index") != ego_binary_index
+            or capture.get("binary_sha256") != report.get("binary_sha256")
+            or capture.get("scene") != report.get("scene")
+            or not isinstance(capture.get("observations"), list)
+            or len(capture["observations"]) != frame_count):
+        return {"status": "invalid", "matches": None,
+                "reason": "Bound native goal capture identity or observation count contradicts the trace"}
+    if task.goal_xy is None:
+        return {"status": "unavailable", "matches": None,
+                "reason": "Validated source task has no goal position"}
+    recorded_goals = []
+    for step, observation in enumerate(capture["observations"]):
+        if (not isinstance(observation, dict) or observation.get("step") != step
+                or not isinstance(observation.get("actors"), list)):
+            return {"status": "invalid", "matches": None,
+                    "reason": "Native goal capture step sequence differs from the trace"}
+        actors = [row for row in observation.get("actors", ())
+                  if isinstance(row, dict) and row.get("source_id") == ego_id]
+        if not actors:
+            continue
+        if len(actors) != 1 or actors[0].get("binary_index") != ego_binary_index:
+            return {"status": "invalid", "matches": None,
+                    "reason": "Native goal capture ego identity is duplicated or inconsistent"}
+        goal = actors[0].get("navigation_goal_world_xy")
+        if goal is None:
+            continue
+        if not (isinstance(goal, list) and len(goal) == 2
+                and all(_finite(value) for value in goal)):
+            return {"status": "invalid", "matches": None,
+                    "reason": "Native goal capture contains a malformed goal position"}
+        recorded_goals.append({"step": step,
+                               "position_world_xy": [float(goal[0]), float(goal[1])]})
+    if not recorded_goals:
+        return {"status": "unavailable", "matches": None,
+                "reason": "Bound capture contains no ego navigation-goal position"}
+    distances = [math.dist(row["position_world_xy"], task.goal_xy) for row in recorded_goals]
+    matches = all(distance <= _NATIVE_GOAL_MATCH_TOLERANCE_M for distance in distances)
+    return {
+        "status": "valid",
+        "matches": matches,
+        "reason": ("Captured native navigation goal matches the bounded source task"
+                   if matches else
+                   "Captured native navigation goal differs from the bounded source task"),
+        "matching_tolerance_m": _NATIVE_GOAL_MATCH_TOLERANCE_M,
+        "recorded_goal_observation_count": len(recorded_goals),
+        "maximum_goal_difference_m": float(max(distances)),
+        "last_recorded_goal_step": recorded_goals[-1]["step"],
     }
 
 
@@ -699,8 +758,41 @@ def _safe_completion(task_outcome, events, exposure):
             "criterion_set_id": "safe_completion_core_v1", "criteria": results}
 
 
+def _deadline_support(frames, actors, times, deadline_s, profile):
+    if not times or not _finite(times[0]) or not _finite(deadline_s):
+        return {"status": "unavailable", "supported": False,
+                "reason": "Task deadline or trace timebase is unavailable"}
+    cutoff = float(times[0] + deadline_s)
+    bracket = next((index for index, value in enumerate(times)
+                    if _finite(value) and value >= cutoff), None)
+    if bracket is None:
+        return {"status": "unavailable", "supported": False,
+                "reason": "Trace ended before the explicit task deadline"}
+    nominal_dt = profile.values["time"]["nominal_sample_interval_s"]
+    for index in range(bracket + 1):
+        if not _finite(times[index]) or not _present_pose(actors[index]):
+            return {"status": "unavailable", "supported": False,
+                    "reason": f"Ego pose/time gap censors deadline assessment at observation {index}"}
+        if index:
+            prior_frame = frames[index - 1]
+            frame = frames[index]
+            dt = times[index] - times[index - 1]
+            if (not _finite(dt) or dt <= 0 or dt > nominal_dt * 1.5
+                    or frame.get("step", index) != prior_frame.get("step", index - 1) + 1
+                    or not _same_lifetime(actors[index - 1], actors[index])
+                    or (type(actors[index - 1].get("source_valid")) is bool
+                        and type(actors[index].get("source_valid")) is bool
+                        and actors[index - 1]["source_valid"] != actors[index]["source_valid"])):
+                return {"status": "unavailable", "supported": False,
+                        "reason": f"Observation gap or ego identity boundary censors deadline at {index}"}
+    return {"status": "valid", "supported": True,
+            "reason": "Continuous ego pose/time observations span the explicit task deadline",
+            "deadline_time_s": cutoff, "last_supported_step": frames[bracket].get("step", bracket)}
+
+
 def measure_tasks(frames, ego_id, report, profile, exposure, events,
-                  task_context: TaskContext | None, *, evidence_refs=()):
+                  task_context: TaskContext | None, *, evidence_refs=(),
+                  evaluation_capture=None, evaluation_capture_bound=False):
     """Measure task progress and efficiency from one already-loaded saved trace."""
     masks = exposure.get("observation_masks", ())
     times = ([row.get("time_s") for row in masks] if len(masks) == len(frames)
@@ -735,7 +827,11 @@ def measure_tasks(frames, ego_id, report, profile, exposure, events,
     )
     low_metrics = _low_progress(frames, times, route_output, profile, evidence_refs)
 
-    native_goal = _native_goal(events, exposure)
+    goal_binding = _captured_task_goal_binding(
+        evaluation_capture, evaluation_capture_bound, ego_id,
+        report.get("ego_binary_index"), task, report, len(frames),
+    )
+    native_goal = _native_goal(events, exposure, goal_binding)
     geometric_goal = None
     if task.status == "valid" and task.goal_xy and task.completion_radius_m:
         rows = []
@@ -752,38 +848,75 @@ def measure_tasks(frames, ego_id, report, profile, exposure, events,
     native_row = next((row for row in events if row.get("channel") == "goal_reached"), None)
     completion = None
     completion_basis = None
+    native_completion = None
     if task.status == "valid":
-        if native_row is not None:
+        if native_row is not None and goal_binding.get("matches") is True:
             event_index = next((index for index, frame in enumerate(frames)
                                 if frame.get("step", index) == native_row.get("step")), None)
-            completion = {"step": native_row.get("step"), "time_s": native_row.get("time_s"),
-                          "attribution": native_row.get("attribution"),
-                          "index": event_index}
-            completion_basis = "native_goal_event"
-        if geometric_goal is not None and (completion is None
-                or (type(geometric_goal.get("time_s")) in (int, float)
-                    and (completion.get("time_s") is None
-                         or geometric_goal["time_s"] < completion["time_s"]))):
-            completion = geometric_goal
-            completion_basis = "observed_position_within_validated_source_goal_radius"
-        if completion is not None:
-            outcome, outcome_reason = "completed", "the bounded source goal was observed"
-        elif (task.deadline_s is not None and times and _finite(times[-1])
-              and _finite(times[0]) and times[-1] - times[0] >= task.deadline_s):
-            outcome, outcome_reason = "failed", "an explicit validated task deadline elapsed without completion"
-        elif task.deadline_s is not None:
-            outcome, outcome_reason = "unresolved", "recording ended before task resolution or deadline"
-        else:
-            terminal_reason = report.get("terminal_reason")
-            if terminal_reason == "horizon":
-                unresolved_reason = "horizon/recording end does not define task failure"
-            elif terminal_reason:
-                unresolved_reason = f"terminal {terminal_reason} ended before task resolution; no task failure rule applies"
+            native_completion = {"step": native_row.get("step"),
+                                 "time_s": native_row.get("time_s"),
+                                 "attribution": native_row.get("attribution"),
+                                 "index": event_index}
+        candidates = []
+        if native_completion is not None:
+            candidates.append((native_completion, "matched_native_goal_event"))
+        if geometric_goal is not None:
+            candidates.append((geometric_goal,
+                               "observed_position_within_validated_source_goal_radius"))
+        if candidates:
+            completion, completion_basis = min(
+                candidates,
+                key=lambda item: (item[0].get("time_s")
+                                  if _finite(item[0].get("time_s")) else math.inf,
+                                  item[0].get("index", math.inf)),
+            )
+        deadline_assessment = {"status": "not_applicable", "supported": False,
+                               "reason": "No explicit validated task deadline is defined"}
+        if task.deadline_s is None:
+            if completion is not None:
+                outcome, outcome_reason = "completed", "the bounded source goal was observed"
             else:
-                unresolved_reason = "recording ended before task resolution; no task failure rule applies"
-            outcome, outcome_reason = "unresolved", unresolved_reason
+                terminal_reason = report.get("terminal_reason")
+                if terminal_reason == "horizon":
+                    unresolved_reason = "horizon/recording end does not define task failure"
+                elif terminal_reason:
+                    unresolved_reason = f"terminal {terminal_reason} ended before task resolution; no task failure rule applies"
+                else:
+                    unresolved_reason = "recording ended before task resolution; no task failure rule applies"
+                outcome, outcome_reason = "unresolved", unresolved_reason
+        else:
+            deadline_assessment = _deadline_support(
+                frames, actors, times, task.deadline_s, profile
+            )
+            completion_elapsed = (completion.get("time_s") - times[0]
+                                  if completion is not None
+                                  and _finite(completion.get("time_s")) and times
+                                  and _finite(times[0]) else None)
+            if completion is not None and completion_elapsed is None:
+                outcome, outcome_reason = (
+                    "unresolved", "completion is observed but its time cannot be compared with the explicit deadline")
+            elif completion is not None and completion_elapsed <= task.deadline_s:
+                outcome, outcome_reason = "completed", "the bounded source goal was observed by its deadline"
+                deadline_assessment = {"status": "valid", "supported": True,
+                                       "reason": "Observed task completion is at or before the explicit deadline",
+                                       "completion_elapsed_s": float(completion_elapsed),
+                                       "deadline_s": task.deadline_s}
+            elif deadline_assessment["supported"]:
+                if completion is not None:
+                    outcome = "failed"
+                    outcome_reason = "the bounded source goal was observed after its explicit deadline"
+                    deadline_assessment["reason"] = outcome_reason
+                    deadline_assessment["late_completion_elapsed_s"] = float(completion_elapsed)
+                else:
+                    outcome = "failed"
+                    outcome_reason = "an explicit validated task deadline elapsed without observed completion"
+            else:
+                outcome = "unresolved"
+                outcome_reason = deadline_assessment["reason"]
     else:
         outcome, outcome_reason = "unassessable", task.reason
+        deadline_assessment = {"status": "unavailable", "supported": False,
+                               "reason": "Task context is unassessable"}
 
     task_metric = _metric(
         "task.outcome", version,
@@ -872,6 +1005,7 @@ def measure_tasks(frames, ego_id, report, profile, exposure, events,
         "context": {**task.summary(), "annotation": annotation,
                     "annotation_application_reason": annotation_problem},
         "native_goal_event": native_goal,
+        "deadline_assessment": deadline_assessment,
         "planner_goal_visibility": _planner_goal_visibility(report),
         "bounded_task_completion": {
             "outcome": outcome, "reason": outcome_reason,
