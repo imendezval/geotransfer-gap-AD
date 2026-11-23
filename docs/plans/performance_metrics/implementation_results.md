@@ -162,3 +162,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE07 — Actual interaction realization
 
 **Dispatch.** Base `5889267fb031a89d7f72fbea7a06e35d9faada28`. Build separate source opportunity and actual realization for following, pedestrian and cyclist crossing and existing controls. Keep unrealized encounters in the result.
+
+**Review pending repair.** Candidate `c42ae21`, 163 focused tests reported by Luna. Real r07 archived smoke exposed a mismatch between the manifest scene ID and the converter's canonical scene name. Review also found PET entry/exit could treat unknown footprint occupancy as clear and join across a lifetime boundary. The first repair turn hit a usage limit before changing the workspace. Redispatched after usage was replenished. Evidence under `runs/pe_campaign/pe07/agent/`.
