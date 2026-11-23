@@ -244,7 +244,8 @@ def _validate_layout(saved):
         try:
             from geotransfer_gap.evaluation.capture import validate_evaluation_capture
 
-            validate_evaluation_capture(capture, report, saved.hashes["trace"])
+            validate_evaluation_capture(capture, report, saved.hashes["trace"],
+                                        verification=verification)
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
             raise SavedEvidenceError(f"Invalid evaluation capture: {exc}") from exc
 

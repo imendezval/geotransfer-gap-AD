@@ -20,8 +20,9 @@ OLD_REVISION = "504218cb9ecd7fd64d2952630b9f10f56d80f923"
 
 def states(step):
     rows = [
-        dict(id=7, binary_index=0, present=step != 1, x=None if step == 1 else 9),
-        dict(id=41, binary_index=1, present=True, x=step),
+        dict(id=7, binary_index=0, present=step != 1, x=None if step == 1 else 9,
+             collision_state=0),
+        dict(id=41, binary_index=1, present=True, x=step, collision_state=0),
     ]
     return dict(step=step, time_s=step / 10, actors=rows if step % 2 == 0 else rows[::-1])
 
@@ -82,7 +83,10 @@ def synthetic_capture(trace, trace_digest):
             actors.append({
                 "source_id": state["id"], "binary_index": state["binary_index"],
                 "lifetime_generation": assignment.get("lifetime_generation"),
-                "collision_state": 0, "collision_partner_binary_index": None,
+                "collision_state": state["collision_state"],
+                "collision_partner_status": "not_applicable",
+                "native_collision_partner_index": None,
+                "collision_partner_binary_index": None,
                 "collision_partner_source_id": None, "collision_center_world_xy": None,
                 "partner_center_world_xy": None, "navigation_goal_world_xy": None,
             })
@@ -159,6 +163,26 @@ def test_bound_evaluation_capture_is_returned_and_tampering_is_rejected(bundle):
 
     capture_path.write_bytes(capture_path.read_bytes() + b" ")
     with pytest.raises(SavedEvidenceError, match="Playback hash"):
+        load_saved_trace(path)
+
+
+def test_saved_capture_settings_must_match_verification_native_facts(bundle):
+    path, trace, verification, _ = bundle
+    attempt = attest(path, trace, verification)
+    capture_path = path.with_name("evaluation_capture.json")
+    capture = synthetic_capture(trace, sha256(path))
+    write_json(capture_path, capture)
+    attempt["scene_config"]["capture_evaluation"] = True
+    attempt["evidence"]["files"]["evaluation_capture"] = {
+        "path": capture_path.name, "sha256": sha256(capture_path),
+    }
+    write_json(path.with_name("attempt.json"), attempt)
+
+    capture["native_settings"]["episode_length"] = 92
+    write_json(capture_path, capture)
+    attempt["evidence"]["files"]["evaluation_capture"]["sha256"] = sha256(capture_path)
+    write_json(path.with_name("attempt.json"), attempt)
+    with pytest.raises(SavedEvidenceError, match="native settings differ"):
         load_saved_trace(path)
 
 

@@ -8,7 +8,7 @@ from geotransfer_gap.artifacts import sha256, write_json
 from geotransfer_gap.runtime.run_trace import _capture_expected_file
 
 
-def fixture_capture(collision_state=1):
+def fixture_capture(collision_state=1, partner_index=2):
     ids = [100, 1035, 500]
     binary = {
         "objects": [
@@ -27,7 +27,7 @@ def fixture_capture(collision_state=1):
     # The ego has no canonical terminal pose, but the detector has retained
     # the collision flag and copied center fields at this observation.
     entities[1].update(removed=True, x=-10000., collision_state=collision_state,
-                       collided_with_index=2, collision_x=2., collision_y=3.,
+                       collided_with_index=partner_index, collision_x=2., collision_y=3.,
                        collision_other_x=4., collision_other_y=5.,
                        goal_position_x=1., goal_position_y=2.)
     actors = [
@@ -52,9 +52,10 @@ def fixture_capture(collision_state=1):
         "frames": [{
             "step": 0, "transition_applied": False,
             "state": {"step": 0, "actors": [
-                {"id": 500, "binary_index": 2, "present": True},
-                {"id": 1035, "binary_index": 1, "present": False},
-                {"id": 100, "binary_index": 0, "present": True},
+                {"id": 500, "binary_index": 2, "present": True, "collision_state": 0},
+                {"id": 1035, "binary_index": 1, "present": False,
+                 "collision_state": collision_state},
+                {"id": 100, "binary_index": 0, "present": True, "collision_state": 0},
             ]},
             "actors": [
                 {"source_id": 500, "binary_index": 2, "lifetime_generation": 4},
@@ -74,6 +75,8 @@ def test_terminal_collision_maps_nonzero_ego_and_transforms_detector_centers():
     rows = {row["source_id"]: row for row in saved["observations"][0]["actors"]}
     ego = rows[1035]
     assert ego["binary_index"] == 1 and ego["lifetime_generation"] == 4
+    assert ego["collision_partner_status"] == "mapped"
+    assert ego["native_collision_partner_index"] == 2
     assert ego["collision_partner_binary_index"] == 2
     assert ego["collision_partner_source_id"] == 500
     assert ego["collision_center_world_xy"] == [12., 23.]
@@ -109,6 +112,35 @@ def test_offroad_flag_does_not_reuse_stale_vehicle_collision_fields():
     assert ego["partner_center_world_xy"] is None
 
 
+def test_unmapped_native_partner_is_explicit_unknown_without_a_source_id():
+    capture, trace = fixture_capture(partner_index=99)
+    saved = capture.build(trace, "b" * 64)
+    ego = next(row for row in saved["observations"][0]["actors"] if row["source_id"] == 1035)
+    assert ego["collision_partner_status"] == "unmapped_index"
+    assert ego["native_collision_partner_index"] == 99
+    assert ego["collision_partner_binary_index"] is None
+    assert ego["collision_partner_source_id"] is None
+
+
+def test_capture_collision_state_and_native_settings_must_match_canonical_evidence():
+    capture, trace = fixture_capture()
+    saved = capture.build(trace, "b" * 64)
+    corrupted = deepcopy(saved)
+    ego = next(row for row in corrupted["observations"][0]["actors"] if row["source_id"] == 1035)
+    ego["collision_state"] = 0
+    with pytest.raises(ValueError, match="collision state"):
+        validate_evaluation_capture(corrupted, trace, "b" * 64)
+    recorded = {"native": deepcopy(saved["native_settings"])}
+    corrupted = deepcopy(saved)
+    corrupted["native_settings"]["goal_behavior"] = 4
+    with pytest.raises(ValueError, match="differ from verification"):
+        validate_evaluation_capture(corrupted, trace, "b" * 64, verification=recorded)
+    corrupted = deepcopy(saved)
+    corrupted["native_settings"]["invented_setting"] = 1
+    with pytest.raises(ValueError, match="native settings"):
+        validate_evaluation_capture(corrupted, trace, "b" * 64)
+
+
 def test_parent_requires_and_hashes_capture_only_when_requested(tmp_path):
     capture, trace = fixture_capture()
     trace_path = tmp_path / "trace.json"
@@ -119,9 +151,14 @@ def test_parent_requires_and_hashes_capture_only_when_requested(tmp_path):
 
     saved = capture.build(trace, sha256(trace_path))
     write_json(tmp_path / "evaluation_capture.json", saved)
-    assert _capture_expected_file(tmp_path, {"capture_evaluation": True}, trace) == {
+    provenance = {"native": deepcopy(saved["native_settings"])}
+    assert _capture_expected_file(tmp_path, {"capture_evaluation": True}, trace, provenance) == {
         "evaluation_capture": "evaluation_capture.json",
     }
+    mismatched_provenance = {"native": {**provenance["native"], "goal_behavior": 4}}
+    with pytest.raises(ValueError, match="differ from verification"):
+        _capture_expected_file(tmp_path, {"capture_evaluation": True}, trace,
+                               mismatched_provenance)
     saved["ego_controller"] = "ppo"
     write_json(tmp_path / "evaluation_capture.json", saved)
     with pytest.raises(ValueError, match="identity or protocol"):

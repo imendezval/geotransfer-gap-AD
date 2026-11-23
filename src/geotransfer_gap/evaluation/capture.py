@@ -10,6 +10,10 @@ import re
 
 CAPTURE_SCHEMA_VERSION = 1
 CAPTURE_FILENAME = "evaluation_capture.json"
+_NATIVE_SETTING_KEYS = {
+    "dynamics_model", "action_type_flag", "episode_length",
+    "observation_width", "goal_behavior",
+}
 
 
 def _finite_number(value, label):
@@ -60,9 +64,7 @@ class EvaluationCapture:
                         "observation_width", "goal_behavior")
             if key in native_settings
         }
-        if set(self._settings) != {
-                "dynamics_model", "action_type_flag", "episode_length",
-                "observation_width", "goal_behavior"}:
+        if set(self._settings) != _NATIVE_SETTING_KEYS:
             raise ValueError("capture requires the supported native evaluation settings")
         self._observations = []
 
@@ -89,13 +91,18 @@ class EvaluationCapture:
             # Detector centers and partner indexes are meaningful only for 1;
             # offroad must not inherit stale collision-position fields.
             vehicle_collision = collision_state == 1
-            partner_index = raw_partner if vehicle_collision and raw_partner >= 0 else None
-            partner_id = (self._id_by_index[partner_index]
-                          if partner_index is not None and partner_index < len(self._id_by_index)
-                          else None)
-            if partner_index is not None and partner_index >= len(self._id_by_index):
-                # Preserve the copied index while refusing to invent a source ID.
-                partner_id = None
+            if not vehicle_collision:
+                partner_status, raw_partner_index = "not_applicable", None
+                partner_index = partner_id = None
+            elif raw_partner == -1:
+                partner_status, raw_partner_index = "not_reported", raw_partner
+                partner_index = partner_id = None
+            elif 0 <= raw_partner < len(self._id_by_index):
+                partner_status, raw_partner_index = "mapped", raw_partner
+                partner_index, partner_id = raw_partner, self._id_by_index[raw_partner]
+            else:
+                partner_status, raw_partner_index = "unmapped_index", raw_partner
+                partner_index = partner_id = None
             center = other_center = None
             if vehicle_collision:
                 center = [
@@ -122,6 +129,8 @@ class EvaluationCapture:
                 "binary_index": index,
                 "lifetime_generation": generation,
                 "collision_state": collision_state,
+                "collision_partner_status": partner_status,
+                "native_collision_partner_index": raw_partner_index,
                 "collision_partner_binary_index": partner_index,
                 "collision_partner_source_id": partner_id,
                 "collision_center_world_xy": center,
@@ -168,14 +177,14 @@ class EvaluationCapture:
             "limitations": [
                 "Collision positions are detector actor centers, not exact physical impact points.",
                 "No upstream aggregate or per-agent log API was read; reset/index behavior is not needed for these copied fields.",
-                "A null partner identity means the native detector supplied no valid mapped partner index.",
+                "Partner status and raw native index distinguish an unreported or unmapped partner; no source ID is fabricated.",
             ],
         }
         validate_evaluation_capture(capture, trace, trace_sha256)
         return capture
 
 
-def validate_evaluation_capture(capture, trace, trace_sha256):
+def validate_evaluation_capture(capture, trace, trace_sha256, *, verification=None):
     """Check capture structure and exact trace/protocol/actor binding."""
     if not isinstance(capture, dict) or type(capture.get("schema_version")) is not int \
             or capture["schema_version"] != CAPTURE_SCHEMA_VERSION:
@@ -202,8 +211,18 @@ def validate_evaluation_capture(capture, trace, trace_sha256):
     observations = capture.get("observations")
     if not isinstance(observations, list) or len(observations) != len(trace.get("frames", [])):
         raise ValueError("evaluation capture observation count differs from trace")
-    if not isinstance(capture.get("native_settings"), dict):
+    native_settings = capture.get("native_settings")
+    if not isinstance(native_settings, dict) or set(native_settings) != _NATIVE_SETTING_KEYS:
         raise ValueError("evaluation capture lacks native settings")
+    if (not isinstance(native_settings["dynamics_model"], str)
+            or any(type(native_settings[key]) is not int
+                   for key in ("action_type_flag", "episode_length", "observation_width", "goal_behavior"))):
+        raise ValueError("evaluation capture has invalid native settings")
+    recorded_native = (verification or {}).get("native")
+    if isinstance(recorded_native, dict):
+        if any(key in recorded_native and recorded_native[key] != value
+               for key, value in native_settings.items()):
+            raise ValueError("evaluation capture native settings differ from verification")
     coordinate = capture.get("coordinate_frame")
     if (not isinstance(coordinate, dict)
             or coordinate.get("transform") != "world_xy = native_xy + coordinate_offset_world_minus_native_m"):
@@ -242,22 +261,41 @@ def validate_evaluation_capture(capture, trace, trace_sha256):
                     or row.get("lifetime_generation") != assignment.get("lifetime_generation")):
                 raise ValueError(f"evaluation capture actor/lifetime binding differs at observation {step}")
             collision_state = row.get("collision_state")
-            if type(collision_state) is not int:
+            if (type(collision_state) is not int or type(state.get("collision_state")) is not int
+                    or collision_state != state["collision_state"]):
                 raise ValueError(f"invalid native collision state at observation {step}")
+            partner_status = row.get("collision_partner_status")
+            raw_partner_index = row.get("native_collision_partner_index")
             partner_index = row.get("collision_partner_binary_index")
             partner_id = row.get("collision_partner_source_id")
             if collision_state < 0:
                 raise ValueError(f"invalid native collision state at observation {step}")
-            if partner_index is None:
-                if partner_id is not None:
-                    raise ValueError(f"unmapped collision partner has a source ID at observation {step}")
+            if collision_state == 1:
+                if type(raw_partner_index) is not int:
+                    raise ValueError(f"vehicle event lacks a native partner index at observation {step}")
+                if partner_status == "mapped":
+                    if (partner_index != raw_partner_index or type(partner_index) is not int
+                            or partner_id is None):
+                        raise ValueError(f"invalid mapped collision partner at observation {step}")
+                    partner = next((actor_id for actor_id, actor in state_by_id.items()
+                                    if actor.get("binary_index") == partner_index), None)
+                    if partner is None or type(partner_id) is not int or partner_id != partner:
+                        raise ValueError(f"collision partner identity differs at observation {step}")
+                elif partner_status == "not_reported":
+                    if raw_partner_index != -1 or partner_index is not None or partner_id is not None:
+                        raise ValueError(f"invalid unreported collision partner at observation {step}")
+                elif partner_status == "unmapped_index":
+                    binary_indices = {actor.get("binary_index") for actor in state_by_id.values()}
+                    if (raw_partner_index == -1 or raw_partner_index in binary_indices
+                            or partner_index is not None
+                            or partner_id is not None):
+                        raise ValueError(f"invalid unmapped collision partner at observation {step}")
+                else:
+                    raise ValueError(f"invalid collision partner status at observation {step}")
             else:
-                if type(partner_index) is not int or partner_index < 0:
-                    raise ValueError(f"invalid collision partner index at observation {step}")
-                partner = next((actor_id for actor_id, actor in state_by_id.items()
-                                if actor.get("binary_index") == partner_index), None)
-                if partner is None or partner_id != partner:
-                    raise ValueError(f"collision partner identity differs at observation {step}")
+                if (partner_status != "not_applicable" or raw_partner_index is not None
+                        or partner_index is not None or partner_id is not None):
+                    raise ValueError(f"non-vehicle event carries collision partner identity at observation {step}")
             for key in ("collision_center_world_xy", "partner_center_world_xy", "navigation_goal_world_xy"):
                 pair = row.get(key)
                 if pair is not None and (not isinstance(pair, list) or len(pair) != 2

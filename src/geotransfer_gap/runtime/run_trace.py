@@ -367,7 +367,7 @@ def _validate_startup(trace, inputs, root, binary):
         raise ValueError("release schedule disagrees with the authoritative source")
 
 
-def _capture_expected_file(folder, row, trace):
+def _capture_expected_file(folder, row, trace, provenance=None):
     """Require and validate the optional sidecar only for opted-in attempts."""
     if row.get("capture_evaluation") is not True:
         return {}
@@ -375,7 +375,8 @@ def _capture_expected_file(folder, row, trace):
 
     capture_path = folder / CAPTURE_FILENAME
     capture = read_json(capture_path)
-    validate_evaluation_capture(capture, trace, sha256(folder / "trace.json"))
+    validate_evaluation_capture(capture, trace, sha256(folder / "trace.json"),
+                                verification=provenance)
     return {"evaluation_capture": CAPTURE_FILENAME}
 
 
@@ -434,7 +435,7 @@ def validate_run(folder, row):
         raise ValueError("SMART evidence names a different scene binary")
     expected = {"trace": "trace.json", "provenance": "verification.json",
                 **{model: MODEL_PROVENANCE[model] for model in models}}
-    expected.update(_capture_expected_file(folder, row, trace))
+    expected.update(_capture_expected_file(folder, row, trace, provenance))
     return {
         "integration_validity": "validated_trace_and_provenance",
         "files": {key: {"path": name, "sha256": sha256(folder / name)}
