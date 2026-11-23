@@ -170,3 +170,5 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 ## PE08 — Conditional semantic compliance
 
 **Dispatch.** Base `e80dddd8cd1f6c1106c7c0347d515813bcb80b45`. Measure only supported obligations on the actual route. Retain independent source admission and explicit gaps in rule evidence.
+
+**Review pending repair.** Candidate `b268e08`. Sol's explicit Python 3.11 venv with the isolated Shapely wheel passed 48 semantic/map/episode tests (`runs/pe_campaign/pe08/sol_review.log`), resolving the agent's Python 3.12 wheel mismatch for this configuration. Repair requested for the frozen safe completion contract and unsupported priority-actor absence.
