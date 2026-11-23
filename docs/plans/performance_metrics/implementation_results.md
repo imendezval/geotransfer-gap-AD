@@ -156,3 +156,9 @@ The default profile's raw SHA-256 remains `8e5a6dfc329b0c71f75ac4aca41000efea669
 **Dispatch.** Base `f0e187a174ed8b941c1de9f25efbd3b5f3491185`. Use the existing source task/route owners and conservative offline outcomes. Do not infer successful completion from a native goal or failure from a horizon.
 
 **Review pending repair.** Candidate `11fd1a0`; Sol's task/episode/safety/map check passed 75 tests (`runs/pe_campaign/pe06/sol_review.log`). Repair required for nonzero/reordered source ego identity, native goal versus bounded source goal binding, and deadline timing/censoring. Real r07 smoke remains scoped to its source certificates.
+
+**Accepted.** Implementation `11fd1a0`, evidence-binding repair `5889267`. Review checked identity-based source ego selection, continuity-limited projection, separate native goal and source completion, time-bounded deadline censoring, and safe completion with missing criteria. `PYTHONPATH="$PWD/runs/pe_campaign/pe05/agent/deps_no_numpy" .venv/bin/pytest -q tests/test_evaluation_tasks.py tests/test_evaluation_episode.py tests/test_evaluation_safety.py tests/test_evaluation_map_metrics.py` passed 83 tests after repair (`runs/pe_campaign/pe06/sol_review_final.log`). Prior archived r07 smoke diagnosed source progress without treating early removal as task failure. Evidence under `runs/pe_campaign/pe06/agent/`. Next PE07.
+
+## PE07 — Actual interaction realization
+
+**Dispatch.** Base `5889267fb031a89d7f72fbea7a06e35d9faada28`. Build separate source opportunity and actual realization for following, pedestrian and cyclist crossing and existing controls. Keep unrealized encounters in the result.
