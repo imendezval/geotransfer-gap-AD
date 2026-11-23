@@ -294,6 +294,11 @@ def test_episode_cli_writes_trace_only_bundle_and_refuses_unsafe_targets(tmp_pat
     assert saved["task"]["bounded_task_completion"]["outcome"] == "unassessable"
     assert any("task outcomes are unassessable" in item
                for item in saved["context_limitations"])
+    assert saved["semantic_compliance"]["capabilities"]["traffic_signal"]["status"] == "unavailable"
+    assert saved["task"]["safe_completion"]["outcome"] == "not_assessed"
+    assert {"rules.wrong_way_distance", "rules.speed_limit_exceedance",
+            "rules.stop_sign_compliance", "rules.priority_yielding"} <= {
+                row["metric_id"] for row in saved["metrics"]}
     with pytest.raises(FileExistsError):
         main(["evaluate", "episode", "--trace", str(trace), "--output", str(output)])
     with pytest.raises(ValueError, match="beneath configured runs"):

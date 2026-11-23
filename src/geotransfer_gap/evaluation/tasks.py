@@ -103,15 +103,17 @@ def _verify_reference(record):
 
 
 def _load_annotation(task, profile):
-    if task.scene_id is None or task.identity is None:
+    if getattr(task, "scene_id", None) is None or getattr(task, "identity", None) is None:
         return {"status": "unavailable", "reason": "Task scene identity is unavailable",
-                "claims": [], "task_claim": None, "task_claim_evidence": []}
+                "claims": [], "claims_data": [], "task_claim": None,
+                "task_claim_evidence": []}
     configured = Path(profile.values["profile"]["annotations_directory"])
     directory = configured if configured.is_absolute() else settings().project / configured
     path = directory / f"{task.scene_id}.json"
     if not path.is_file():
         return {"status": "absent", "reason": "No sparse evaluation annotation is supplied",
-                "claims": [], "task_claim": None, "task_claim_evidence": []}
+                "claims": [], "claims_data": [], "task_claim": None,
+                "task_claim_evidence": []}
     try:
         try:
             annotation_ref = {"kind": "sparse_evaluation_annotation",
@@ -134,6 +136,7 @@ def _load_annotation(task, profile):
         task_claims = []
         task_claim_evidence = {}
         summaries = []
+        claims_data = []
         for claim in annotation["claims"]:
             required = {"claim_id", "claim_type", "scope", "decision_status",
                         "decision", "evidence_refs", "review"}
@@ -172,6 +175,7 @@ def _load_annotation(task, profile):
             if claim["claim_type"] == "task_definition":
                 task_claims.append(claim)
                 task_claim_evidence[claim["claim_id"]] = evidence_values
+            claims_data.append({"claim": claim, "selected_evidence": evidence_values})
             summaries.append({"claim_id": claim["claim_id"],
                               "claim_type": claim["claim_type"],
                               "decision_status": claim["decision_status"],
@@ -182,13 +186,15 @@ def _load_annotation(task, profile):
             raise ValueError("multiple supported task definitions are ambiguous")
         return {"status": "valid", "reason": "Annotation identity and evidence hashes verified",
                 "evidence_ref": annotation_ref, "claims": summaries,
+                "claims_data": claims_data,
                 "task_claim": next((claim for claim in task_claims
                     if claim["decision_status"] == "supported"), None),
                 "task_claim_evidence": task_claim_evidence}
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         return {"status": "invalid", "reason": f"Sparse annotation is invalid: {exc}",
                 "evidence_ref": annotation_ref,
-                "claims": [], "task_claim": None, "task_claim_evidence": []}
+                "claims": [], "claims_data": [], "task_claim": None,
+                "task_claim_evidence": []}
 
 
 def _apply_task_claim(task, claim, evidence_values):
@@ -792,7 +798,8 @@ def _deadline_support(frames, actors, times, deadline_s, profile):
 
 def measure_tasks(frames, ego_id, report, profile, exposure, events,
                   task_context: TaskContext | None, *, evidence_refs=(),
-                  evaluation_capture=None, evaluation_capture_bound=False):
+                  evaluation_capture=None, evaluation_capture_bound=False,
+                  annotation=None):
     """Measure task progress and efficiency from one already-loaded saved trace."""
     masks = exposure.get("observation_masks", ())
     times = ([row.get("time_s") for row in masks] if len(masks) == len(frames)
@@ -801,7 +808,7 @@ def measure_tasks(frames, ego_id, report, profile, exposure, events,
     task = task_context or TaskContext("unavailable", "No source task context was supplied")
     evidence_refs = tuple(evidence_refs) + tuple(task.evidence_refs)
     version = profile.definition_version
-    annotation = _load_annotation(task, profile)
+    annotation = annotation if annotation is not None else _load_annotation(task, profile)
     annotation_problem = None
     if annotation.get("evidence_ref"):
         evidence_refs += (annotation["evidence_ref"],)
@@ -1001,8 +1008,10 @@ def measure_tasks(frames, ego_id, report, profile, exposure, events,
     )
     metrics = (route_metrics + stationary_metrics + low_metrics + completion_metrics
                + [task_metric, safe_metric])
+    annotation_summary = {key: value for key, value in annotation.items()
+                         if key not in {"claims_data", "task_claim_evidence"}}
     task_result = {
-        "context": {**task.summary(), "annotation": annotation,
+        "context": {**task.summary(), "annotation": annotation_summary,
                     "annotation_application_reason": annotation_problem},
         "native_goal_event": native_goal,
         "deadline_assessment": deadline_assessment,

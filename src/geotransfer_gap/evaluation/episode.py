@@ -12,7 +12,8 @@ from geotransfer_gap.evaluation.kinematics import measure_kinematics
 from geotransfer_gap.evaluation.map_metrics import measure_map_metrics
 from geotransfer_gap.evaluation.safety import measure_safety
 from geotransfer_gap.evaluation.interactions import measure_interactions
-from geotransfer_gap.evaluation.tasks import measure_tasks
+from geotransfer_gap.evaluation.semantics import measure_semantics
+from geotransfer_gap.evaluation.tasks import _load_annotation, measure_tasks
 
 
 RESULT_SCHEMA_VERSION = 1
@@ -22,7 +23,7 @@ def _code_identity():
     package = Path(__file__).parent
     owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
               "context.py", "map_metrics.py", "tasks.py", "interactions.py",
-              "episode.py", "commands.py")
+              "semantics.py", "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
     files["runtime/trace_io.py"] = sha256(package.parent / "runtime/trace_io.py")
     files["maps/lanelet.py"] = sha256(package.parent / "maps/lanelet.py")
@@ -63,11 +64,13 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
         scene_root, report.get("binary_sha256"), saved.ego_source_id, map_context,
         expected_ego_binary_index=report.get("ego_binary_index"),
     )
+    annotation = _load_annotation(selected_task, profile)
     task_measurement = measure_tasks(
         frames, saved.ego_source_id, report, profile, measured["exposure"],
         measured["events"], selected_task, evidence_refs=metric_refs,
         evaluation_capture=saved.playback.evaluation_capture,
         evaluation_capture_bound=saved.playback.evaluation_capture_bound,
+        annotation=annotation,
     )
     measured["metrics"].extend(task_measurement["metrics"])
     interactions = measure_interactions(
@@ -76,6 +79,49 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
         risk_metrics=safety["metrics"],
     )
     measured["metrics"].extend(interactions["metrics"])
+    lane_assignment = next((row for row in spatial["metrics"]
+                            if row["metric_id"] == "trajectory.lane_lateral_offset"
+                            and row["window"] == "primary"), None)
+    lane_assignment_samples = (
+        lane_assignment.get("value", {}).get("samples", ())
+        if lane_assignment and isinstance(lane_assignment.get("value"), dict) else ())
+    semantics = measure_semantics(
+        frames, saved.ego_source_id, profile,
+        map_context or MapContext(status="unavailable",
+                                  reason="No hash-bound directed map was supplied"),
+        annotation,
+        lane_assignment_samples=lane_assignment_samples,
+        evidence_refs=(tuple(metric_refs) + tuple(selected_task.evidence_refs)
+                       + tuple(map_context.evidence_refs if map_context else ())),
+        trace_horizon_complete=(report.get("terminal_reason") == "horizon"
+                                and len(frames) == report.get("requested_observation_frames")),
+    )
+    measured["metrics"].extend(semantics["metrics"])
+    failed_rules = [row for row in semantics["metrics"]
+                    if row["criterion_outcome"] == "fail"]
+    if failed_rules:
+        safe = task_measurement["task"].get("safe_completion")
+        if safe:
+            safe["outcome"] = "fail"
+            safe["reason"] = "An observed supported conditional rule criterion failed"
+            safe["criteria"]["conditional_rules"] = {
+                "status": "valid", "outcome": "fail", "reason": safe["reason"],
+                "failed_metric_ids": [row["metric_id"] for row in failed_rules],
+                "semantic_results_path": "semantic_compliance.criteria",
+            }
+            safe_metric = next((row for row in task_measurement["metrics"]
+                                if row["metric_id"] == "task.safe_completion"), None)
+            if safe_metric:
+                safe_metric.update(status="valid", value={"outcome": "fail"},
+                                   criterion_outcome="fail", reason=safe["reason"])
+    elif task_measurement["task"].get("safe_completion"):
+        task_measurement["task"]["safe_completion"]["criteria"]["conditional_rules"] = {
+            "status": "not_assessed", "outcome": "not_assessed",
+            "reason": "At least one rule family lacks complete applicable evidence; no safe pass is inferred",
+            "unassessed_families": [key for key, value in semantics["capabilities"].items()
+                                     if value["status"] not in {"valid", "not_applicable"}],
+            "semantic_results_path": "semantic_compliance.capabilities",
+        }
     task_measurement["task"]["encounter_completion"] = {
         "status": interactions["status"],
         "reason": interactions["reason"],
@@ -165,6 +211,9 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
             "results": interactions["interactions"],
             "source_admission_decision_used": interactions.get("source_admission_decision_used", False),
             "compliance_criterion": interactions.get("compliance_criterion"),
+        },
+        "semantic_compliance": {
+            key: value for key, value in semantics.items() if key != "metrics"
         },
         "scene_context": (scene if scene is not None else
                           {"status": "trace_only_no_map_or_task_context"}),

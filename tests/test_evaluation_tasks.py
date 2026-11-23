@@ -398,6 +398,7 @@ def test_annotation_hashes_and_reviewed_task_bounds_are_applied(tmp_path, monkey
     assert context["completion_radius_m"] == 0.75
     assert context["deadline_s"] == 12.0
     assert context["annotation"]["status"] == "valid"
+    assert "claims_data" not in context["annotation"]
 
 
 def test_tampered_annotation_evidence_invalidates_task_context(tmp_path, monkeypatch):
