@@ -70,11 +70,15 @@ const slider=el('time'),reference=el('baseline'),mode=el('mode'),img=new Image()
 for(const select of [reference,mode]){
  choices.forEach((r,i)=>select.add(new Option(r.name,i)));
 }
-const selection=new URLSearchParams(location.hash.slice(1));
-const selectedEpisode=selection.get('episode'),selectedPair=selection.get('pair');
-const preferred=choices.findIndex(r=>selectedEpisode!==null?r.evaluation?.episode_id===selectedEpisode:
- selectedPair!==null?r.name===selectedPair:r.config);
-mode.value=preferred>=0&&(selectedEpisode!==null||selectedPair!==null||D.runs.length===1)?String(preferred):choices.length>1?'1':'0';
+function preferredView(){
+ const selection=new URLSearchParams(location.hash.slice(1));
+ const episode=selection.get('episode'),pair=selection.get('pair');
+ if(episode!==null)return choices.findIndex(r=>r.evaluation?.episode_id===episode);
+ if(pair!==null)return choices.findIndex(r=>r.name===pair);
+ return D.runs.length===1?choices.findIndex(r=>r.config):-1;
+}
+const preferred=preferredView();
+mode.value=preferred>=0?String(preferred):choices.length>1?'1':'0';
 el('aerial').disabled=!D.image;
 slider.max=Math.max(0,...choices.flatMap(r=>r.frames.map(f=>f.step)));
 const ego=(run,frame)=>frame?.actors.find(a=>a.id===run.ego_id&&a.present);
@@ -241,6 +245,10 @@ function update(){
 }
 let timer=null;
 for(const id of ['time','baseline','mode','details-for','aerial'])el(id).addEventListener('input',update);
+window.addEventListener('hashchange',()=>{
+ const preferred=preferredView();
+ if(preferred>=0){mode.value=String(preferred);update();}
+});
 el('play').onclick=()=>{
  if(timer){clearInterval(timer);timer=null;el('play').textContent='Play';}
  else{el('play').textContent='Pause';timer=setInterval(()=>{slider.value=(+slider.value+1)%(+slider.max+1);update();},100);}
