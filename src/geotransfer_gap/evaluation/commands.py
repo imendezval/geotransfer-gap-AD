@@ -48,7 +48,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="action", required=True)
     episode = sub.add_parser("episode", help="measure one existing saved trace")
     episode.add_argument("--trace", required=True, type=Path)
-    episode.add_argument("--output", required=True, type=Path)
+    episode.add_argument("--output", required=True, type=Path,
+                         help="new indexed evaluation directory beneath configured runs")
     episode.add_argument("--profile", type=Path)
     episode.add_argument("--scene", help="scene ID or scene root for identity checking")
     run = sub.add_parser("run", help="account for and evaluate an existing saved run or campaign")

@@ -7,6 +7,7 @@ import html
 import json
 import math
 from pathlib import Path
+from urllib.parse import quote
 import webbrowser
 from geotransfer_gap.config import settings
 from geotransfer_gap.artifacts import (
@@ -277,11 +278,12 @@ def _evaluated_run(item, root, digest, detached_bindings):
         raise FileNotFoundError(f"Saved trace is missing: {trace}")
     inputs = (result.get("episode_metrics") or {}).get("input") or {}
     hashes = inputs.get("evidence_sha256", {})
-    expected = None
-    if evidence.get("level") == "archived_attested" and "attempt" not in hashes:
-        expected = detached_bindings.get(trace.parent)
-        if expected is None or not {"trace", "provenance"} <= expected.keys():
-            raise ValueError("Archived trace is missing its saved evidence binding")
+    expected = detached_bindings.get(trace.parent) if "attempt" not in hashes else None
+    if expected:
+        expected = {**expected, "trace": {"path": trace.name, "sha256": evidence.get("trace_sha256")}}
+    if (evidence.get("level") == "archived_attested" and "attempt" not in hashes
+            and not (expected and "provenance" in expected)):
+        raise ValueError("Archived trace is missing its saved evidence binding")
     saved = read_playback(trace, digest, expected, verify_all_files=True)
     if saved.hashes.get("trace") != evidence.get("trace_sha256"):
         raise ValueError("Saved trace hash differs from the evaluated trace")
@@ -447,7 +449,8 @@ def _check_output(output, *, evaluations=(), campaign=None, inputs=(),
 
 
 def _page_path(directory, name):
-    if not name or name in {".", ".."} or Path(name).name != name:
+    if (not name or name in {".", ".."} or Path(name).name != name
+            or any(ord(char) < 32 for char in name)):
         raise ValueError(f"Invalid viewer page name: {name!r}")
     return directory / f"{name}.html"
 
@@ -550,7 +553,7 @@ def main(argv=None):
     ap.add_argument("--trace", type=Path, action="append", default=[])
     ap.add_argument("--evaluation", type=Path, action="append", default=[],
                     help="Select one saved indexed evaluation, or attach evaluations to an explicit view")
-    ap.add_argument("--output", type=Path)
+    ap.add_argument("--output", type=Path, help="HTML file for a single view or a directory for a gallery")
     ap.add_argument(
         "--run",
         choices=["expert", "smart", "both"],
@@ -638,7 +641,7 @@ def main(argv=None):
             + "".join(
                 (
                     '<li><a href="'
-                    + html.escape(p.name)
+                    + quote(p.name, safe="")
                     + '">'
                     + html.escape(p.stem)
                     + "</a></li>"

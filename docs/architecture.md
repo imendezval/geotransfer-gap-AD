@@ -73,13 +73,22 @@ The configured `cache` root stores verified archived reference-code checkouts.
 Native compilation and short scene-loader aliases retain their content-keyed
 `/tmp` locations used by the validated runtime.
 
-The evaluation layer consumes the existing `execution`, `runtime.run_trace`,
-batch/campaign ledgers, artifact references and hash-bound scene certificates.
-It does not own a simulator loop, run scheduler, source manifest, admission
-producer or second viewer. `evaluation.capture` copies optional native fields at
-the existing episode-worker hook and binds them to the already written trace;
-capture is opt-in and must leave canonical trace behavior unchanged. Offline
-evaluation writes new results under `runs/`, outside selected evidence. The
-existing viewer can display compatible saved results, while metric definitions
-and status semantics have one owner in
-[`docs/performance_evaluation.md`](performance_evaluation.md).
+The execution manifest selects scenes. The schema-4 ledger freezes the expected
+selection before dispatch and records attempts. Schema-2 ledgers can be
+partial, so legacy evaluation also uses the original scene manifest. Each
+trace retains its own observation and evidence bindings. Optional
+`evaluation.capture` fields are written by the existing episode-worker hook
+and bound to the canonical trace.
+
+The offline evaluation layer passes each selected trace through the shared
+saved-evidence reader and metric engine. Standalone trace, run and campaign
+selections use one indexed result writer. The index binds the input snapshot
+and per-episode results and events. Standalone selection scope is independent
+of execution attestation and original experiment accounting. Run and campaign
+selections retain unsuccessful and unavailable entries.
+
+The viewer reads indexed results and verifies their playback bindings against
+the recorded scene, binary, trace and sidecars. Its existing playback engine
+serves both explicit and evaluation-only views. Reports and summaries consume
+stored metrics. Geographic comparison additionally uses frozen source cohort
+manifests. See the [metric definitions](performance_evaluation.md).

@@ -25,6 +25,11 @@ incomplete slots. The output goes outside the saved campaign directory.
 Viewing uses the saved report and configured scene assets without inference
 or a campaign freeze check.
 
+To attach saved performance metrics and events, add `--evaluation EVALUATION_DIR`
+to a campaign view. To select playback from the evaluation index itself, use
+`geotransfer view --evaluation EVALUATION_DIR --open`. The evaluation gallery
+accounts for every indexed slot, including slots without usable playback.
+
 Use repeated trace flags to compare hand-selected trajectories on the same
 scene.
 

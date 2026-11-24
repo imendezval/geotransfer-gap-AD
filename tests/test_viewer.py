@@ -342,6 +342,31 @@ def test_old_trace_without_metrics_remains_viewable(tmp_path, matrix_bundle):
     assert '"name": "expert / idm / source_hold"' in page
 
 
+def test_explicit_fresh_run_comparison_uses_existing_execution_entrypoint(
+        tmp_path, matrix_bundle, monkeypatch):
+    from geotransfer_gap import execution
+    from geotransfer_gap.artifacts import write_json
+
+    scene, _, report, _ = matrix_bundle
+    calls = []
+
+    def fake_saved_run(args):
+        calls.append(args)
+        planner = args[-1]
+        run = tmp_path / "runs" / planner
+        write_json(run / scene.name / "trace.json", {
+            **legacy(planner), "scene": report["scene"], "binary_sha256": report["binary_sha256"],
+        })
+        return run
+
+    monkeypatch.setattr(execution, "main", fake_saved_run)
+    page = tmp_path / "fresh.html"
+    viewer.main(["--scene", str(scene), "--run", "both", "--output", str(page)])
+    assert [args[-1] for args in calls] == ["expert", "smart"]
+    html = page.read_text()
+    assert '"name": "expert evaluator rollout"' in html and '"name": "smart evaluator rollout"' in html
+
+
 def test_stale_trace_hash_is_not_attached(tmp_path, matrix_bundle):
     from geotransfer_gap.artifacts import read_json, write_json
 

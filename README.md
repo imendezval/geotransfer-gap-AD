@@ -129,43 +129,42 @@ The BB bridge can also run upstream PPO with the checkpoint and device options
 required by the BB checkout. The verified matrix uses `--ego ppo` or
 `--traffic ppo` and the pinned policy adapter.
 
-## Evaluate saved runs offline
+## Evaluate and view saved runs offline
 
-The evaluation commands read existing run ledgers, campaign traces and their
-recorded evidence. They do not launch a simulator or planner. Choose a fresh
-output directory beneath `runs/`; an existing campaign remains an input and is
-never rewritten by evaluation.
+Use the directory printed by a modern `geotransfer run` command.
 
 ```bash
-evaluation=runs/evaluation/m9-diagnostic
-.venv/bin/geotransfer evaluate run --campaign runs/m9_acceptance \
-  --output "$evaluation" --profile configs/evaluation/default.toml
-.venv/bin/geotransfer evaluate aggregate --evaluation "$evaluation" \
-  --output runs/evaluation/m9-aggregate
-.venv/bin/geotransfer evaluate sensitivity --evaluation "$evaluation" \
-  --output runs/evaluation/m9-sensitivity
+.venv/bin/geotransfer evaluate run --run "$RUN_DIR" --output runs/evaluation/example
+.venv/bin/geotransfer view --evaluation runs/evaluation/example --open
 ```
 
-`evaluate run --run DIR --manifest PATH` accounts for a saved run instead of a
-campaign. `evaluate report --evaluation DIR` rebuilds its CSV and Markdown from
-the already stored results. A campaign's `PASS` means its existing single and
-manifest executions were validated and canonically equal; it is not a driving
-success. Execution validity, metric assessment, encounter realization, task
-result and driving outcome remain separate. Missing evidence stays unavailable
-or blocked, never zero or pass. Read [the metric definitions](docs/performance_evaluation.md)
-before interpreting thresholds, exposures or geographic comparisons.
+Schema-4 run ledgers record the expected scene selection. An explicit
+`--manifest PATH` cross-checks it and remains required for legacy schema-2 runs.
 
-Mapped-footprint and lane-geometry measurements need the optional Shapely extra:
-install it with `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
-Without Shapely, those geometry assessments remain unavailable; their synthetic
-test module is explicitly skipped. To inspect a saved evaluation beside its
-trace, pass `--evaluation` to the existing viewer, for example:
+For a single saved trace, use `evaluate episode`.
 
 ```bash
-.venv/bin/geotransfer view --scene r07_e200_f25439 \
-  --trace runs/example/trace.json --evaluation runs/evaluation/example \
-  --output runs/views/example.html
+.venv/bin/geotransfer evaluate episode --trace "$TRACE_PATH" --output runs/evaluation/standalone
+.venv/bin/geotransfer view --evaluation runs/evaluation/standalone \
+  --output runs/views/standalone.html
 ```
+
+Both commands write an indexed evaluation with an input snapshot, CSV and
+Markdown reports, and one result/event pair per selected episode. Standalone
+counts describe the selected trace. The viewer uses the trace recorded in the
+evaluation and opens a gallery for multiple entries. Missing or changed
+playback evidence is listed as unavailable or invalid. Explicit scene/trace
+viewing still accepts repeated `--evaluation` attachments.
+
+Use new evaluation output directories under `runs/`. Evaluation, reporting,
+and playback of saved evidence run offline. Map footprint and lane geometry
+assessments require the optional Shapely extra. Install it with
+`.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
+
+See the [saved evidence workflows](docs/workflows.md#offline-performance-evaluation)
+for campaign evaluation, aggregation, sensitivity, and older standalone outputs.
+The [metric definitions](docs/performance_evaluation.md) explain exposure,
+missing evidence, and the frozen geographic comparison requirements.
 
 ## Convert and admit a new scene
 

@@ -39,7 +39,7 @@ def atomic_write_text(path, content):
 
 
 def protected_input_paths(cfg):
-    return (cfg.source, cfg.artifacts, cfg.bench, cfg.reference_data, cfg.weights,
+    return (cfg.source, cfg.artifacts, cfg.bench, cfg.reference_data, cfg.weights, cfg.cache,
             cfg.project / ".git")
 
 

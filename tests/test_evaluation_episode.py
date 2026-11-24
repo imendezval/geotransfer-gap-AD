@@ -323,6 +323,27 @@ def test_cli_accepts_safe_output_sibling_of_loose_trace_in_runs(tmp_path, monkey
     assert (destination / "index.json").is_file()
 
 
+def test_standalone_refuses_to_publish_if_trace_changes_during_measurement(tmp_path, monkeypatch):
+    from geotransfer_gap.evaluation import reporting
+
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
+    trace = tmp_path / "trace.json"
+    matrix_trace(trace, count=12, terminal="ego_removed", requested=20)
+    measure = reporting.evaluate_episode
+
+    def measure_then_change(*args, **kwargs):
+        result = measure(*args, **kwargs)
+        trace.write_bytes(trace.read_bytes() + b" ")
+        return result
+
+    monkeypatch.setattr(reporting, "evaluate_episode", measure_then_change)
+    output = runs / "changed"
+    with pytest.raises(ValueError, match="changed while evaluation was running"):
+        reporting.evaluate_trace(trace=trace, output=output)
+    assert not (output / "index.json").exists()
+
+
 def test_missing_event_channels_do_not_emit_zero_event_count(tmp_path, monkeypatch):
     from geotransfer_gap.evaluation.reporting import read_indexed_evaluation
 

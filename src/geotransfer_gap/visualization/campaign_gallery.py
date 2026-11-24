@@ -217,8 +217,8 @@ def render_evaluation(evaluation, output=None):
         raise ValueError("Choose an output directory for the multi-episode evaluation gallery")
 
     attachments = list(_indexed_attachments(evaluation, index, indexed))
-    requires_detached_binding = any(
-        row["result"]["evidence"].get("level") == "archived_attested"
+    requires_detached_binding = selection.get("kind") == "saved_campaign" and any(
+        row["result"]["evidence"].get("status") == "valid"
         and "attempt" not in ((row["result"].get("episode_metrics") or {}).get("input", {})
                               .get("evidence_sha256", {}))
         for row in attachments

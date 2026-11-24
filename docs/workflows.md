@@ -90,40 +90,99 @@ plots and execution traces remain local ignored artifacts.
 
 ## Offline performance evaluation
 
-Evaluate saved evidence only after selecting the intended run or frozen campaign.
-The command validates the saved index, trace and sidecar bindings and writes a
-new result directory under the configured `runs` root. It does not rerun a
-planner, replace a failed attempt, or change campaign status.
+A scene manifest selects scene inputs for execution. A run ledger records the
+submitted episodes and their execution and retry status. A trace records the
+observations of one episode. An evaluation index binds the selected saved
+evidence to metrics, events and reports. Use a new output directory beneath the
+configured `runs` root for each evaluation or summary.
+
+### Single-scene run
 
 ```bash
-evaluation=runs/evaluation/PROJECT_RUN
-.venv/bin/geotransfer evaluate run --campaign runs/m9_acceptance \
-  --output "$evaluation" --profile configs/evaluation/default.toml
-.venv/bin/geotransfer evaluate report --evaluation "$evaluation"
-.venv/bin/geotransfer evaluate aggregate --evaluation "$evaluation" \
-  --output runs/evaluation/PROJECT_RUN-aggregate
-.venv/bin/geotransfer evaluate sensitivity --evaluation "$evaluation" \
-  --output runs/evaluation/PROJECT_RUN-sensitivity
+.venv/bin/geotransfer run --scene r12_e151_f12041 \
+  --ego ppo --traffic smart --traffic-startup source_hold
+# Set RUN_DIR to the saved directory printed by the run command.
+.venv/bin/geotransfer evaluate run --run "$RUN_DIR" --output runs/evaluation/single
+.venv/bin/geotransfer view --evaluation runs/evaluation/single --open
 ```
 
-Use `--run DIR --manifest PATH` for one existing schema-2 or schema-4 run index.
-Campaign evaluation retains every expected slot and its attempt history; the
-campaign's single trace is the primary episode and its batch trace is a parity
-replication, not another driving sample. `valid`, `unavailable`, `not_applicable`,
-`undefined`, and `invalid` assessment statuses are distinct from `pass`, `fail`,
-and `not_assessed` criterion outcomes. A readable trace without execution
-attestation supports trace-only diagnostics, not a validated rollout claim.
+Schema-4 evaluation takes every expected episode from the ledger, including
+failed, blocked and incomplete entries. Supply `--manifest PATH` if you also
+want to validate it against the original manifest. The current corpus is never
+used to reconstruct the historical run selection. Source-context metrics still
+require their existing validated source inputs.
 
-The saved report preserves exposure and per-metric denominators. It is not a
-weighted planner score. A geographic comparison additionally requires compatible
-hash-bound cohorts and source-only matching features; the currently configured
-US fixtures are diagnostic and cannot support a country-level gap claim. The
-metric definitions, output schemas and interpretation limits live in
-[`docs/performance_evaluation.md`](performance_evaluation.md).
+### Individual trace
 
-Map footprint and lane geometry assessments require the optional Shapely
-dependency: `.venv/bin/python -m pip install -e '.[evaluation-geometry]'`.
-Without it, these measurements are unavailable and the Shapely-specific
-synthetic test module explicitly skips. Attach a saved result to an existing
-offline scene view by passing `--evaluation EVALUATION_DIR` to the viewer; the
-README has a complete command example.
+```bash
+.venv/bin/geotransfer evaluate episode --trace "$TRACE_PATH" --output runs/evaluation/standalone
+.venv/bin/geotransfer view --evaluation runs/evaluation/standalone --open
+```
+
+`evaluate episode` accepts `--scene ID_OR_ROOT` for explicit scene identity
+checking and `--profile PATH` for a different valid metric profile. Both
+evaluation commands write `index.json`, `input_snapshot.json`, `episodes.csv`,
+`report.md`, and `episodes/<id>/{result,events}.json`. Standalone evaluations
+describe a single selected trace and preserve its recorded evidence level.
+Original experiment completeness and execution rates are unavailable. To use
+an older evaluation containing `episode.json`, run `evaluate episode` on its
+original trace and choose a new output directory.
+
+### Corpus run
+
+```bash
+.venv/bin/geotransfer run --manifest artifacts/corpus/current.json --ego ppo --traffic smart
+# Set RUN_DIR to the saved directory printed by the run command.
+.venv/bin/geotransfer evaluate run --run "$RUN_DIR" --output runs/evaluation/corpus
+.venv/bin/geotransfer evaluate aggregate --evaluation runs/evaluation/corpus \
+  --output runs/evaluation/corpus-aggregate
+.venv/bin/geotransfer view --evaluation runs/evaluation/corpus --open
+```
+
+The evaluation-only viewer uses the exact recorded trace. A single playable
+entry opens a playback page. Multiple entries open a gallery with all episode
+statuses and same-scene comparison for viewable episodes. A missing trace or
+scene binary can leave an entry without playback. Use `--output DIRECTORY`
+for a multi-episode gallery or `--output FILE.html` for a single entry. Omit
+`--output` to use a directory under `runs/views/evaluations`. Outputs must stay
+outside saved evidence and protected source roots.
+
+The explicit modes are also available. For example, use
+`view --scene SCENE --trace TRACE --evaluation EVALUATION --output FILE.html`.
+Repeat `--trace` to compare saved traces and repeat `--evaluation` to attach
+multiple saved evaluations in explicit mode. Evaluation-only selection accepts
+one evaluation directory.
+
+### Frozen campaign
+
+```bash
+evaluation=runs/evaluation/m9
+.venv/bin/geotransfer evaluate run --campaign runs/m9_acceptance --output "$evaluation"
+.venv/bin/geotransfer evaluate report --evaluation "$evaluation"
+.venv/bin/geotransfer evaluate aggregate --evaluation "$evaluation" \
+  --output runs/evaluation/m9-aggregate
+.venv/bin/geotransfer evaluate sensitivity --evaluation "$evaluation" \
+  --output runs/evaluation/m9-sensitivity
+.venv/bin/geotransfer view --campaign runs/m9_acceptance --evaluation "$evaluation" \
+  --output runs/views/m9-gallery
+```
+
+The campaign's single trace is the primary episode. Its batch trace is retained
+as parity evidence. Campaign integration, execution validity, driving outcomes,
+task completion, encounter realization, and metric validity are separate.
+`evaluate report` regenerates the CSV and Markdown from indexed results and
+events. Aggregate and sensitivity summaries of a standalone input describe the
+selected trace and report supported quantities only.
+
+### Legacy run
+
+```bash
+.venv/bin/geotransfer evaluate run --run "$LEGACY_RUN_DIR" \
+  --manifest "$ORIGINAL_MANIFEST" --output runs/evaluation/legacy
+```
+
+The original manifest is mandatory for schema-2 ledgers because they may record
+only the episodes that ran. Geographic comparison separately requires the
+frozen source-only cohort manifests and all existing eligibility checks. The
+configured US fixtures remain diagnostic. See the
+[metric definitions and limits](performance_evaluation.md).

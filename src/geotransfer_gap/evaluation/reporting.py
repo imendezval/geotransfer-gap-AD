@@ -889,6 +889,8 @@ def _episode_result(selection, episode, profile, profile_path):
             if episode.get("batch_replication"):
                 account["batch_replication"]["evidence_status"] = _batch_evidence_status(episode, selection)
         except SavedEvidenceError as exc:
+            if standalone:
+                raise
             evidence_status, evidence_reason = "invalid", str(exc)
             trace_hash = sha256(selected_trace) if selected_trace.is_file() else None
         if result is not None:

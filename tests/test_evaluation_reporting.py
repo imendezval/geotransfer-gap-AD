@@ -274,7 +274,11 @@ def test_saved_campaign_counts_single_once_and_keeps_batch_as_replication(monkey
     assert record["accounting"]["batch_replication"]["evidence_status"] == "valid"
 
 
-def test_passing_campaign_rechecks_historical_attestation_and_canonical_parity(monkeypatch, tmp_path):
+@pytest.mark.parametrize("detached", [False, True])
+def test_passing_campaign_rechecks_historical_attestation_and_canonical_parity(
+        monkeypatch, tmp_path, detached):
+    from geotransfer_gap.visualization import viewer
+
     artifacts, runs = _environment(monkeypatch, tmp_path)
     _, _, binary, scene_ref, _ = _scene_and_manifest(artifacts, tmp_path)
     campaign = runs / "attested-campaign"
@@ -301,6 +305,9 @@ def test_passing_campaign_rechecks_historical_attestation_and_canonical_parity(m
                             "files": batch_files,
                             "attempts": [{"number": 1, "status": "passed",
                                           "record": str(batch_path.parent / "attempt.json")}]}}
+    if detached:
+        single_path.with_name("attempt.json").unlink()
+        report_row["single"]["attempts"] = []
     write_json(campaign / "verification_matrix.json", {"schema_version": 1, "slots": [report_row]})
     index = reporting.evaluate_run(campaign=campaign,
                                    output=_evaluation_output(runs, "attested-campaign"))
@@ -309,8 +316,15 @@ def test_passing_campaign_rechecks_historical_attestation_and_canonical_parity(m
     assert result["accounting"]["campaign_status"] == "PASS"
     assert result["evidence"]["level"] == "archived_attested"
     assert result["evidence"]["producer_revision"] == "504218cb9ecd7fd64d2952630b9f10f56d80f923"
-    assert result["accounting"]["attempt_history"][0]["status_consistent"] is True
+    if detached:
+        assert not result["accounting"]["attempt_history"]
+    else:
+        assert result["accounting"]["attempt_history"][0]["status_consistent"] is True
     assert result["accounting"]["batch_replication"]["evidence_level"] == "archived_attested"
+    monkeypatch.setattr(viewer, "binary_roads", lambda _: [])
+    page = viewer.main(["--evaluation", str(_evaluation_output(runs, "attested-campaign")),
+                        "--output", str(tmp_path / "campaign.html")])
+    assert '"status": "attached"' in page.read_text()
 
 
 def test_failed_campaign_retains_failure_while_successful_retry_supports_diagnostics(
