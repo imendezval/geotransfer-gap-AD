@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import tempfile
 from .config import settings
 
 
@@ -21,6 +23,39 @@ def write_json(path, data):
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(data, indent=2, allow_nan=False) + "\n")
     temp.replace(path)
+
+
+def atomic_write_text(path, content):
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def protected_input_paths(cfg):
+    return (cfg.source, cfg.artifacts, cfg.bench, cfg.reference_data, cfg.weights,
+            cfg.project / ".git")
+
+
+def saved_evidence_ancestor(path, runs):
+    """Find saved evidence around a resolved destination, including an existing directory."""
+    markers = ("trace.json", "attempt.json", "verification.json", "campaign.json",
+               "campaign_report.json", "report.json", "run.json", "manifest.json",
+               "matrix.json", "inventory.json", "ledger.json")
+    for parent in (path, *path.parents):
+        if parent == runs:
+            break
+        if (any((parent / marker).is_file() for marker in markers)
+                or (parent / "index.json").is_file() and (parent / "input_snapshot.json").is_file()
+                or (parent / "episode.json").is_file()):
+            return parent
+    return None
 
 
 def manifest_path():

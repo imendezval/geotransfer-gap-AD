@@ -10,6 +10,9 @@ from pathlib import Path
 import webbrowser
 from geotransfer_gap.config import settings
 from geotransfer_gap.artifacts import (
+    atomic_write_text,
+    protected_input_paths,
+    saved_evidence_ancestor,
     scene_root,
     read_json,
     sha256,
@@ -183,7 +186,10 @@ def binary_roads(root):
 
 
 def _load_playback(path, digest, expected):
-    saved = read_playback(path, digest, expected)
+    return _normalize_playback(read_playback(path, digest, expected))
+
+
+def _normalize_playback(saved):
     run = normalize_trace(saved.report, saved.verification, saved.diagnostic)
     run["trace_sha256"] = saved.hashes["trace"]
     return run
@@ -202,42 +208,47 @@ def _evaluation_records(paths):
             continue
         seen.add(root)
         _, index, indexed = read_indexed_evaluation(root)
-        profile = index.get("profile")
-        if (not isinstance(profile, dict)
-                or not all(isinstance(profile.get(key), str) and profile[key]
-                           for key in ("raw_sha256", "effective_sha256", "definition_version"))):
-            raise ValueError(f"Saved evaluation profile identity is malformed: {root}")
-        if any(len(profile[key]) != 64 or any(char not in "0123456789abcdef" for char in profile[key])
-               for key in ("raw_sha256", "effective_sha256")):
-            raise ValueError(f"Saved evaluation profile hashes are malformed: {root}")
-        for entry in index["episodes"]:
-            result, events = indexed[entry["episode_id"]]
-            if not isinstance(result.get("protocol"), dict):
-                raise ValueError("Saved evaluation protocol identity is malformed")
-            evidence = result.get("evidence", {})
-            if entry.get("trace_sha256") != evidence.get("trace_sha256"):
-                raise ValueError("Saved evaluation trace binding disagrees with its index")
-            input_profile = result.get("input_profile", {})
-            if (input_profile.get("raw_sha256") != profile["raw_sha256"]
-                    or input_profile.get("effective_sha256") != profile["effective_sha256"]):
-                raise ValueError("Saved evaluation profile disagrees with its indexed profile")
-            episode_metrics = result.get("episode_metrics")
-            if episode_metrics is not None:
-                if (not isinstance(episode_metrics.get("input"), dict)
-                        or not isinstance(episode_metrics.get("evaluator"), dict)
-                        or not isinstance(episode_metrics.get("metrics", []), list)
-                        or any(not isinstance(metric, dict)
-                               for metric in episode_metrics.get("metrics", []))):
-                    raise ValueError("Saved episode metrics contain malformed profile or metric records")
-                evaluator = episode_metrics.get("evaluator", {})
-                if (evaluator.get("effective_profile_sha256") != profile["effective_sha256"]
-                        or evaluator.get("definition_version") != profile["definition_version"]):
-                    raise ValueError("Saved metric profile/version disagrees with its indexed profile")
-            loaded.append({
-                "directory": str(root), "profile": profile, "entry": entry,
-                "result": result, "events": events,
-            })
+        loaded.extend(_indexed_attachments(root, index, indexed))
     return loaded
+
+
+def _indexed_attachments(root, index, indexed):
+    profile = index.get("profile")
+    if (not isinstance(profile, dict)
+            or not all(isinstance(profile.get(key), str) and profile[key]
+                       for key in ("raw_sha256", "effective_sha256", "definition_version"))):
+        raise ValueError(f"Saved evaluation profile identity is malformed: {root}")
+    if any(len(profile[key]) != 64 or any(char not in "0123456789abcdef" for char in profile[key])
+           for key in ("raw_sha256", "effective_sha256")):
+        raise ValueError(f"Saved evaluation profile hashes are malformed: {root}")
+    for entry in index["episodes"]:
+        result, events = indexed[entry["episode_id"]]
+        if not isinstance(result.get("protocol"), dict):
+            raise ValueError("Saved evaluation protocol identity is malformed")
+        evidence = result.get("evidence", {})
+        if entry.get("trace_sha256") != evidence.get("trace_sha256"):
+            raise ValueError("Saved evaluation trace binding disagrees with its index")
+        input_profile = result.get("input_profile", {})
+        if (input_profile.get("raw_sha256") != profile["raw_sha256"]
+                or input_profile.get("effective_sha256") != profile["effective_sha256"]):
+            raise ValueError("Saved evaluation profile disagrees with its indexed profile")
+        episode_metrics = result.get("episode_metrics")
+        if episode_metrics is not None:
+            if (not isinstance(episode_metrics.get("input"), dict)
+                    or not isinstance(episode_metrics["input"].get("evidence_sha256", {}), dict)
+                    or not isinstance(episode_metrics.get("evaluator"), dict)
+                    or not isinstance(episode_metrics.get("metrics", []), list)
+                    or any(not isinstance(metric, dict)
+                           for metric in episode_metrics.get("metrics", []))):
+                raise ValueError("Saved episode metrics contain malformed profile or metric records")
+            evaluator = episode_metrics.get("evaluator", {})
+            if (evaluator.get("effective_profile_sha256") != profile["effective_sha256"]
+                    or evaluator.get("definition_version") != profile["definition_version"]):
+                raise ValueError("Saved metric profile/version disagrees with its indexed profile")
+        yield {
+            "directory": str(root), "profile": profile, "entry": entry,
+            "result": result, "events": events,
+        }
 
 
 def _trace_protocol(run):
@@ -248,6 +259,37 @@ def _trace_protocol(run):
         "traffic": report.get("traffic_controller"),
         "startup": report.get("traffic_startup", report.get("traffic_protocol")),
     }
+
+
+def _evaluated_run(item, root, digest, detached_bindings):
+    """Resolve a playback from the exact trace and sidecars used by a saved result."""
+    result, entry = item["result"], item["entry"]
+    evidence = result["evidence"]
+    trace_path = evidence.get("trace_path")
+    if trace_path != entry.get("trace_path"):
+        raise ValueError("Saved evaluation trace path disagrees with its index")
+    if not trace_path:
+        raise FileNotFoundError("No saved trace was recorded")
+    trace = Path(trace_path)
+    if not trace.is_absolute():
+        raise ValueError("Saved evaluation trace path must be absolute")
+    if not trace.is_file():
+        raise FileNotFoundError(f"Saved trace is missing: {trace}")
+    inputs = (result.get("episode_metrics") or {}).get("input") or {}
+    hashes = inputs.get("evidence_sha256", {})
+    expected = None
+    if evidence.get("level") == "archived_attested" and "attempt" not in hashes:
+        expected = detached_bindings.get(trace.parent)
+        if expected is None or not {"trace", "provenance"} <= expected.keys():
+            raise ValueError("Archived trace is missing its saved evidence binding")
+    saved = read_playback(trace, digest, expected, verify_all_files=True)
+    if saved.hashes.get("trace") != evidence.get("trace_sha256"):
+        raise ValueError("Saved trace hash differs from the evaluated trace")
+    if saved.hashes != {**hashes, "trace": evidence["trace_sha256"]}:
+        raise ValueError("Saved trace sidecars differ from the evaluated evidence")
+    run = _normalize_playback(saved)
+    run["evaluation"] = _bind_evaluation(run, root.name, digest, [item])
+    return run, saved.files.values()
 
 
 def _bind_evaluation(run, scene_name, binary_digest, records, campaign_status=None):
@@ -384,12 +426,30 @@ def _bind_evaluation(run, scene_name, binary_digest, records, campaign_status=No
     }
 
 
-def _check_evaluation_output(output, evaluations):
-    target = Path(output).expanduser().resolve()
+def _check_output(output, *, evaluations=(), campaign=None, inputs=(),
+                  directory=None):
+    output = Path(output).expanduser()
+    target = output.resolve()
+    if campaign is not None and target.is_relative_to(campaign):
+        raise ValueError("Choose a viewer output outside the saved campaign")
     for evaluation in evaluations:
-        root = Path(evaluation).expanduser().resolve()
-        if target.is_relative_to(root):
+        if target.is_relative_to(Path(evaluation).expanduser().resolve()):
             raise ValueError("Choose a viewer output outside attached evaluation evidence")
+    cfg = settings()
+    for root in (*protected_input_paths(cfg), *inputs):
+        if target.is_relative_to(Path(root).resolve()):
+            raise ValueError(f"Viewer output overlaps protected input: {root}")
+    if (ancestor := saved_evidence_ancestor(target, cfg.runs)) is not None:
+        raise ValueError(f"Viewer output is nested in an existing run/evidence directory: {ancestor}")
+    if output.is_symlink() or (directory is not None and target.parent != directory.resolve()):
+        raise ValueError(f"Viewer page escapes its output directory: {output}")
+    return target
+
+
+def _page_path(directory, name):
+    if not name or name in {".", ".."} or Path(name).name != name:
+        raise ValueError(f"Invalid viewer page name: {name!r}")
+    return directory / f"{name}.html"
 
 
 def view_payload(root, traces=(), *, files_by_trace=None, evaluations=(),
@@ -406,6 +466,11 @@ def view_payload(root, traces=(), *, files_by_trace=None, evaluations=(),
             campaign_status_by_trace.get(path),
         )
 
+    return _scene_payload(root, digest, runs)
+
+
+def _scene_payload(root, digest, runs):
+    t = root / "testing"
     source_hash = registration = image = goal = None
     limitations = []
     source = converted = []
@@ -455,16 +520,20 @@ def view_payload(root, traces=(), *, files_by_trace=None, evaluations=(),
 
 def build(root, output, traces=(), *, files_by_trace=None, evaluations=(),
           campaign_status_by_trace=None):
-    _check_evaluation_output(output, evaluations)
-    payload = view_payload(scene_root(str(root)), traces, files_by_trace=files_by_trace,
-                           evaluations=evaluations,
-                           campaign_status_by_trace=campaign_status_by_trace)
+    root = scene_root(str(root))
+    traces = tuple(traces)
+    target = _check_output(output, evaluations=evaluations, inputs=(root, *traces))
+    payload = view_payload(root, traces, files_by_trace=files_by_trace,
+                           evaluations=evaluations, campaign_status_by_trace=campaign_status_by_trace)
+    _write_playback(target, payload)
+    return Path(output)
+
+
+def _write_playback(output, payload):
     encoded = json.dumps(payload, allow_nan=False).replace("</", "<\\/")
-    output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     template = Path(__file__).with_name("viewer.html").read_text()
-    output.write_text(template.replace("__DATA__", encoded))
-    return output
+    atomic_write_text(output, template.replace("__DATA__", encoded))
 
 
 def main(argv=None):
@@ -480,7 +549,7 @@ def main(argv=None):
     ap.add_argument("--traffic-startup", choices=STARTUP_POLICIES, help="Filter saved campaign traces")
     ap.add_argument("--trace", type=Path, action="append", default=[])
     ap.add_argument("--evaluation", type=Path, action="append", default=[],
-                    help="Attach one or more saved PE09 evaluation output directories")
+                    help="Select one saved indexed evaluation, or attach evaluations to an explicit view")
     ap.add_argument("--output", type=Path)
     ap.add_argument(
         "--run",
@@ -489,6 +558,7 @@ def main(argv=None):
     )
     ap.add_argument("--open", action="store_true")
     args = ap.parse_args(argv)
+    evaluation_only = bool(args.evaluation and not (args.campaign or args.scene or args.manifest))
     if args.campaign:
         if args.trace or args.run:
             ap.error("--campaign uses its saved traces and cannot be combined with --trace or --run")
@@ -501,10 +571,21 @@ def main(argv=None):
             if args.scene or any(filters):
                 selection = "__".join(value or "all" for value in filters)
                 destination = destination / "selections" / selection
+    elif evaluation_only:
+        if args.trace or args.run or args.ego or args.traffic or args.traffic_startup:
+            ap.error("Use --scene or --manifest for explicit traces or a fresh run, or --campaign for filters")
+        if len(args.evaluation) != 1:
+            ap.error("Evaluation-only viewing requires exactly one --evaluation directory")
+    if args.campaign or evaluation_only:
         try:
-            index = render_campaign(args.campaign, destination, scene=args.scene, ego=args.ego,
-                                    traffic=args.traffic, startup=args.traffic_startup,
-                                    evaluations=args.evaluation)
+            if args.campaign:
+                index = render_campaign(args.campaign, destination, scene=args.scene, ego=args.ego,
+                                        traffic=args.traffic, startup=args.traffic_startup,
+                                        evaluations=args.evaluation)
+            else:
+                from geotransfer_gap.visualization.campaign_gallery import render_evaluation
+
+                index = render_evaluation(args.evaluation[0], args.output)
         except (OSError, ValueError) as exc:
             ap.error(str(exc))
         print(index, flush=True)
@@ -512,17 +593,35 @@ def main(argv=None):
             webbrowser.open(index.resolve().as_uri())
         return index
     if bool(args.manifest) == bool(args.scene):
-        ap.error("Specify exactly one of --scene and --manifest, or use --campaign")
+        ap.error("Specify --scene, --manifest, --campaign, or --evaluation")
     if args.ego or args.traffic or args.traffic_startup:
         ap.error("Controller filters require --campaign")
-    destination = args.output or settings().runs / "views"
+    destination = (args.output or settings().runs / "views").expanduser()
+    selected_scene = scene_root(args.scene) if args.scene else None
     rows = (
-        [{"name": scene_root(args.scene).name, "root": str(scene_root(args.scene))}]
-        if args.scene
+        [{"name": selected_scene.name, "root": str(selected_scene)}]
+        if selected_scene is not None
         else read_manifest(args.manifest)
     )
-    links = []
-    for row in rows:
+    checks = {"evaluations": args.evaluation,
+              "inputs": [row["root"] for row in rows] + args.trace}
+    if args.manifest:
+        checks["inputs"].append(args.manifest)
+    try:
+        _check_output(destination, **checks)
+        links = [
+            _check_output(destination, **checks)
+            if args.scene and destination.suffix == ".html" else
+            _check_output(_page_path(destination, row["name"]), directory=destination, **checks)
+            for row in rows
+        ]
+        index = (_check_output(destination / "index.html", directory=destination, **checks)
+                 if args.manifest else links[0])
+        if len(set(links)) != len(links) or args.manifest and index in links:
+            raise ValueError("Scene gallery pages resolve to the same output path")
+    except (OSError, ValueError) as exc:
+        ap.error(str(exc))
+    for row, output in zip(rows, links, strict=True):
         traces = list(args.trace)
         if args.run:
             from geotransfer_gap.execution import main as execute
@@ -530,18 +629,11 @@ def main(argv=None):
             for planner in ["expert", "smart"] if args.run == "both" else [args.run]:
                 run = execute(["--scene", row["root"], "--planner", planner])
                 traces.append(run / row["name"] / "trace.json")
-        output = (
-            destination
-            if args.scene and destination.suffix == ".html"
-            else destination / (row["name"] + ".html")
-        )
         build(row["root"], output, traces, evaluations=args.evaluation)
-        links.append(output)
         print(output, flush=True)
     if args.manifest:
         destination.mkdir(parents=True, exist_ok=True)
-        index = destination / "index.html"
-        index.write_text(
+        atomic_write_text(index,
             '<!doctype html><meta charset="utf-8"><title>GeoTransfer scenes</title><h1>Admitted scene gallery</h1><ul>'
             + "".join(
                 (
@@ -555,7 +647,5 @@ def main(argv=None):
             )
             + "</ul>"
         )
-    else:
-        index = links[0]
     if args.open:
         webbrowser.open(index.resolve().as_uri())

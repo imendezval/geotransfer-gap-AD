@@ -60,8 +60,9 @@ def test_matrix_role_mode_release_and_reentry(ego, traffic, startup):
 def test_trace_only_viewer_has_explicit_missing_source_assets(tmp_path, monkeypatch):
     from geotransfer_gap.artifacts import sha256, write_json
 
-    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(tmp_path))
-    root = tmp_path / "us"
+    artifacts = tmp_path / "artifacts"
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(artifacts))
+    root = artifacts / "us"
     (root / "testing").mkdir(parents=True)
     binary = root / "testing/map_000000.bin"
     binary.write_bytes(b"fixture")
@@ -72,15 +73,18 @@ def test_trace_only_viewer_has_explicit_missing_source_assets(tmp_path, monkeypa
     assert payload["ego_id"] == 41
     assert payload["source"] == payload["converted"] == []
     assert all("unavailable" in line for line in payload["limitations"])
-    assert "unavailable" in viewer.build(root, root / "index.html", [trace_file]).read_text()
+    assert "unavailable" in viewer.build(root, tmp_path / "index.html", [trace_file]).read_text()
+    with pytest.raises(ValueError, match="protected input"):
+        viewer.build(root, root / "index.html", [trace_file])
 
 
 @pytest.fixture
 def matrix_bundle(tmp_path, monkeypatch):
     from geotransfer_gap.artifacts import reference, sha256, write_json
 
-    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(tmp_path))
-    root = tmp_path / "scene"
+    artifacts = tmp_path / "artifacts"
+    monkeypatch.setenv("GEOTRANSFER_ARTIFACTS", str(artifacts))
+    root = artifacts / "scene"
     binary = root / "testing/map_000000.bin"
     binary.parent.mkdir(parents=True)
     binary.write_bytes(b"scene")
@@ -417,14 +421,14 @@ def test_evaluation_text_is_not_interpreted_as_html(tmp_path, matrix_bundle):
 
 def test_campaign_evaluation_attachment_respects_filtered_output_isolation(
         tmp_path, saved_campaign):
-    from geotransfer_gap.artifacts import read_json, sha256
+    from geotransfer_gap.artifacts import read_json, resolve_reference, sha256
     from geotransfer_gap.visualization.campaign_gallery import render_campaign
 
     campaign, folder = saved_campaign
     # Use the existing fixture trace as the exact evaluation input.
-    root = folder.parent / "scene"
     trace = folder / "trace.json"
     report = read_json(trace)
+    root = resolve_reference(report["scene"])
     evaluation = _write_evaluation_bundle(tmp_path, root, folder, report)
     evidence_before = {p: sha256(p) for p in (campaign / "campaign.json",
                                                campaign / "verification_matrix.json",

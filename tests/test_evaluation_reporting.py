@@ -488,6 +488,116 @@ def test_schema4_ledger_only_rejects_inconsistent_expected_inventory(monkeypatch
         reporting.evaluate_run(run=run_dir, output=_evaluation_output(runs, "bad-ledger"))
 
 
+def test_view_from_single_evaluation_uses_saved_metrics_and_checks_live_assets(monkeypatch, tmp_path):
+    from geotransfer_gap.visualization import viewer
+
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, _ = _scene_and_manifest(artifacts, tmp_path)
+    folder = runs / "matrix" / "synthetic"
+    trace, _ = _attested_matrix(folder, scene_ref, binary)
+    _batch_run(folder.parent, "synthetic", scene_ref, binary, status="passed",
+               attempts=[{"number": 1, "status": "passed", "record": "synthetic/attempt.json"}])
+    standalone = runs / "standalone"
+    ledger = runs / "ledger"
+    reporting.evaluate_trace(trace=trace, output=standalone)
+    reporting.evaluate_run(run=folder.parent, output=ledger)
+    monkeypatch.setattr(viewer, "binary_roads", lambda _: [])
+    monkeypatch.setattr(reporting, "evaluate_episode",
+                        lambda *args, **kwargs: pytest.fail("viewer recomputed metrics"))
+    opened = []
+    monkeypatch.setattr(viewer.webbrowser, "open", opened.append)
+    for bundle in (standalone, ledger):
+        page = viewer.main(["--evaluation", str(bundle), "--open"])
+        assert page.name == "synthetic.html"
+        assert f'"trace_sha256": "{sha256(trace)}"' in page.read_text()
+        assert '"status": "attached"' in page.read_text()
+        assert opened[-1] == page.as_uri()
+    with pytest.raises(SystemExit):
+        viewer.main(["--evaluation", str(standalone), "--evaluation", str(ledger)])
+    with pytest.raises(SystemExit):
+        viewer.main(["--evaluation", str(ledger), "--trace", str(trace)])
+    with pytest.raises(SystemExit):
+        viewer.main(["--evaluation", str(ledger), "--output", str(ledger / "viewer.html")])
+    with pytest.raises(SystemExit):
+        viewer.main(["--evaluation", str(standalone), "--output", str(folder / "viewer.html")])
+
+    output = tmp_path / "unavailable.html"
+    binary.write_bytes(b"changed scene")
+    viewer.main(["--evaluation", str(standalone), "--output", str(output)])
+    assert "Trace binary differs from viewed scene" in output.read_text()
+    assert '"status": "attached"' not in output.read_text()
+    binary.unlink()
+    viewer.main(["--evaluation", str(standalone), "--output", str(output)])
+    assert "Recorded scene binary is missing or unreadable" in output.read_text()
+
+
+def test_evaluation_gallery_preserves_rows_and_exact_episode_links(monkeypatch, tmp_path):
+    from geotransfer_gap.visualization import viewer
+
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, _ = _scene_and_manifest(artifacts, tmp_path)
+    run = runs / "matrix"
+    trace, _ = _attested_matrix(run / "synthetic", scene_ref, binary)
+    row = _batch_run(run, "synthetic", scene_ref, binary, status="passed",
+                     attempts=[{"number": 1, "status": "passed", "record": "synthetic/attempt.json"}])
+    ledger_path = run / "run.json"
+    ledger = json.loads(ledger_path.read_text())
+    for name, status in (("other", "failed"), ("blocked", "blocked")):
+        _, _, other_binary, other_scene, _ = _scene_and_manifest(artifacts, tmp_path, name=name)
+        _attested_matrix(run / name, other_scene, other_binary)
+        attempts = [{"number": 1, "status": "passed", "record": f"{name}/attempt.json"}]
+        ledger["results"].append({
+            **row, "name": name, "scene": other_scene, "slot_id": f"{name}:expert:idm:immediate",
+            "status": status, "inputs": {"binary": {"reference": reference(other_binary),
+                                                    "sha256": sha256(other_binary)}},
+            "attempts": attempts if status == "failed" else [],
+            "blocked_reason": "<blocked>",
+        })
+    write_json(ledger_path, ledger)
+    bundle = runs / "evaluation"
+    index = reporting.evaluate_run(run=run, output=bundle)
+    # A second logical episode can reference identical bytes. Keep both records and links.
+    original = index["episodes"][0]
+    result = json.loads((bundle / original["result_file"]).read_text())
+    result["episode_id"] = "synthetic:another-episode"
+    duplicate = "episodes/second/result.json"
+    write_json(bundle / duplicate, result)
+    index["episodes"].append({**original, "episode_id": result["episode_id"], "result_file": duplicate,
+                              "result_sha256": sha256(bundle / duplicate)})
+    index["expected_episodes"] += 1
+    write_json(bundle / "index.json", index)
+    monkeypatch.setattr(viewer, "binary_roads", lambda _: [])
+
+    output = tmp_path / "gallery"
+    gallery = viewer.main(["--evaluation", str(bundle), "--output", str(output)])
+    assert gallery.name == "index.html"
+    html = gallery.read_text()
+    assert "#episode=synthetic%3Aexpert%3Aidm%3Aimmediate" in html
+    assert "#episode=synthetic%3Aanother-episode" in html
+    assert "#episode=other%3Aexpert%3Aidm%3Aimmediate" in html
+    assert "<td>failed</td>" in html and "<td>blocked</td>" in html
+    assert "&lt;blocked&gt;" in html and "<blocked>" not in html
+    pages = sorted(path for path in output.glob("*.html") if path != gallery)
+    assert len(pages) == 2
+    safe_page = next(path for path in pages if "synthetic" in path.name)
+    assert '"episode_id": "synthetic:another-episode"' in safe_page.read_text()
+    protected = bundle / "index.json"
+    before = protected.read_bytes()
+    safe_page.unlink()
+    safe_page.symlink_to(protected)
+    with pytest.raises(SystemExit):
+        viewer.main(["--evaluation", str(bundle), "--output", str(output)])
+    assert protected.read_bytes() == before
+
+    safe_page.unlink()
+    trace.unlink()
+    changed = run / "other/trace.json"
+    write_json(changed, dict(json.loads(changed.read_text()), changed=True))
+    status = viewer.main(["--evaluation", str(bundle), "--output", str(tmp_path / "status")]).read_text()
+    assert "Saved trace is missing" in status and "Invalid playback evidence" in status
+    assert "No episode can be rendered" in status
+
+
 def test_report_rerenders_saved_results_without_metric_recomputation(monkeypatch, tmp_path):
     _, output = _saved_legacy_evaluation(monkeypatch, tmp_path, "rerender")
     before = ((output / "episodes.csv").read_bytes(), (output / "report.md").read_bytes())

@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from geotransfer_gap.artifacts import protected_input_paths, saved_evidence_ancestor
 from geotransfer_gap.config import settings
 
 
@@ -21,10 +22,8 @@ def _output_path(output, trace, profile_path, selected_scene):
         raise ValueError(f"Evaluation output must be beneath configured runs: {runs}")
     if destination.exists():
         raise FileExistsError(f"Refusing to overwrite evaluation output: {destination}")
-    protected = (cfg.source.resolve(), cfg.artifacts.resolve(), cfg.bench.resolve(),
-                 cfg.reference_data.resolve())
-    for root in protected:
-        if _overlaps(destination, root):
+    for root in protected_input_paths(cfg):
+        if _overlaps(destination, root.resolve()):
             raise ValueError(f"Evaluation output overlaps protected input root: {root}")
     input_paths = [Path(trace).expanduser().resolve(), Path(profile_path).expanduser().resolve()]
     for suffix in ("verification.json", "diagnostic.json", "attempt.json"):
@@ -39,19 +38,8 @@ def _output_path(output, trace, profile_path, selected_scene):
         if (source.is_file() and source.parent.is_relative_to(runs)
                 and source.parent != runs and destination.is_relative_to(source.parent)):
             raise ValueError(f"Evaluation output must not be inside a saved run input directory: {source.parent}")
-    # A fresh child of a saved run/campaign directory still overlaps that
-    # archived evidence context even if the trace was selected elsewhere.
-    ancestor = destination.parent
-    while ancestor.is_relative_to(runs):
-        if ancestor != runs and any((ancestor / marker).is_file() for marker in
-                                    ("trace.json", "attempt.json", "verification.json",
-                                     "campaign.json", "campaign_report.json", "report.json",
-                                     "run.json", "manifest.json", "matrix.json", "inventory.json",
-                                     "ledger.json")):
-            raise ValueError(f"Evaluation output is nested in an existing run/evidence directory: {ancestor}")
-        if ancestor == runs:
-            break
-        ancestor = ancestor.parent
+    if (ancestor := saved_evidence_ancestor(destination, runs)) is not None:
+        raise ValueError(f"Evaluation output is nested in an existing run/evidence directory: {ancestor}")
     return destination
 
 

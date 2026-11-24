@@ -6,12 +6,11 @@ import csv
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import re
-import tempfile
 
 from geotransfer_gap.artifacts import (
+    atomic_write_text,
     read_json,
     reference,
     resolve_reference,
@@ -1126,12 +1125,21 @@ def _evaluation_file(output, value, label):
     return candidate
 
 
-def read_indexed_evaluation(output):
-    """Read a saved PE09 result bundle without regenerating its reports.
+def _evaluation_snapshot_bytes(output, index):
+    snapshot_ref = index.get("input_snapshot")
+    if not isinstance(snapshot_ref, dict):
+        raise ValueError("Saved evaluation input snapshot reference is malformed")
+    snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
+    if not snapshot_path.is_file():
+        raise ValueError("Selected input snapshot is missing or has changed")
+    data = snapshot_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != snapshot_ref.get("sha256"):
+        raise ValueError("Selected input snapshot is missing or has changed")
+    return data
 
-    The offline viewer uses this boundary so its attachments inherit the same
-    index, input-snapshot, result, event and path-containment checks as reports.
-    """
+
+def read_indexed_evaluation(output):
+    """Read a verified saved PE09 result bundle without regenerating its reports."""
     output = Path(output).expanduser().resolve()
     index_path = _evaluation_file(output, "index.json", "evaluation index")
     if not index_path.is_file():
@@ -1149,13 +1157,7 @@ def read_indexed_evaluation(output):
         raise ValueError("Saved evaluation index is incomplete")
     if index.get("expected_episodes") != len(index["episodes"]):
         raise ValueError("Evaluation index episode count is inconsistent")
-    snapshot_ref = index.get("input_snapshot")
-    if not isinstance(snapshot_ref, dict):
-        raise ValueError("Saved evaluation input snapshot reference is malformed")
-    snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
-    if (not snapshot_path.is_file() or not snapshot_ref.get("sha256")
-            or sha256(snapshot_path) != snapshot_ref["sha256"]):
-        raise ValueError("Selected input snapshot is missing or has changed")
+    _evaluation_snapshot_bytes(output, index)
     _dedupe(index["episodes"])
     return output, index, _read_indexed_results(output, index)
 
@@ -1194,21 +1196,6 @@ def _render_markdown(index, rows):
     return "\n".join(lines)
 
 
-def _atomic_write_text(path, content):
-    """Replace a report inside its evaluation directory without following links."""
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        raise
-
-
 def render_report(output):
     output = Path(output).expanduser().resolve()
     runs = settings().runs.resolve()
@@ -1220,8 +1207,8 @@ def render_report(output):
     markdown = _render_markdown(index, rows)
     csv_path = _evaluation_file(output, "episodes.csv", "CSV report")
     markdown_path = _evaluation_file(output, "report.md", "Markdown report")
-    _atomic_write_text(csv_path, csv_text)
-    _atomic_write_text(markdown_path, markdown)
+    atomic_write_text(csv_path, csv_text)
+    atomic_write_text(markdown_path, markdown)
     return {"episodes": len(rows), "csv": str(output / "episodes.csv"),
             "markdown": str(output / "report.md")}
 
