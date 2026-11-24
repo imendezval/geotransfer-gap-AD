@@ -68,7 +68,7 @@ def main(argv=None):
     source.add_argument("--run", type=Path, help="existing run directory with run.json")
     source.add_argument("--campaign", type=Path, help="existing campaign directory with campaign.json")
     run.add_argument("--manifest", type=Path,
-                     help="existing schema-2 scene manifest used by a saved run")
+                     help="scene manifest required for legacy schema-2 runs, optional for schema 4")
     run.add_argument("--output", required=True, type=Path,
                      help="new evaluation directory beneath configured runs")
     run.add_argument("--profile", type=Path)
@@ -104,8 +104,6 @@ def main(argv=None):
     if args.action == "run":
         from geotransfer_gap.evaluation.reporting import evaluate_run
 
-        if args.run is not None and args.manifest is None:
-            parser.error("evaluate run --run requires --manifest")
         if args.campaign is not None and args.manifest is not None:
             parser.error("--manifest applies to --run, not --campaign")
         index = evaluate_run(run=args.run, manifest=args.manifest,

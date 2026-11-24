@@ -152,7 +152,8 @@ def test_schema4_accounts_retry_failure_block_and_not_run_without_losing_trace_b
                      status="failed", attempts=attempts)
     # Add separately submitted blocked and not-run entries to the same schema-4 ledger.
     ledger = json.loads((run_dir / "run.json").read_text())
-    for name, row_status in (("blocked", "blocked"), ("pending", "not_run")):
+    for name, row_status in (("blocked", "blocked"), ("pending", "not_run"),
+                             ("interrupted", "interrupted")):
         scene_root, _, scene_binary, ref, _ = _scene_and_manifest(artifacts, tmp_path, name=name)
         ledger["results"].append({
             **row, "slot_id": f"{name}:expert:idm:immediate", "name": name, "scene": ref,
@@ -166,15 +167,25 @@ def test_schema4_accounts_retry_failure_block_and_not_run_without_losing_trace_b
     write_json(manifest, {"schema_version": 2, "scenes": [
         {"name": name, "root": reference(artifacts / name),
          "binary_sha256": sha256(artifacts / name / "testing/map_000000.bin")}
-        for name in ("synthetic", "blocked", "pending")
+        for name in ("synthetic", "blocked", "pending", "interrupted")
     ]})
     before = trace.read_bytes()
 
     index = reporting.evaluate_run(run=run_dir, manifest=manifest,
                                    output=_evaluation_output(runs, "ledger"))
-    assert index["expected_episodes"] == 3
-    assert index["accounting_counts"]["execution_status"] == {"blocked": 1, "failed": 1, "not_run": 1}
+    assert index["expected_episodes"] == 4
+    assert index["accounting_counts"]["execution_status"] == {
+        "blocked": 1, "failed": 1, "interrupted": 1, "not_run": 1,
+    }
     evaluated = _evaluation_output(runs, "ledger")
+    ledger_only = _evaluation_output(runs, "ledger-only")
+    ledger_index = reporting.evaluate_run(run=run_dir, output=ledger_only)
+    assert index["selection"]["source"] == "ledger_and_manifest"
+    assert ledger_index["selection"]["source"] == "ledger"
+    assert ledger_index["episodes"] == index["episodes"]
+    assert ledger_index["accounting_counts"] == index["accounting_counts"]
+    assert str(manifest) not in {item["path"] for item in
+                                 json.loads((ledger_only / "input_snapshot.json").read_text())["files"]}
     episode_rows = [json.loads((evaluated / item["result_file"]).read_text()) for item in index["episodes"]]
     failed = next(item for item in episode_rows if item["episode_id"] == row["slot_id"])
     blocked = next(item for item in episode_rows if item["scene_id"] == "blocked")
@@ -206,6 +217,8 @@ def test_legacy_schema2_partial_index_keeps_manifest_only_not_run_rows(monkeypat
     write_json(run_dir / "run.json", {"schema_version": 2, "results": [{
         "scene": scene_ref, "name": "synthetic", "output": str(output_dir), "planner": "expert"
     }, {"scene": absent_ref, "name": "trace-missing", "output": str(absent_output), "planner": "expert"}]})
+    with pytest.raises(ValueError, match="schema-2 runs require --manifest"):
+        reporting.evaluate_run(run=run_dir, output=_evaluation_output(runs, "legacy-no-manifest"))
     write_json(manifest, {"schema_version": 2, "scenes": [
         {"name": "synthetic", "root": scene_ref, "binary_sha256": sha256(binary)},
         {"name": "trace-missing", "root": absent_ref, "binary_sha256": sha256(absent_binary)},
@@ -452,6 +465,27 @@ def test_stale_manifest_duplicate_ids_and_output_overlap_are_rejected(monkeypatc
     ]})
     with pytest.raises(ValueError, match="saved run input directory"):
         reporting.evaluate_run(run=run_dir, manifest=manifest, output=run_dir / "nested-evaluation")
+
+
+@pytest.mark.parametrize(("change", "error"), [
+    (lambda ledger: ledger["results"].append(ledger["results"][0]), "Duplicate logical episode"),
+    (lambda ledger: ledger.update(traffic_startup="source_hold"), "conflicting traffic_startup"),
+    (lambda ledger: ledger["results"][0].update(steps=12), "protocol differs"),
+    (lambda ledger: ledger["results"][0].update(slot_id="bad"), "slot ID differs"),
+    (lambda ledger: ledger["results"][0].update(inputs={}), "input identities are malformed"),
+])
+def test_schema4_ledger_only_rejects_inconsistent_expected_inventory(monkeypatch, tmp_path,
+                                                                    change, error):
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, _ = _scene_and_manifest(artifacts, tmp_path)
+    run_dir = runs / "matrix"
+    _batch_run(run_dir, "synthetic", scene_ref, binary, status="not_run")
+    ledger_path = run_dir / "run.json"
+    ledger = json.loads(ledger_path.read_text())
+    change(ledger)
+    write_json(ledger_path, ledger)
+    with pytest.raises(ValueError, match=error):
+        reporting.evaluate_run(run=run_dir, output=_evaluation_output(runs, "bad-ledger"))
 
 
 def test_report_rerenders_saved_results_without_metric_recomputation(monkeypatch, tmp_path):

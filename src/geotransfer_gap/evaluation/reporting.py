@@ -84,8 +84,7 @@ def _trace_scene_root(report):
         return None
 
 
-def _scene_entries(manifest_path):
-    manifest = read_json(manifest_path)
+def _scene_entries(manifest):
     if isinstance(manifest, dict):
         if manifest.get("schema_version") != 2 or not isinstance(manifest.get("scenes"), list):
             raise ValueError("Run manifest must be an existing schema-2 scene manifest")
@@ -212,63 +211,74 @@ def _run_input(run_dir, manifest_path):
     ledger_path = run_dir / "run.json"
     if not ledger_path.is_file():
         raise FileNotFoundError(f"Saved run ledger does not exist: {ledger_path}")
-    ledger = read_json(ledger_path)
+    source_hashes = {}
+
+    def read_selection_file(path):
+        data = path.read_bytes()
+        source_hashes[path] = hashlib.sha256(data).hexdigest()
+        return json.loads(data)
+
+    ledger = read_selection_file(ledger_path)
     if not isinstance(ledger, dict):
         raise ValueError("Saved run index must be a JSON object")
+    manifest_scenes = (_scene_entries(read_selection_file(Path(manifest_path).expanduser().resolve()))
+                       if manifest_path is not None else None)
     if ledger.get("schema_version") == 4:
-        manifest_scenes = _scene_entries(manifest_path)
         rows = ledger.get("results")
         if not isinstance(rows, list) or not rows:
             raise ValueError("Schema-4 run ledger has no expected result rows")
-        seen = set()
-        seen_protocols = set()
         episodes = []
         protocol = ledger.get("protocol", {})
         if not isinstance(protocol, dict):
             raise ValueError("Schema-4 run ledger protocol is malformed")
         protocol_fields = ("ego_controller", "traffic_controller", "traffic_startup")
         expected_protocol = {}
-        for field in protocol_fields:
+        for field in protocol.keys() | set(protocol_fields):
             nested = protocol.get(field)
             top_level = ledger.get(field)
             if nested is not None and top_level is not None and nested != top_level:
                 raise ValueError(f"Schema-4 run ledger has conflicting {field} identities")
             expected_protocol[field] = top_level if top_level is not None else nested
         names = set()
+        roots = set()
         for row in rows:
             if not isinstance(row, dict):
                 raise ValueError("Schema-4 run ledger contains a malformed result row")
-            name = row.get("name")
-            if not isinstance(row.get("inputs"), dict):
+            inputs = row.get("inputs")
+            binary = inputs.get("binary") if isinstance(inputs, dict) else None
+            binary_hash = binary.get("sha256") if isinstance(binary, dict) else None
+            if not isinstance(binary_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", binary_hash):
                 raise ValueError("Schema-4 run ledger input identities are malformed")
-            if not isinstance(name, str) or name not in manifest_scenes:
-                raise ValueError("Run ledger scene is absent from supplied manifest")
-            manifest_row = manifest_scenes[name]
-            if not _same_scene(row.get("scene"), manifest_row):
-                raise ValueError(f"Stale manifest scene root for {name}")
-            binary_hash = (row.get("inputs") or {}).get("binary", {}).get("sha256")
-            expected_hash = manifest_row.get("binary_sha256")
-            if expected_hash is not None and binary_hash != expected_hash:
-                raise ValueError(f"Stale manifest binary identity for {name}")
-            logical = _identity(row, name, protocol=ledger)
+            name = row.get("name")
+            scene_root = _trace_scene_root(row)
+            if not isinstance(name, str) or not name or scene_root is None:
+                raise ValueError("Schema-4 run ledger scene identity is malformed")
+            if manifest_scenes is not None:
+                if name not in manifest_scenes:
+                    raise ValueError("Run ledger scene is absent from supplied manifest")
+                manifest_row = manifest_scenes[name]
+                if scene_root != manifest_row["resolved_root"]:
+                    raise ValueError(f"Stale manifest scene root for {name}")
+                expected_hash = manifest_row.get("binary_sha256")
+                if expected_hash is not None and binary_hash != expected_hash:
+                    raise ValueError(f"Stale manifest binary identity for {name}")
             episode_protocol = (name, *(row.get(field, expected_protocol[field])
                                         for field in protocol_fields))
             if any(not isinstance(value, str) or not value for value in episode_protocol):
                 raise ValueError(f"Schema-4 episode protocol identity is malformed: {name}")
-            if logical in seen or episode_protocol in seen_protocols:
+            logical = ":".join(episode_protocol)
+            if name in names or scene_root in roots:
                 raise ValueError(f"Duplicate logical episode identity: {logical}")
-            seen.add(logical)
-            seen_protocols.add(episode_protocol)
-            if any(row.get(field, expected_protocol[field]) != expected_protocol[field]
-                   for field in protocol_fields):
+            if any(row.get(field, value) != value for field, value in expected_protocol.items()):
                 raise ValueError(f"Schema-4 episode protocol differs from its run ledger: {name}")
-            if row.get("slot_id") != ":".join(str(value) for value in episode_protocol):
+            if row.get("slot_id") != logical:
                 raise ValueError(f"Schema-4 slot ID differs from its logical episode identity: {name}")
             names.add(name)
+            roots.add(scene_root)
             history, candidates = _attempt_history(run_dir, row.get("attempts", []))
             expected_scene = row.get("scene")
             episodes.append({
-                "episode_id": logical, "scene_id": name, "scene_root": str(manifest_row["resolved_root"]),
+                "episode_id": logical, "scene_id": name, "scene_root": str(scene_root),
                 "expected_scene": expected_scene, "expected_binary_sha256": binary_hash,
                 "ego": episode_protocol[1],
                 "traffic": episode_protocol[2],
@@ -278,19 +288,21 @@ def _run_input(run_dir, manifest_path):
                                       row.get("blocked_reason")),
                 "attempt_history": history, "trace_candidates": candidates,
                 "expected_files": None, "campaign_status": None,
-                "batch_replication": None, "scene_inputs": row.get("inputs", {}),
+                "batch_replication": None, "scene_inputs": inputs,
                 "trace_required": True, "source_row": row,
             })
-        if names != set(manifest_scenes):
+        if manifest_scenes is not None and names != set(manifest_scenes):
             raise ValueError("Stale manifest selection: expected scenes differ from schema-4 ledger")
         return {
-            "kind": "schema4_run", "root": run_dir, "source_files": [ledger_path, Path(manifest_path).resolve()],
-            "manifest_scenes": manifest_scenes, "episodes": episodes,
+            "kind": "schema4_run", "root": run_dir, "source_files": list(source_hashes),
+            "source_hashes": source_hashes, "episodes": episodes,
+            "selection_source": "ledger_and_manifest" if manifest_scenes is not None else "ledger",
             "producer_revision": None, "campaign": None,
         }
     if ledger.get("schema_version") != 2 or not isinstance(ledger.get("results"), list):
         raise ValueError("Supported saved run indexes are schema 2 and schema 4")
-    manifest_scenes = _scene_entries(manifest_path)
+    if manifest_scenes is None:
+        raise ValueError("Legacy schema-2 runs require --manifest ORIGINAL_MANIFEST to recover the expected scene selection")
     indexed = {}
     for row in ledger["results"]:
         if not isinstance(row, dict) or not isinstance(row.get("name"), str):
@@ -345,8 +357,7 @@ def _run_input(run_dir, manifest_path):
         })
     return {
         "kind": "legacy_schema2_run", "root": run_dir,
-        "source_files": [run_dir / "run.json", Path(manifest_path).resolve()],
-        "manifest_scenes": manifest_scenes, "episodes": episodes,
+        "source_files": list(source_hashes), "source_hashes": source_hashes, "episodes": episodes,
         "producer_revision": None, "campaign": None,
     }
 
@@ -500,10 +511,11 @@ def _dedupe(episodes):
 
 def _snapshot(selection, profile_path):
     paths = {}
+    source_hashes = selection.get("source_hashes", {})
     for source in [*selection["source_files"], profile_path]:
         path = Path(source).resolve()
-        if path.is_file():
-            paths[str(path)] = {"path": str(path), "sha256": sha256(path),
+        if path in source_hashes or path.is_file():
+            paths[str(path)] = {"path": str(path), "sha256": source_hashes.get(path) or sha256(path),
                                 "role": "profile" if path == profile_path else "selection_manifest_or_ledger"}
     for episode in selection["episodes"]:
         for input_name, entry in episode.get("scene_inputs", {}).items():
@@ -1007,6 +1019,8 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
     }
     if selection["kind"] == STANDALONE_TRACE:
         index["selection"]["accounting_scope"] = "selected_trace"
+    if selection.get("selection_source") is not None:
+        index["selection"]["source"] = selection["selection_source"]
     write_json(output / "index.json", index)
     render_report(output)
     return index
@@ -1276,8 +1290,6 @@ def evaluate_trace(*, trace, output, scene=None, profile=None):
 def evaluate_run(*, run=None, manifest=None, campaign=None, output, profile=None):
     if (run is None) == (campaign is None):
         raise ValueError("Choose exactly one of --run or --campaign")
-    if run is not None and manifest is None:
-        raise ValueError("An existing scene manifest is required with --run")
     if campaign is not None and manifest is not None:
         raise ValueError("--manifest applies to --run, not --campaign")
     selection = (_campaign_input(campaign) if campaign is not None else _run_input(run, manifest))
