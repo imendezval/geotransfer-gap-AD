@@ -598,6 +598,42 @@ def test_evaluation_gallery_preserves_rows_and_exact_episode_links(monkeypatch, 
     assert "No episode can be rendered" in status
 
 
+def test_standalone_summaries_scope_counts_and_withhold_population_inference(monkeypatch, tmp_path):
+    from geotransfer_gap.artifacts import read_json
+    from geotransfer_gap.evaluation.aggregate import aggregate_evaluation, sensitivity_evaluation
+    from geotransfer_gap.evaluation.comparison import compare_saved_evaluations
+
+    artifacts, runs = _environment(monkeypatch, tmp_path)
+    _, _, binary, scene_ref, _ = _scene_and_manifest(artifacts, tmp_path)
+    path = tmp_path / "trace.json"
+    trace = _trace(scene_ref, sha256(binary))
+    for frame in trace["frames"]:
+        frame["state"]["actors"][0].pop("collision_state")
+    write_json(path, trace)
+    bundle = runs / "standalone"
+    reporting.evaluate_trace(trace=path, output=bundle)
+    monkeypatch.setattr(reporting, "evaluate_episode",
+                        lambda *args, **kwargs: pytest.fail("summary recomputed metrics"))
+    summary = read_json(aggregate_evaluation(bundle, runs / "aggregate"))
+    assert summary["accounting_scope"] == "selected_trace"
+    assert summary["selected_traces"] == 1 and "submitted" not in summary
+    assert not summary["paired_condition_intersections"]
+    stratum, = summary["strata"]
+    assert stratum["accounting"] == {"selected_traces": 1, "with_valid_saved_evidence": 1}
+    assert stratum["outcomes"]["episode_collision_rate"]["full"]["rate"] is None
+    assert all(metric["uncertainty"]["interval"] is None for metric in stratum["metric_summaries"])
+
+    sensitivity = read_json(sensitivity_evaluation(bundle, runs / "sensitivity"))
+    assert sensitivity["accounting_scope"] == "selected_trace"
+    group, = sensitivity["groups"]
+    assert group["safety_progress_comfort_context"]["accounting"] == stratum["accounting"]
+    assert group["variants"]
+    assert all(row["selected_traces"] == 1 and row["paired_difference_uncertainty"]["interval"] is None
+               for row in group["variants"])
+    with pytest.raises(ValueError, match="Evaluate the original run or campaign"):
+        compare_saved_evaluations(bundle, bundle, runs / "comparison")
+
+
 def test_report_rerenders_saved_results_without_metric_recomputation(monkeypatch, tmp_path):
     _, output = _saved_legacy_evaluation(monkeypatch, tmp_path, "rerender")
     before = ((output / "episodes.csv").read_bytes(), (output / "report.md").read_bytes())

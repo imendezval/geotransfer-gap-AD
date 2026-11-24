@@ -12,17 +12,15 @@ import math
 from pathlib import Path
 import random
 
-from geotransfer_gap.artifacts import read_json, sha256, write_json
+from geotransfer_gap.artifacts import sha256, write_json
 from geotransfer_gap.config import settings
 from geotransfer_gap.evaluation.compatibility import (
     CORE_CRITERIA, CORE_CRITERION_SET_ID, CORE_CRITERION_SET_VERSION,
 )
 from geotransfer_gap.evaluation.profile import load_profile
 from geotransfer_gap.evaluation.reporting import (
-    INDEX_SCHEMA_VERSION,
-    _dedupe,
-    _evaluation_file,
-    _read_indexed_results,
+    STANDALONE_TRACE,
+    read_indexed_evaluation,
 )
 
 
@@ -728,7 +726,11 @@ def _tradeoff_summaries(rows, uncertainty_profile):
     return output
 
 
-def _accounting(rows):
+def _accounting(rows, standalone):
+    if standalone:
+        return {"selected_traces": len(rows), "with_valid_saved_evidence": sum(
+            (result.get("evidence") or {}).get("status") == "valid" for result, _ in rows
+        )}
     submitted, executed, failed, excluded = len(rows), 0, 0, 0
     for result, _ in rows:
         accounting = result.get("accounting") or {}
@@ -881,7 +883,7 @@ def _paired_intersections(records, uncertainty_profile):
     return output
 
 
-def aggregate_records(records, *, uncertainty_profile):
+def aggregate_records(records, *, uncertainty_profile, standalone=False):
     """Aggregate already verified `(result, events)` rows; retained for synthetic tests."""
     uncertainty = uncertainty_profile["uncertainty"]
     bootstrap_options = {
@@ -911,7 +913,7 @@ def aggregate_records(records, *, uncertainty_profile):
         clusters = {_identity(result)[1] for result, _ in rows if _identity(result)[1] is not None}
         output.append({
             "stratum": dimensions,
-            "accounting": _accounting(rows),
+            "accounting": _accounting(rows, standalone),
             "episode_count": len(rows),
             "recording_cluster_count": len(clusters),
             "location_count": len(locations),
@@ -922,16 +924,22 @@ def aggregate_records(records, *, uncertainty_profile):
             "failure_label_recurrence": _failure_recurrence(rows),
         })
     output.sort(key=lambda row: json.dumps(row["stratum"], sort_keys=True))
-    return {"schema_version": AGGREGATE_SCHEMA_VERSION,
+    summary = {"schema_version": AGGREGATE_SCHEMA_VERSION,
             "estimand": "episode summaries are descriptive; bootstrap statistic is an equal-source-cluster mean",
             "uncertainty_profile": {key: uncertainty[key] for key in
                                     ("cluster_unit", "bootstrap_seed", "bootstrap_resamples", "confidence_level")},
-            "submitted": sum(len(rows) for rows in strata.values()),
+            ("selected_traces" if standalone else "submitted"): sum(len(rows) for rows in strata.values()),
             "strata": output,
-            "paired_condition_intersections": _paired_intersections(records, uncertainty_profile),
+            "paired_condition_intersections": ([] if standalone else
+                                               _paired_intersections(records, uncertainty_profile)),
             "limitations": ["No causal or geographic claim is implied.",
                             "Missing checkpoint identity remains null and is not inferred.",
                             "A valid observed-event count can be a lower bound."]}
+    if standalone:
+        summary["accounting_scope"] = "selected_trace"
+        summary["limitations"].append("All counts and rates describe only the selected trace. "
+                                      "Original experiment accounting is unavailable.")
+    return summary
 
 
 def _metric_rows(result):
@@ -1030,7 +1038,7 @@ def _primary_variant_value(result, variant, metric_id, window, profile):
     return None
 
 
-def sensitivity_records(records, *, uncertainty_profile, threshold_scales):
+def sensitivity_records(records, *, uncertainty_profile, threshold_scales, standalone=False):
     """Summarize profile-frozen alternative thresholds from stored PE09 metric evidence."""
     uncertainty = uncertainty_profile.get("uncertainty", uncertainty_profile)
     bootstrap_options = {"seed": uncertainty["bootstrap_seed"],
@@ -1074,7 +1082,8 @@ def sensitivity_records(records, *, uncertainty_profile, threshold_scales):
             represented = {item["episode_id"] for item in observations}
             rows.append({
                 "variant": key, "metric_id": metric_id, "window": window, "units": units,
-                "episodes_submitted": len(cohort), "episodes_with_variant_record": len(observations),
+                ("selected_traces" if standalone else "episodes_submitted"): len(cohort),
+                "episodes_with_variant_record": len(observations),
                 "episodes_assessed_under_variant": len(assessed),
                 "episodes_with_finite_value": len(supported),
                 "episodes_missing_variant_record": len(cohort_ids - represented),
@@ -1099,7 +1108,7 @@ def sensitivity_records(records, *, uncertainty_profile, threshold_scales):
                                     if _identity(result)[0].get("location") is not None}),
             "variants": rows,
             "safety_progress_comfort_context": {
-                "accounting": _accounting(cohort),
+                "accounting": _accounting(cohort, standalone),
                 "outcomes": _outcomes(cohort, bootstrap_options),
                 "tradeoff_metric_summaries": _tradeoff_summaries(cohort, uncertainty),
                 "interaction_family_recurrence": _family_recurrence(cohort),
@@ -1109,7 +1118,7 @@ def sensitivity_records(records, *, uncertainty_profile, threshold_scales):
             },
         })
     groups.sort(key=lambda row: json.dumps(row["stratum"], sort_keys=True))
-    return {"schema_version": SENSITIVITY_SCHEMA_VERSION,
+    summary = {"schema_version": SENSITIVITY_SCHEMA_VERSION,
             "method": "reused PE09 stored sensitivity channels and PE02 saved continuous samples; no simulation or planner execution",
             "paired_estimand": "same logical episode; cluster-resampled equal recording/sequence-cluster mean difference",
             "threshold_scales": threshold_scales,
@@ -1117,23 +1126,17 @@ def sensitivity_records(records, *, uncertainty_profile, threshold_scales):
             "limitations": ["Alternative values are reported only when the stored evidence supports them.",
                             "A missing threshold variant remains unavailable; it is not imputed.",
                             "Threshold sensitivity does not change episode outcomes or prove causality."]}
+    if standalone:
+        summary["accounting_scope"] = "selected_trace"
+        summary["paired_estimand"] = "Within-trace difference from the saved primary threshold"
+        summary["limitations"].append("Counts and rates describe only the selected trace. "
+                                      "Original experiment accounting is unavailable.")
+    return summary
 
 
 def _load_evaluation(evaluation):
-    output = Path(evaluation).expanduser().resolve()
-    index_path = _evaluation_file(output, "index.json", "evaluation index")
-    index = read_json(index_path)
-    if (not isinstance(index, dict) or index.get("schema_version") != INDEX_SCHEMA_VERSION
-            or index.get("complete") is not True or not isinstance(index.get("episodes"), list)
-            or index.get("expected_episodes") != len(index["episodes"])):
-        raise ValueError("Saved PE09 evaluation index is unsupported or incomplete")
-    _dedupe(index["episodes"])
-    snapshot_ref = index.get("input_snapshot") or {}
-    snapshot = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
-    if not snapshot.is_file() or sha256(snapshot) != snapshot_ref.get("sha256"):
-        raise ValueError("Saved evaluation input snapshot is missing or has changed")
-    records_by_id = _read_indexed_results(output, index)
-    records = [records_by_id[row["episode_id"]] for row in index["episodes"]]
+    output, index, records_by_id = read_indexed_evaluation(evaluation)
+    records = list(records_by_id.values())
     expected_profile = (index.get("profile") or {}).get("effective_sha256")
     expected_definition = (index.get("profile") or {}).get("definition_version")
     for result, _ in records:
@@ -1177,25 +1180,27 @@ def _profile_for_index(index):
 def aggregate_evaluation(evaluation, output):
     evaluation_root, index, records = _load_evaluation(evaluation)
     profile_path, profile = _profile_for_index(index)
-    result = aggregate_records(records, uncertainty_profile=profile.values)
-    result["source"] = {"evaluation": str(evaluation_root), "index_sha256": sha256(evaluation_root / "index.json"),
-                         "profile_effective_sha256": profile.effective_sha256,
-                         "profile_raw_sha256": (index.get("profile") or {}).get("raw_sha256"),
-                         "episode_result_hashes": [row["result_sha256"] for row in index["episodes"]]}
-    destination = _prepare_output(output, evaluation_root, profile_path)
-    write_json(destination / "aggregate.json", result)
-    return destination / "aggregate.json"
+    result = aggregate_records(records, uncertainty_profile=profile.values,
+                               standalone=(index.get("selection") or {}).get("kind") == STANDALONE_TRACE)
+    return _write_summary(evaluation_root, index, profile_path, result, output, "aggregate.json")
 
 
 def sensitivity_evaluation(evaluation, output):
     evaluation_root, index, records = _load_evaluation(evaluation)
     profile_path, profile = _profile_for_index(index)
-    result = sensitivity_records(records, uncertainty_profile=profile.values,
-                                 threshold_scales=profile.values["comfort"]["threshold_scale_sensitivity"])
+    result = sensitivity_records(
+        records, uncertainty_profile=profile.values,
+        threshold_scales=profile.values["comfort"]["threshold_scale_sensitivity"],
+        standalone=(index.get("selection") or {}).get("kind") == STANDALONE_TRACE,
+    )
+    return _write_summary(evaluation_root, index, profile_path, result, output, "sensitivity.json")
+
+
+def _write_summary(evaluation_root, index, profile_path, result, output, filename):
     result["source"] = {"evaluation": str(evaluation_root), "index_sha256": sha256(evaluation_root / "index.json"),
-                         "profile_effective_sha256": profile.effective_sha256,
+                         "profile_effective_sha256": index["profile"]["effective_sha256"],
                          "profile_raw_sha256": (index.get("profile") or {}).get("raw_sha256"),
                          "episode_result_hashes": [row["result_sha256"] for row in index["episodes"]]}
-    destination = _prepare_output(output, evaluation_root, profile_path)
-    write_json(destination / "sensitivity.json", result)
-    return destination / "sensitivity.json"
+    destination = _prepare_output(output, evaluation_root, profile_path) / filename
+    write_json(destination, result)
+    return destination

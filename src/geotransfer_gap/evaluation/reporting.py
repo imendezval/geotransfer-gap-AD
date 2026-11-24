@@ -502,6 +502,8 @@ def _campaign_input(campaign_dir):
 def _dedupe(episodes):
     seen = set()
     for episode in episodes:
+        if not isinstance(episode, dict) or not isinstance(episode.get("episode_id"), str):
+            raise ValueError("Saved evaluation contains a malformed episode identity")
         identity = episode["episode_id"]
         if identity in seen:
             raise ValueError(f"Duplicate logical episode identity: {identity}")
@@ -968,6 +970,7 @@ def _standalone_context_snapshot(snapshot, record):
 def _write_evaluation(output, selection, profile, profile_path, snapshot):
     output.mkdir(parents=True, exist_ok=False)
     episode_entries = []
+    rows = []
     for episode in selection["episodes"]:
         record = _episode_result(selection, episode, profile, profile_path)
         if selection["kind"] == STANDALONE_TRACE:
@@ -984,7 +987,7 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
         record["events_file"] = str(events_path.relative_to(output))
         record["events_sha256"] = sha256(events_path)
         write_json(result_path, record)
-        episode_entries.append({
+        entry = {
             "episode_id": episode["episode_id"], "result_file": str(result_path.relative_to(output)),
             "result_sha256": sha256(result_path), "events_file": str(events_path.relative_to(output)),
             "events_sha256": sha256(events_path),
@@ -999,7 +1002,9 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
             "encounter_status": (record.get("encounter_result") or {}).get("status"),
             "driving_outcome": record.get("driving_outcome", {}).get("outcome"),
             "failure_labels": [item["label"] for item in record.get("failure_taxonomy", [])],
-        })
+        }
+        episode_entries.append(entry)
+        rows.append(_presentation_row(entry, record))
     _verify_snapshot(snapshot)
     write_json(output / "input_snapshot.json", snapshot)
     index = {
@@ -1020,8 +1025,8 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
         index["selection"]["accounting_scope"] = "selected_trace"
     if selection.get("selection_source") is not None:
         index["selection"]["source"] = selection["selection_source"]
+    _write_reports(output, index, rows)
     write_json(output / "index.json", index)
-    render_report(output)
     return index
 
 
@@ -1043,46 +1048,38 @@ _CSV_COLUMNS = ("episode_id", "scene_id", "ego", "traffic", "startup", "executio
                 "trace_sha256", "trace_path", "result_file")
 
 
-def _presentation_rows(output, index, indexed=None):
-    indexed = indexed if indexed is not None else _read_indexed_results(output, index)
-    rows = []
-    for episode in index["episodes"]:
-        result, _ = indexed[episode["episode_id"]]
-        account = result.get("accounting", {})
-        rows.append({
-            "episode_id": episode["episode_id"], "scene_id": result.get("scene_id"),
-            "ego": result.get("protocol", {}).get("ego"),
-            "traffic": result.get("protocol", {}).get("traffic"),
-            "startup": result.get("protocol", {}).get("startup"),
-            "execution_status": account.get("execution_status"),
-            "campaign_status": account.get("campaign_status"),
-            "evidence_status": result.get("evidence", {}).get("status"),
-            "evidence_level": result.get("evidence", {}).get("level"),
-            "metric_status": result.get("metric_validity", {}).get("status"),
-            "task_outcome": (result.get("task_result") or {}).get("outcome"),
-            "encounter_status": (result.get("encounter_result") or {}).get("status"),
-            "driving_outcome": result.get("driving_outcome", {}).get("outcome"),
-            "failure_labels": ";".join(item["label"] for item in result.get("failure_taxonomy", [])),
-            "trace_sha256": result.get("evidence", {}).get("trace_sha256"),
-            "trace_path": result.get("evidence", {}).get("trace_path"),
-            "result_file": episode["result_file"],
-        })
-    return rows
+def _presentation_row(episode, result):
+    account = result.get("accounting", {})
+    return {
+        "episode_id": episode["episode_id"], "scene_id": result.get("scene_id"),
+        "ego": result.get("protocol", {}).get("ego"),
+        "traffic": result.get("protocol", {}).get("traffic"),
+        "startup": result.get("protocol", {}).get("startup"),
+        "execution_status": account.get("execution_status"),
+        "campaign_status": account.get("campaign_status"),
+        "evidence_status": result.get("evidence", {}).get("status"),
+        "evidence_level": result.get("evidence", {}).get("level"),
+        "metric_status": result.get("metric_validity", {}).get("status"),
+        "task_outcome": (result.get("task_result") or {}).get("outcome"),
+        "encounter_status": (result.get("encounter_result") or {}).get("status"),
+        "driving_outcome": result.get("driving_outcome", {}).get("outcome"),
+        "failure_labels": ";".join(item["label"] for item in result.get("failure_taxonomy", [])),
+        "trace_sha256": result.get("evidence", {}).get("trace_sha256"),
+        "trace_path": result.get("evidence", {}).get("trace_path"),
+        "result_file": episode["result_file"],
+    }
 
 
 def _read_indexed_results(output, index):
     """Read PE09 result/event pairs only after checking their immutable index hashes."""
     indexed = {}
     for episode in index["episodes"]:
-        if not isinstance(episode, dict) or not isinstance(episode.get("episode_id"), str):
-            raise ValueError("Saved evaluation index contains a malformed episode entry")
         path = _evaluation_file(output, episode.get("result_file"), "saved evaluation result")
-        if not path.is_file() or sha256(path) != episode.get("result_sha256"):
-            raise ValueError(f"Saved evaluation result is missing or has changed: {path}")
+        result = json.loads(_verified_bytes(path, episode.get("result_sha256"),
+                                           f"Saved evaluation result is missing or has changed: {path}"))
         event_path = _evaluation_file(output, episode.get("events_file"), "saved evaluation events")
-        if not event_path.is_file() or sha256(event_path) != episode.get("events_sha256"):
-            raise ValueError(f"Saved evaluation events are missing or have changed: {event_path}")
-        result, event_bundle = read_json(path), read_json(event_path)
+        event_bundle = json.loads(_verified_bytes(
+            event_path, episode.get("events_sha256"), f"Saved evaluation events are missing or have changed: {event_path}"))
         if (not isinstance(result, dict) or result.get("result_schema_version") != RESULT_SCHEMA_VERSION
                 or result.get("episode_id") != episode.get("episode_id")):
             raise ValueError("Saved evaluation result episode identity disagrees with its index")
@@ -1125,17 +1122,22 @@ def _evaluation_file(output, value, label):
     return candidate
 
 
+def _verified_bytes(path, digest, error):
+    if not path.is_file():
+        raise ValueError(error)
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError(error)
+    return data
+
+
 def _evaluation_snapshot_bytes(output, index):
     snapshot_ref = index.get("input_snapshot")
     if not isinstance(snapshot_ref, dict):
         raise ValueError("Saved evaluation input snapshot reference is malformed")
     snapshot_path = _evaluation_file(output, snapshot_ref.get("file"), "input snapshot")
-    if not snapshot_path.is_file():
-        raise ValueError("Selected input snapshot is missing or has changed")
-    data = snapshot_path.read_bytes()
-    if hashlib.sha256(data).hexdigest() != snapshot_ref.get("sha256"):
-        raise ValueError("Selected input snapshot is missing or has changed")
-    return data
+    return _verified_bytes(snapshot_path, snapshot_ref.get("sha256"),
+                           "Selected input snapshot is missing or has changed")
 
 
 def read_indexed_evaluation(output):
@@ -1157,6 +1159,11 @@ def read_indexed_evaluation(output):
         raise ValueError("Saved evaluation index is incomplete")
     if index.get("expected_episodes") != len(index["episodes"]):
         raise ValueError("Evaluation index episode count is inconsistent")
+    selection = index.get("selection", {})
+    if not isinstance(selection, dict):
+        raise ValueError("Saved evaluation selection is malformed")
+    if selection.get("kind") == STANDALONE_TRACE and index["expected_episodes"] != 1:
+        raise ValueError("A standalone evaluation must select exactly one trace")
     _evaluation_snapshot_bytes(output, index)
     _dedupe(index["episodes"])
     return output, index, _read_indexed_results(output, index)
@@ -1196,21 +1203,22 @@ def _render_markdown(index, rows):
     return "\n".join(lines)
 
 
+def _write_reports(output, index, rows):
+    csv_path = _evaluation_file(output, "episodes.csv", "CSV report")
+    markdown_path = _evaluation_file(output, "report.md", "Markdown report")
+    atomic_write_text(csv_path, _render_csv(rows))
+    atomic_write_text(markdown_path, _render_markdown(index, rows))
+    return {"episodes": len(rows), "csv": str(csv_path), "markdown": str(markdown_path)}
+
+
 def render_report(output):
     output = Path(output).expanduser().resolve()
     runs = settings().runs.resolve()
     if not output.is_relative_to(runs):
         raise ValueError(f"Saved evaluation reports must remain beneath configured runs: {runs}")
     _, index, indexed = read_indexed_evaluation(output)
-    rows = _presentation_rows(output, index, indexed)
-    csv_text = _render_csv(rows)
-    markdown = _render_markdown(index, rows)
-    csv_path = _evaluation_file(output, "episodes.csv", "CSV report")
-    markdown_path = _evaluation_file(output, "report.md", "Markdown report")
-    atomic_write_text(csv_path, csv_text)
-    atomic_write_text(markdown_path, markdown)
-    return {"episodes": len(rows), "csv": str(output / "episodes.csv"),
-            "markdown": str(output / "report.md")}
+    rows = [_presentation_row(entry, indexed[entry["episode_id"]][0]) for entry in index["episodes"]]
+    return _write_reports(output, index, rows)
 
 
 def _evaluate_selection(selection, output, profile):

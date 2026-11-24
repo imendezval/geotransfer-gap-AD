@@ -27,6 +27,7 @@ from geotransfer_gap.evaluation.aggregate import (
     paired_cluster_bootstrap,
     paired_condition_summary,
 )
+from geotransfer_gap.evaluation.reporting import STANDALONE_TRACE
 
 
 COMPARISON_SCHEMA_VERSION = 1
@@ -802,6 +803,10 @@ def compare_saved_evaluations(left, right, output, *, config_path=None):
     config, manifests = load_comparison_config(config_path)
     left_root, left_index, left_records = _load_evaluation(left)
     right_root, right_index, right_records = _load_evaluation(right)
+    if any((index.get("selection") or {}).get("kind") == STANDALONE_TRACE
+           for index in (left_index, right_index)):
+        raise ValueError("Geographic comparison requires run or campaign selections and the frozen "
+                         "source cohort manifests. Evaluate the original run or campaign.")
     if ((left_index.get("profile") or {}).get("effective_sha256")
             != (right_index.get("profile") or {}).get("effective_sha256")
             or (left_index.get("profile") or {}).get("definition_version")
