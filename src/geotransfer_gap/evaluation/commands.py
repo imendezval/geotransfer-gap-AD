@@ -6,11 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from geotransfer_gap.artifacts import reference, resolve_reference, scene_root, sha256, write_json
 from geotransfer_gap.config import settings
-from geotransfer_gap.evaluation.context import build_map_context
-from geotransfer_gap.evaluation.episode import evaluate_episode
-from geotransfer_gap.evaluation.profile import load_profile
 
 
 def _overlaps(left, right):
@@ -59,72 +55,6 @@ def _output_path(output, trace, profile_path, selected_scene):
     return destination
 
 
-def _scene_context(selection, report):
-    if selection is None:
-        return None, None
-    selected_root = scene_root(selection).resolve()
-    recorded = report.get("scene")
-    if not isinstance(recorded, dict):
-        raise ValueError("Selected scene cannot be checked because this trace has no scene identity")
-    recorded_root = resolve_reference(recorded).resolve()
-    if selected_root != recorded_root:
-        raise ValueError("Selected scene root differs from the saved trace identity")
-    binary = selected_root / "testing" / "map_000000.bin"
-    if not binary.is_file():
-        raise ValueError(f"Selected scene has no evaluation binary: {binary}")
-    digest = sha256(binary)
-    if digest != report.get("binary_sha256"):
-        raise ValueError("Selected scene binary differs from the saved trace identity")
-    try:
-        portable = reference(selected_root)
-    except ValueError:
-        portable = None
-    return selected_root, {"selection": str(selection), "root": portable,
-                           "binary_sha256": digest, "status": "scene_and_binary_identity_checked"}
-
-
-def _episode(args):
-    trace = Path(args.trace).expanduser().resolve()
-    if not trace.is_file():
-        raise FileNotFoundError(f"Saved trace does not exist: {trace}")
-    from geotransfer_gap.runtime.trace_io import load_saved_trace
-
-    saved = load_saved_trace(trace)
-    selected_root, scene_info = _scene_context(args.scene, saved.playback.report)
-    map_root = selected_root
-    if map_root is None and saved.playback.report.get("scene") is not None:
-        try:
-            map_root = resolve_reference(saved.playback.report["scene"])
-        except (KeyError, TypeError, ValueError):
-            map_root = None
-    map_context = build_map_context(map_root, saved.playback.report.get("binary_sha256"))
-    if scene_info is None and map_context.status == "valid":
-        scene_info = {
-            "root": saved.playback.report.get("scene"),
-            "binary_sha256": saved.playback.report.get("binary_sha256"),
-            "status": "saved_scene_identity_and_source_map_context_checked",
-        }
-    profile_path = args.profile or settings().project / "configs/evaluation/default.toml"
-    destination = _output_path(args.output, trace, profile_path, selected_root)
-    profile = load_profile(profile_path)
-    result, events = evaluate_episode(saved, profile, scene=scene_info,
-                                      map_context=map_context, scene_root=map_root)
-    result["input"]["trace_filename"] = trace.name
-    destination.mkdir(parents=True, exist_ok=False)
-    if events:
-        event_path = destination / "events.json"
-        write_json(event_path, {"schema_version": 1, "events": events})
-        result["observed_events"]["sha256"] = sha256(event_path)
-    else:
-        result["observed_events"]["sha256"] = None
-    write_json(destination / "episode.json", result)
-    print(json.dumps({"episode": str(destination / "episode.json"),
-                      "events": str(destination / "events.json") if events else None,
-                      "trace_sha256": result["input"]["trace_sha256"],
-                      "evidence_level": result["input"]["evidence_level"]}, indent=2))
-    return result
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser("geotransfer evaluate")
     sub = parser.add_subparsers(dest="action", required=True)
@@ -162,7 +92,15 @@ def main(argv=None):
                          help="new comparison directory beneath configured runs")
     args = parser.parse_args(argv)
     if args.action == "episode":
-        return _episode(args)
+        from geotransfer_gap.evaluation.reporting import evaluate_trace
+
+        index = evaluate_trace(trace=args.trace, scene=args.scene, output=args.output,
+                               profile=args.profile)
+        entry = index["episodes"][0]
+        print(json.dumps({"index": str(args.output.expanduser().resolve() / "index.json"),
+                          "trace_sha256": entry["trace_sha256"],
+                          "evidence_level": entry["evidence_level"]}, indent=2))
+        return index
     if args.action == "run":
         from geotransfer_gap.evaluation.reporting import evaluate_run
 

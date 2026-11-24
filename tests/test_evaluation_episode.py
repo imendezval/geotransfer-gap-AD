@@ -272,7 +272,8 @@ def test_malformed_time_short_trace_and_terminal_event_keep_missing_distinct():
 
 
 def test_episode_cli_writes_trace_only_bundle_and_refuses_unsafe_targets(tmp_path, monkeypatch):
-    from geotransfer_gap.artifacts import read_json, sha256
+    from geotransfer_gap.artifacts import sha256
+    from geotransfer_gap.evaluation.reporting import read_indexed_evaluation
 
     runs = tmp_path / "runs"
     runs.mkdir()
@@ -281,16 +282,22 @@ def test_episode_cli_writes_trace_only_bundle_and_refuses_unsafe_targets(tmp_pat
     matrix_trace(trace, count=12, terminal="ego_removed", requested=20)
     output = runs / "episode-01"
     main(["evaluate", "episode", "--trace", str(trace), "--output", str(output)])
-    saved = read_json(output / "episode.json")
+    _, index, records = read_indexed_evaluation(output)
+    assert index["selection"]["kind"] == "standalone_trace"
+    assert index["selection"]["accounting_scope"] == "selected_trace"
+    assert index["expected_episodes"] == 1
+    record, events = next(iter(records.values()))
+    assert record["accounting"]["execution_status"] == "not_recorded"
+    assert record["accounting"]["attempt_history"] == []
+    saved = record["episode_metrics"]
     assert saved["result_schema_version"] == 1
     assert saved["input"]["evidence_level"] == "trace_only_diagnostic"
     assert saved["input"]["producer_revision_status"] == "not_recorded_by_saved_trace_contract"
     assert saved["evaluator"]["evaluator_code"]["sha256"]
     assert saved["input"]["live_validation_status"] == "not_run_offline_evaluation"
     assert saved["metrics"][0]["evidence_refs"][0]["sha256"] == saved["input"]["trace_sha256"]
-    assert (output / "events.json").is_file()
-    assert saved["observed_events"]["count"] > 0
-    assert saved["observed_events"]["sha256"] == sha256(output / "events.json")
+    assert saved["observed_events"]["count"] == len(events) > 0
+    assert saved["observed_events"]["sha256"] == sha256(output / record["events_file"])
     assert saved["task"]["bounded_task_completion"]["outcome"] == "unassessable"
     assert any("task outcomes are unassessable" in item
                for item in saved["context_limitations"])
@@ -313,11 +320,11 @@ def test_cli_accepts_safe_output_sibling_of_loose_trace_in_runs(tmp_path, monkey
     matrix_trace(trace, count=2, terminal="ego_removed", requested=4)
     destination = runs / "new-evaluation"
     main(["evaluate", "episode", "--trace", str(trace), "--output", str(destination)])
-    assert (destination / "episode.json").is_file()
+    assert (destination / "index.json").is_file()
 
 
 def test_missing_event_channels_do_not_emit_zero_event_count(tmp_path, monkeypatch):
-    from geotransfer_gap.artifacts import read_json
+    from geotransfer_gap.evaluation.reporting import read_indexed_evaluation
 
     runs = tmp_path / "runs"
     runs.mkdir()
@@ -330,14 +337,19 @@ def test_missing_event_channels_do_not_emit_zero_event_count(tmp_path, monkeypat
             actor.pop("reached_goal", None)
     write_json(trace, report)
     main(["evaluate", "episode", "--trace", str(trace), "--output", str(runs / "unknown-events")])
-    result = read_json(runs / "unknown-events" / "episode.json")
+    _, _, records = read_indexed_evaluation(runs / "unknown-events")
+    record, events = next(iter(records.values()))
+    result = record["episode_metrics"]
     assert result["observed_events"]["status"] == "unavailable"
     assert result["observed_events"]["count"] is None
-    assert result["observed_events"]["file"] is None
+    assert events == []
+    assert record["event_accounting"]["count"] is None
+    assert result["observed_events"]["file"] == record["events_file"]
 
 
 def test_cli_scene_context_validates_binary_and_output_is_offline(tmp_path, monkeypatch):
-    from geotransfer_gap.artifacts import read_json, sha256
+    from geotransfer_gap.artifacts import sha256
+    from geotransfer_gap.evaluation.reporting import read_indexed_evaluation
 
     artifacts = tmp_path / "artifacts"
     scene = artifacts / "scene-a"
@@ -356,7 +368,18 @@ def test_cli_scene_context_validates_binary_and_output_is_offline(tmp_path, monk
     modules_before = set(sys.modules)
     main(["evaluate", "episode", "--trace", str(trace), "--output", str(runs / "checked"),
           "--scene", str(scene)])
-    assert read_json(runs / "checked" / "episode.json")["scene_context"]["status"] == "scene_and_binary_identity_checked"
+    _, _, records = read_indexed_evaluation(runs / "checked")
+    record, _ = next(iter(records.values()))
+    assert record["episode_metrics"]["scene_context"]["status"] == "scene_and_binary_identity_checked"
+    wrong_scene = artifacts / "wrong"
+    wrong_scene.mkdir()
+    with pytest.raises(ValueError, match="scene root differs"):
+        main(["evaluate", "episode", "--trace", str(trace), "--output", str(runs / "wrong"),
+              "--scene", str(wrong_scene)])
+    binary.write_bytes(b"changed synthetic binary")
+    with pytest.raises(ValueError, match="binary differs"):
+        main(["evaluate", "episode", "--trace", str(trace), "--output", str(runs / "wrong"),
+              "--scene", str(scene)])
     heavy_roots = {"torch", "pufferlib", "lanelet2"}
     newly_loaded_heavy_modules = sorted(
         name for name in set(sys.modules) - modules_before

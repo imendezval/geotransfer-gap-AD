@@ -34,6 +34,7 @@ class Playback:
     bound: bool
     evaluation_capture: dict | None = None
     evaluation_capture_bound: bool = False
+    files: dict[str, Path] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,7 @@ def read_playback(path, digest=None, expected=None, *, verify_all_files=False):
                     raise SavedEvidenceError(f"Invalid saved evidence filename: {name!r}")
                 file = path.with_name(name)
                 actual = sha256(file) if file.is_file() else None
+                paths[kind] = file
             if actual is None or file.name != entry.get("path") or actual != entry.get("sha256"):
                 raise SavedEvidenceError(f"Playback hash or file differs from saved evidence: {file}")
             hashes[kind] = actual
@@ -154,7 +156,7 @@ def read_playback(path, digest=None, expected=None, *, verify_all_files=False):
         evidence is not None and evidence.get("trace_sha256") == hashes["trace"]
     )
     return Playback(report, evidence, diagnostic, hashes, attempt, bound,
-                    evaluation_capture, capture_bound)
+                    evaluation_capture, capture_bound, paths)
 
 
 def _digest(value):

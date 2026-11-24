@@ -113,6 +113,36 @@ def synthetic_capture(trace, trace_digest):
     }
 
 
+def test_standalone_index_binds_attested_evidence_without_run_accounting(bundle, monkeypatch):
+    from geotransfer_gap.artifacts import read_json
+    from geotransfer_gap.evaluation.reporting import evaluate_trace, read_indexed_evaluation, render_report
+
+    path, trace, verification, _ = bundle
+    attest(path, trace, verification)
+    runs = path.parent / "runs"
+    monkeypatch.setenv("GEOTRANSFER_RUNS", str(runs))
+    output = runs / "evaluation"
+    index = evaluate_trace(trace=path, output=output)
+    _, _, records = read_indexed_evaluation(output)
+    result, _ = next(iter(records.values()))
+    assert result["evidence"]["level"] == "archived_attested"
+    assert result["accounting"]["execution_status"] == "not_recorded"
+    snapshot_path = output / index["input_snapshot"]["file"]
+    bound = {row["path"]: row.get("sha256") for row in read_json(snapshot_path)["files"]}
+    for name in ("trace.json", "attempt.json", "verification.json"):
+        evidence = path.with_name(name)
+        assert bound[str(evidence)] == sha256(evidence)
+    assert "Original experiment accounting is unavailable" in (output / "report.md").read_text()
+    render_report(output)
+    snapshot_path.write_text("{}")
+    with pytest.raises(ValueError, match="input snapshot"):
+        read_indexed_evaluation(output)
+    path.write_text("{}")
+    with pytest.raises(SavedEvidenceError):
+        evaluate_trace(trace=path, output=runs / "corrupt")
+    assert not (runs / "corrupt").exists()
+
+
 def test_archived_bundle_binds_bytes_and_joins_identity(bundle):
     path, trace, verification, binary = bundle
     attempt = attest(path, trace, verification)

@@ -15,6 +15,7 @@ from geotransfer_gap.artifacts import (
     read_json,
     reference,
     resolve_reference,
+    scene_root,
     sha256,
     write_json,
 )
@@ -27,6 +28,7 @@ from geotransfer_gap.runtime.trace_io import SavedEvidenceError, load_saved_trac
 
 INDEX_SCHEMA_VERSION = 1
 RESULT_SCHEMA_VERSION = 1
+STANDALONE_TRACE = "standalone_trace"
 _CAMPAIGN_STATES = {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}
 
 
@@ -49,6 +51,37 @@ def _validate_output(output, inputs, scenes, profile_path):
         _output_path(destination, path, profile_path,
                      path if path in scenes else None)
     return destination
+
+
+def _scene_context(selection, report):
+    if selection is None:
+        return None, None
+    selected_root = scene_root(selection).resolve()
+    recorded = report.get("scene")
+    if not isinstance(recorded, dict):
+        raise ValueError("Selected scene cannot be checked because this trace has no scene identity")
+    recorded_root = resolve_reference(recorded).resolve()
+    if selected_root != recorded_root:
+        raise ValueError("Selected scene root differs from the saved trace identity")
+    binary = selected_root / "testing" / "map_000000.bin"
+    if not binary.is_file():
+        raise ValueError(f"Selected scene has no evaluation binary: {binary}")
+    digest = sha256(binary)
+    if digest != report.get("binary_sha256"):
+        raise ValueError("Selected scene binary differs from the saved trace identity")
+    try:
+        portable = reference(selected_root)
+    except ValueError:
+        portable = None
+    return selected_root, {"selection": str(selection), "root": portable,
+                           "binary_sha256": digest, "status": "scene_and_binary_identity_checked"}
+
+
+def _trace_scene_root(report):
+    try:
+        return resolve_reference(report["scene"]).resolve() if report.get("scene") else None
+    except (KeyError, TypeError, ValueError, OSError):
+        return None
 
 
 def _scene_entries(manifest_path):
@@ -486,10 +519,12 @@ def _snapshot(selection, profile_path):
                     "path": None, "reference": recorded_ref, "expected_sha256": entry.get("sha256"),
                     "present": False, "role": "recorded_scene_input",
                 }
-            elif path.is_file():
+            elif path.is_file() or (input_name == "binary" and episode.get("scene_info")):
                 paths[str(path)] = {"path": str(path), "reference": recorded_ref,
                                     "expected_sha256": entry.get("sha256"),
-                                    "sha256": sha256(path), "present": True,
+                                    "sha256": (episode["scene_info"]["binary_sha256"]
+                                               if input_name == "binary" and episode.get("scene_info")
+                                               else sha256(path)), "present": True,
                                     "role": "recorded_scene_input"}
             else:
                 paths[f"missing:{path}"] = {"path": str(path), "reference": recorded_ref,
@@ -547,9 +582,15 @@ def _snapshot(selection, profile_path):
                         if sidecar.is_file():
                             paths[str(sidecar)] = {"path": str(sidecar), "sha256": sha256(sidecar),
                                                    "role": role}
-        for _, trace, _ in episode.get("trace_candidates", []):
-            if trace and trace.is_file():
-                paths[str(trace)] = {"path": str(trace), "sha256": sha256(trace), "role": "saved_trace"}
+        if (saved := episode.get("saved_trace")) is not None:
+            for kind, path in saved.playback.files.items():
+                digest = saved.playback.hashes.get(kind)
+                paths[str(path)] = {"path": str(path), "sha256": digest,
+                                    "present": digest is not None, "role": f"saved_{kind}"}
+        else:
+            for _, trace, _ in episode.get("trace_candidates", []):
+                if trace and trace.is_file():
+                    paths[str(trace)] = {"path": str(trace), "sha256": sha256(trace), "role": "saved_trace"}
     return {"schema_version": 1, "files": [paths[key] for key in sorted(paths)]}
 
 
@@ -786,13 +827,15 @@ def _metric_summary(result):
 def _episode_result(selection, episode, profile, profile_path):
     candidates = episode.get("trace_candidates", [])
     selected_trace = candidates[-1][1] if candidates else None
+    standalone = selection["kind"] == STANDALONE_TRACE
     account = {
         "execution_status": episode.get("execution_status", "unknown"),
         "execution_failure": episode.get("execution_failure"),
         "campaign_status": episode.get("campaign_status"),
         "campaign_integration_validity": episode.get("campaign_integration_validity"),
         "attempt_history": episode.get("attempt_history", []),
-        "primary_view": "single" if selection["kind"] == "saved_campaign" else "run_entry",
+        "primary_view": {"saved_campaign": "single", STANDALONE_TRACE: "trace"}.get(
+            selection["kind"], "run_entry"),
         "batch_replication": episode.get("batch_replication"),
     }
     result, events, evidence_level = None, [], None
@@ -805,21 +848,28 @@ def _episode_result(selection, episode, profile, profile_path):
     if selected_trace is not None:
         try:
             _verify_campaign_parity(selection, episode)
-            saved, trace = _load_evidence(selection, episode, selected_trace)
-            map_root = None
-            try:
-                map_root = resolve_reference(trace.get("scene")).resolve() if trace.get("scene") else None
-            except (KeyError, TypeError, ValueError):
-                map_root = None
+            saved = episode.get("saved_trace")
+            if saved is None:
+                saved, trace = _load_evidence(selection, episode, selected_trace)
+            else:
+                trace = saved.playback.report
+            map_root = episode["scene_root"] if standalone else _trace_scene_root(trace)
             map_context = build_map_context(map_root, trace.get("binary_sha256"))
-            scene_info = {
-                "root": trace.get("scene"), "binary_sha256": trace.get("binary_sha256"),
-                "status": "saved_scene_identity_checked" if map_context.status == "valid"
-                    else "trace_identity_checked_map_context_" + map_context.status,
-            }
+            if standalone:
+                scene_info = episode.get("scene_info")
+                if scene_info is None and map_context.status == "valid":
+                    scene_info = {
+                        "root": trace.get("scene"), "binary_sha256": trace.get("binary_sha256"),
+                        "status": "saved_scene_identity_and_source_map_context_checked",
+                    }
+            else:
+                scene_info = {
+                    "root": trace.get("scene"), "binary_sha256": trace.get("binary_sha256"),
+                    "status": "saved_scene_identity_checked" if map_context.status == "valid"
+                        else "trace_identity_checked_map_context_" + map_context.status,
+                }
             result, events = evaluate_episode(saved, profile, scene=scene_info,
                                               map_context=map_context, scene_root=map_root)
-            result["input"]["trace_filename"] = selected_trace.name
             trace_hash = saved.playback.hashes["trace"]
             evidence_level = saved.evidence_level.value
             evidence_status, evidence_reason = "valid", "Saved trace and supplied binding passed the shared evidence reader"
@@ -885,12 +935,32 @@ def _slug(episode_id):
     return f"{label}-{digest}"
 
 
+def _standalone_context_snapshot(snapshot, record):
+    """Retain the source references actually consumed by standalone metrics."""
+    files = {row["path"]: row for row in snapshot["files"] if row["path"] is not None}
+    for metric in record["episode_metrics"]["metrics"]:
+        for ref in metric.get("evidence_refs", []):
+            value = ref.get("reference") or ref.get("path")
+            if value is None or not ref.get("sha256"):
+                continue
+            path = str(resolve_reference(value))
+            existing = files.get(path)
+            if existing is None:
+                existing = {"path": path, "sha256": ref["sha256"], "role": "metric_source_context"}
+                files[path] = existing
+                snapshot["files"].append(existing)
+            elif existing.get("sha256") != ref["sha256"]:
+                raise ValueError(f"Selected saved evidence changed while evaluation was running: {path}")
+    snapshot["files"].sort(key=lambda row: row["path"] or str(row.get("reference")))
+
+
 def _write_evaluation(output, selection, profile, profile_path, snapshot):
     output.mkdir(parents=True, exist_ok=False)
-    write_json(output / "input_snapshot.json", snapshot)
     episode_entries = []
     for episode in selection["episodes"]:
         record = _episode_result(selection, episode, profile, profile_path)
+        if selection["kind"] == STANDALONE_TRACE:
+            _standalone_context_snapshot(snapshot, record)
         slug = _slug(episode["episode_id"])
         episode_dir = output / "episodes" / slug
         episode_dir.mkdir(parents=True, exist_ok=False)
@@ -920,6 +990,7 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
             "failure_labels": [item["label"] for item in record.get("failure_taxonomy", [])],
         })
     _verify_snapshot(snapshot)
+    write_json(output / "input_snapshot.json", snapshot)
     index = {
         "schema_version": INDEX_SCHEMA_VERSION,
         "selection": {"kind": selection["kind"], "root": str(selection["root"]),
@@ -934,6 +1005,8 @@ def _write_evaluation(output, selection, profile, profile_path, snapshot):
         "episodes": episode_entries,
         "complete": True,
     }
+    if selection["kind"] == STANDALONE_TRACE:
+        index["selection"]["accounting_scope"] = "selected_trace"
     write_json(output / "index.json", index)
     render_report(output)
     return index
@@ -1048,6 +1121,9 @@ def read_indexed_evaluation(output):
     output = Path(output).expanduser().resolve()
     index_path = _evaluation_file(output, "index.json", "evaluation index")
     if not index_path.is_file():
+        if (output / "episode.json").is_file():
+            raise ValueError("This older standalone evaluation has no index. Run "
+                             "evaluate episode --trace ORIGINAL_TRACE --output NEW_DIR.")
         raise FileNotFoundError(f"Evaluation index does not exist: {index_path}")
     index = read_json(index_path)
     if not isinstance(index, dict):
@@ -1079,9 +1155,11 @@ def _render_csv(rows):
 
 
 def _render_markdown(index, rows):
+    selected_trace = index["selection"]["kind"] == STANDALONE_TRACE
     lines = ["# Offline performance evaluation", "",
              f"Selection: `{index['selection']['kind']}`.",
-             f"Accounted logical episodes: {index['expected_episodes']}.",
+             (f"Selected traces: {index['expected_episodes']}. Original experiment accounting is unavailable."
+              if selected_trace else f"Accounted logical episodes: {index['expected_episodes']}."),
              "Execution, archived evidence, metric validity, task/encounter findings, and driving outcomes are reported separately. "
              "Campaign status records integration/parity only.", "",
              "## Accounting", "", "| Dimension | Status | Episodes |", "| --- | --- | ---: |"]
@@ -1134,6 +1212,67 @@ def render_report(output):
             "markdown": str(output / "report.md")}
 
 
+def _evaluate_selection(selection, output, profile):
+    profile_path = _profile_path(profile)
+    if not profile_path.is_file():
+        raise FileNotFoundError(f"Evaluation profile does not exist: {profile_path}")
+    _dedupe(selection["episodes"])
+    if not selection["episodes"]:
+        raise ValueError("Selected saved input has no expected logical episodes")
+    input_paths = list(selection["source_files"])
+    scenes = [episode["scene_root"] for episode in selection["episodes"] if episode.get("scene_root")]
+    for episode in selection["episodes"]:
+        input_paths.extend(attempt["record"] for attempt in episode.get("attempt_history", [])
+                           if attempt.get("record"))
+        input_paths.extend(str(path) for _, path, _ in episode.get("trace_candidates", []))
+        input_paths.extend(str(path) for _, path, _ in episode.get("batch_trace_candidates", []))
+        if (saved := episode.get("saved_trace")) is not None:
+            input_paths.extend(saved.playback.files.values())
+    destination = _validate_output(output, input_paths, scenes, profile_path)
+    profile_values = load_profile(profile_path)
+    snapshot = _snapshot(selection, profile_path)
+    if not any(item["path"] == str(profile_path) and item.get("sha256") == profile_values.raw_sha256
+               for item in snapshot["files"]):
+        raise ValueError("Evaluation profile changed while its effective identity was being loaded")
+    return _write_evaluation(destination, selection, profile_values, profile_path, snapshot)
+
+
+def evaluate_trace(*, trace, output, scene=None, profile=None):
+    trace = Path(trace).expanduser().resolve()
+    if not trace.is_file():
+        raise FileNotFoundError(f"Saved trace does not exist: {trace}")
+    saved = load_saved_trace(trace)
+    report = saved.playback.report
+    selected_root, scene_info = _scene_context(scene, report)
+    root = selected_root or _trace_scene_root(report)
+    scene_inputs = dict((saved.playback.verification or {}).get("inputs", {}))
+    if root is not None:
+        binary = root / "testing/map_000000.bin"
+        scene_inputs.setdefault("binary", {
+            "reference": str(binary), "sha256": report.get("binary_sha256"),
+        })
+        if selected_root is not None:
+            # Keep the explicit identity check bound to the snapshot even
+            # if that binary changes after resolving the original selection.
+            scene_inputs["binary"] = {"reference": str(binary), "sha256": report["binary_sha256"]}
+    episode = {
+        "episode_id": saved.playback.hashes["trace"],
+        "scene_id": root.name if root is not None else None,
+        "scene_root": root,
+        "scene_info": scene_info,
+        "scene_inputs": scene_inputs,
+        "ego": report.get("ego_controller", report["planner"] if report["schema_version"] == 2 else None),
+        "traffic": report.get("traffic_controller"),
+        "startup": report.get("traffic_startup", report.get("traffic_protocol")),
+        "execution_status": "not_recorded",
+        "trace_candidates": [(1, trace, None)],
+        "saved_trace": saved,
+    }
+    return _evaluate_selection({
+        "kind": STANDALONE_TRACE, "root": trace, "source_files": [], "episodes": [episode],
+    }, output, profile)
+
+
 def evaluate_run(*, run=None, manifest=None, campaign=None, output, profile=None):
     if (run is None) == (campaign is None):
         raise ValueError("Choose exactly one of --run or --campaign")
@@ -1141,23 +1280,5 @@ def evaluate_run(*, run=None, manifest=None, campaign=None, output, profile=None
         raise ValueError("An existing scene manifest is required with --run")
     if campaign is not None and manifest is not None:
         raise ValueError("--manifest applies to --run, not --campaign")
-    profile_path = _profile_path(profile)
-    if not profile_path.is_file():
-        raise FileNotFoundError(f"Evaluation profile does not exist: {profile_path}")
     selection = (_campaign_input(campaign) if campaign is not None else _run_input(run, manifest))
-    _dedupe(selection["episodes"])
-    if not selection["episodes"]:
-        raise ValueError("Selected saved input has no expected logical episodes")
-    input_paths = list(selection["source_files"]) + [profile_path]
-    scenes = [episode["scene_root"] for episode in selection["episodes"] if episode.get("scene_root")]
-    for episode in selection["episodes"]:
-        input_paths.extend(attempt["record"] for attempt in episode.get("attempt_history", [])
-                           if attempt.get("record"))
-        input_paths.extend(str(path) for _, path, _ in episode.get("trace_candidates", []))
-        input_paths.extend(str(path) for _, path, _ in episode.get("batch_trace_candidates", []))
-    destination = _validate_output(output, input_paths, scenes, profile_path)
-    profile_values = load_profile(profile_path)
-    if sha256(profile_path) != profile_values.raw_sha256:
-        raise ValueError("Evaluation profile changed while its effective identity was being loaded")
-    snapshot = _snapshot(selection, profile_path)
-    return _write_evaluation(destination, selection, profile_values, profile_path, snapshot)
+    return _evaluate_selection(selection, output, profile)
