@@ -45,13 +45,16 @@ def protected_input_paths(cfg):
 
 def saved_evidence_ancestor(path, runs):
     """Find saved evidence around a resolved destination, including an existing directory."""
-    markers = ("trace.json", "attempt.json", "verification.json", "campaign.json",
-               "campaign_report.json", "report.json", "run.json", "manifest.json",
-               "matrix.json", "inventory.json", "ledger.json")
+    markers = ("attempt.json", "verification.json", "run.json", "campaign.json",
+               "campaign_report.json")
+    historical_run_markers = ("trace.json", "report.json", "manifest.json",
+                              "matrix.json", "inventory.json", "ledger.json")
     for parent in (path, *path.parents):
         if parent == runs:
             break
         if (any((parent / marker).is_file() for marker in markers)
+                or parent.is_relative_to(runs)
+                and any((parent / marker).is_file() for marker in historical_run_markers)
                 or (parent / "index.json").is_file() and (parent / "input_snapshot.json").is_file()
                 or (parent / "episode.json").is_file()):
             return parent

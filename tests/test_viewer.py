@@ -367,6 +367,18 @@ def test_explicit_fresh_run_comparison_uses_existing_execution_entrypoint(
     assert '"name": "expert evaluator rollout"' in html and '"name": "smart evaluator rollout"' in html
 
 
+def test_manifest_gallery_allows_an_output_sibling_of_the_manifest(tmp_path, matrix_bundle):
+    from geotransfer_gap.artifacts import write_json
+
+    scene, _, report, _ = matrix_bundle
+    manifest = tmp_path / "manifest.json"
+    write_json(manifest, {"schema_version": 2, "scenes": [{"name": scene.name, "root": report["scene"]}]})
+    output = tmp_path / "gallery"
+    viewer.main(["--manifest", str(manifest), "--output", str(output)])
+    assert (output / f"{scene.name}.html").is_file()
+    assert f'href="{scene.name}.html"' in (output / "index.html").read_text()
+
+
 def test_stale_trace_hash_is_not_attached(tmp_path, matrix_bundle):
     from geotransfer_gap.artifacts import read_json, write_json
 
