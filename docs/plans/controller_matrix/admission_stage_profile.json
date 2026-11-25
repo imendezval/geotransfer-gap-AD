@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "method": "one serial ordinary admission followed by scoped subprocess timing on the same copied scratch scene",
+  "created_at_utc": "2026-11-25T02:35:00.139176+00:00",
+  "protocol": "hybrid_startup",
+  "run_dir": "/tmp/geotransfer-admission-profile-1o5zqize",
+  "software": {
+    "repo_revision": "1f95fd30341a6073398f992c4953b6f1d87d859b",
+    "python": "3.11.18",
+    "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39",
+    "behavior_bench_revision": "805fe04c6977b60c41c92c31f1a5211fbd704f44",
+    "lanelet2_version": "1.2.3"
+  },
+  "support_evidence": {
+    "artifacts_tree": "/tmp/geotransfer-scale-native.hoxqKh/artifacts",
+    "native_oracle_sha256": "41357eaf2f5ba5b8cbbad2c91fe05eb4a62e9d38400b43f511ab7dc27a7256e7",
+    "native_oracle_converter_sha256": "4cf8f74187dcc5e9884feff7c199fc7d7b3f58b2d98562293790ac77a2fdcb3f",
+    "current_converter_sha256": "4cf8f74187dcc5e9884feff7c199fc7d7b3f58b2d98562293790ac77a2fdcb3f",
+    "hybrid_protocol_parity_sha256": "99bc840376f286baeb955e63fd1f88ec6d519157fc2409aecc3744a7dffd838e",
+    "canonical_native_oracle_converter_sha256": "b7921aeb4c752b0de4b552efd59ba44e78e7d264c9282a4f1469ffb3df7a1d26",
+    "current_oracle_matches_converter": true
+  },
+  "validation_dependencies": {
+    "tool_file_count": 31,
+    "pre_profile_post_profile_hashes_equal": true
+  },
+  "candidates": [
+    {
+      "label": "technical_pass",
+      "source_candidate_root": "/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r15_e332_f25626",
+      "scratch_root": "/tmp/geotransfer-admission-profile-1o5zqize/artifacts/technical_pass",
+      "scene": {
+        "recording": 15,
+        "ego_track_id": 332,
+        "first_frame": 25626,
+        "scene_binary_sha256": "84258ae1d1522df278aa6fdb737a43c5c4e5a8bc644b3026b8a7161663137be0",
+        "scene_json_sha256": "75f767730f5a9981e9a39690881b807f1f04b1863ccfc6e60f88010df644e584",
+        "source_tracks_sha256": "ff9f7500b4f4be8816ead4a215ec6a10d9a7b07a303ad47fb58e6a92f32f10a5",
+        "source_lanelet2_map_sha256": "e6cb0b8218bebbe5953cb1338afd96c63b18fa15f5010e44645623d39d5ce4fe"
+      },
+      "source_screen_slice": {
+        "passed": true,
+        "raw_rule_flags": [],
+        "stage_seconds": {
+          "audit_scene.py": 0.18068558499362553,
+          "audit_map_semantics.py": 0.12029961300140712,
+          "audit_rule_applicability.py": 0.9147847939966596,
+          "audit_physical_source.py": 0.13824525300151436
+        },
+        "optional_scope_proofs_run": false
+      },
+      "ordinary_admission_seconds": 14.346654367000156,
+      "ordinary_returncode": 0,
+      "profiled_admission": {
+        "outer_seconds": 14.27915460299846,
+        "subprocess_seconds": 14.186565956988488,
+        "unattributed_seconds": 0.09258864600997185,
+        "stages": {
+          "audit_interaction_fidelity.py": {
+            "count": 2,
+            "seconds": 0.23409876799269114
+          },
+          "audit_map_semantics.py": {
+            "count": 1,
+            "seconds": 0.13384352299908642
+          },
+          "audit_physical_source.py": {
+            "count": 1,
+            "seconds": 0.14942874500411563
+          },
+          "audit_rule_applicability.py": {
+            "count": 1,
+            "seconds": 0.9127245859999675
+          },
+          "audit_scene.py": {
+            "count": 1,
+            "seconds": 0.20141532199340872
+          },
+          "probe_counterfactual.py": {
+            "count": 2,
+            "seconds": 2.6138662779994775
+          },
+          "probe_eval_replay.py": {
+            "count": 1,
+            "seconds": 1.171515697002178
+          },
+          "probe_repeat_reset.py": {
+            "count": 1,
+            "seconds": 1.31630654699984
+          },
+          "scene_contract.py": {
+            "count": 1,
+            "seconds": 0.17571278900140896
+          },
+          "trace_eval_lifecycle.py": {
+            "count": 3,
+            "seconds": 3.6508704900043085
+          },
+          "validate_parked.py": {
+            "count": 1,
+            "seconds": 1.187776535996818
+          },
+          "validate_replay.py": {
+            "count": 1,
+            "seconds": 1.218410640998627
+          },
+          "validate_spawn.py": {
+            "count": 1,
+            "seconds": 1.2205960349965608
+          }
+        }
+      },
+      "queue_full_gate_duplicate_stage_seconds": {
+        "audit_scene.py": 0.20141532199340872,
+        "audit_map_semantics.py": 0.13384352299908642,
+        "audit_rule_applicability.py": 0.9127245859999675,
+        "audit_physical_source.py": 0.14942874500411563
+      },
+      "technical_admitted": true,
+      "research_admitted": false,
+      "exclusion_reasons": [
+        "exists:semantic_review_hybrid_startup.json"
+      ],
+      "decision_parity": true,
+      "decision_fields_different": [],
+      "validation_dependency_count": 31,
+      "validation_dependencies_unchanged": true
+    },
+    {
+      "label": "technical_reject",
+      "source_candidate_root": "/home/inigo/data/git/repo/student-project/geotransfer-gap-AD/artifacts/oriented_v3/r00_e321_f21052",
+      "scratch_root": "/tmp/geotransfer-admission-profile-1o5zqize/artifacts/technical_reject",
+      "scene": {
+        "recording": 0,
+        "ego_track_id": 321,
+        "first_frame": 21052,
+        "scene_binary_sha256": "e9526d748d96d3cc8a919889381cb454c457a79bbf1060c2036d0bb51338c448",
+        "scene_json_sha256": "2cb0623ca8313b8753b9bfc4b72ea2ccdce67bf7065b9529f96484638a2e93c3",
+        "source_tracks_sha256": "d222312f2c87cc492624c09109af0c6688871fa111939c45eba3ea089ccaf32c",
+        "source_lanelet2_map_sha256": "16dcaffd0cf6e3b50eff8c23af303f445a0b43db1474bf25f0440f54d8585973"
+      },
+      "source_screen_slice": {
+        "passed": true,
+        "raw_rule_flags": [],
+        "stage_seconds": {
+          "audit_scene.py": 0.22781763799866894,
+          "audit_map_semantics.py": 0.13407703099801438,
+          "audit_rule_applicability.py": 0.6298876910004765,
+          "audit_physical_source.py": 0.21085713199863676
+        },
+        "optional_scope_proofs_run": false
+      },
+      "ordinary_admission_seconds": 15.342475466000906,
+      "ordinary_returncode": 1,
+      "profiled_admission": {
+        "outer_seconds": 16.547199758002535,
+        "subprocess_seconds": 16.437824193999404,
+        "unattributed_seconds": 0.10937556400313042,
+        "stages": {
+          "audit_interaction_fidelity.py": {
+            "count": 2,
+            "seconds": 0.2608930819988018
+          },
+          "audit_map_semantics.py": {
+            "count": 1,
+            "seconds": 0.14760240699979477
+          },
+          "audit_physical_source.py": {
+            "count": 1,
+            "seconds": 0.2325008500047261
+          },
+          "audit_rule_applicability.py": {
+            "count": 1,
+            "seconds": 0.6476214719950804
+          },
+          "audit_scene.py": {
+            "count": 1,
+            "seconds": 0.2424369430009392
+          },
+          "probe_counterfactual.py": {
+            "count": 2,
+            "seconds": 3.1946945889940253
+          },
+          "probe_eval_replay.py": {
+            "count": 1,
+            "seconds": 1.358226475000265
+          },
+          "probe_repeat_reset.py": {
+            "count": 1,
+            "seconds": 1.547652584995376
+          },
+          "scene_contract.py": {
+            "count": 1,
+            "seconds": 0.19986699799483176
+          },
+          "trace_eval_lifecycle.py": {
+            "count": 3,
+            "seconds": 4.460079188007512
+          },
+          "validate_parked.py": {
+            "count": 1,
+            "seconds": 1.398858767002821
+          },
+          "validate_replay.py": {
+            "count": 1,
+            "seconds": 1.2854247110008146
+          },
+          "validate_spawn.py": {
+            "count": 1,
+            "seconds": 1.4619661270044162
+          }
+        }
+      },
+      "queue_full_gate_duplicate_stage_seconds": {
+        "audit_scene.py": 0.2424369430009392,
+        "audit_map_semantics.py": 0.14760240699979477,
+        "audit_rule_applicability.py": 0.6476214719950804,
+        "audit_physical_source.py": 0.2325008500047261
+      },
+      "technical_admitted": false,
+      "research_admitted": false,
+      "exclusion_reasons": [
+        "source_supported_irrelevance_plausible",
+        "exists:semantic_review_hybrid_startup.json",
+        "hybrid_lifecycle"
+      ],
+      "decision_parity": true,
+      "decision_fields_different": [],
+      "validation_dependency_count": 31,
+      "validation_dependencies_unchanged": true
+    }
+  ],
+  "cache_reuse_note": "Queue reuse timing and resume decisions are reported separately in Workstream B using a source-semantic reject.",
+  "timing_scope": "Temporary proxy wraps only admit_scene.subprocess.run and is restored before return."
+}
