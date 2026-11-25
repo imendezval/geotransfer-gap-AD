@@ -14,6 +14,23 @@ import numpy as np
 import pandas as pd
 from geotransfer_gap.corpus.screen_source_tasks import sample, screen
 from geotransfer_gap.corpus.screen_source_restarts import restart
+from geotransfer_gap.corpus.run_oriented_candidate_queue import candidate_key as phase_key
+
+
+PHASE_OFFSETS = (-20, -15, -10, -5, 5, 10, 15, 20)
+
+
+def phase_variants(seeds, offsets=PHASE_OFFSETS):
+    """Create deterministic actor/window candidates while retaining pair identity."""
+    todo = {}
+    for row in seeds:
+        for offset in offsets:
+            first = row["first_frame"] + offset
+            variant = dict(row, first_frame=first)
+            key = phase_key(variant)
+            if first >= 0 and key not in todo:
+                todo[key] = variant
+    return todo
 
 
 def main():
@@ -26,14 +43,15 @@ def main():
     occupied = {
         (r["recording"], tid) for r in manifest for tid in r["moving_track_ids"]
     }
-    seeds, processed, inputs = ({}, set(), [])
+    seeds, inputs = ({}, [])
     for path in args.ledgers:
         inputs.append(
             {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         )
         for row in json.loads(path.read_text())["results"]:
-            key = tuple((row[k] for k in ("recording", "ego", "first_frame")))
-            processed.add(key)
+            if "actor" not in row:
+                continue
+            key = phase_key(row)
             flags = row.get("source_unsupported_rule_flags", [])
             if flags and (
                 not (
@@ -50,13 +68,17 @@ def main():
             if any(((row["recording"], row[k]) in occupied for k in ("ego", "actor"))):
                 continue
             seeds[key] = row
-    todo = {}
-    for row in seeds.values():
-        for offset in (-20, -15, -10, -5, 5, 10, 15, 20):
-            first = row["first_frame"] + offset
-            key = (row["recording"], row["ego"], first, row["actor"])
-            if first >= 0 and key[:3] not in processed:
-                todo[key] = dict(row, first_frame=first)
+    ordered_seeds = sorted(
+        seeds.values(),
+        key=lambda row: (
+            row["location"],
+            row["recording"],
+            row["ego"],
+            row["first_frame"],
+            row["actor"],
+        ),
+    )
+    todo = phase_variants(ordered_seeds)
     jobs = []
     for rec in sorted({k[0] for k in todo}):
         rows = [r for k, r in todo.items() if k[0] == rec]
@@ -160,15 +182,9 @@ def main():
             r["ego"],
             abs(r["task_evidence"].get("ego_path_crossing_step", 45) - 45),
             r["first_frame"],
+            r["actor"],
         )
     )
-    unique = []
-    seen = set()
-    for row in jobs:
-        key = tuple((row[k] for k in ("recording", "ego", "first_frame")))
-        if key not in seen:
-            seen.add(key)
-            unique.append(row)
     result = {
         "schema_version": 1,
         "selection": "Fixed offsets±5/10/15/20 source frames around supported unadmitted tasks; source-only resampling/task recheck; min5m path/4m displacement; unchanged goal first-entry75, source goal85, full fidelity/manual/model admission. Skip source ego/claimed actor IDs already in the independent manifest. No planner outcomes.",
@@ -183,10 +199,10 @@ def main():
         "inputs": inputs,
         "seed_windows": len(seeds),
         "proposed_variants": len(todo),
-        "jobs": unique,
+        "jobs": jobs,
     }
     args.output.write_text(json.dumps(result, indent=2) + "\n")
-    print("new refined source jobs", len(unique))
+    print("new refined source jobs", len(jobs))
 
 
 if __name__ == "__main__":
