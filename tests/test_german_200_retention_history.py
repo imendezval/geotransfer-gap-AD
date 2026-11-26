@@ -94,6 +94,25 @@ def test_deterministic_source_only_successor_excludes_only_prior_primaries():
     assert [row["source_window_identity_sha256"] for row in selected[:12]] == [f"i{i:02d}" for i in range(24, 36)]
 
 
+def test_deterministic_source_only_successor_accepts_balanced_short_tail_and_exhaustion():
+    source = []
+    prior = set()
+    for arm, prefix in (("Interactive100", "i"), ("Random100", "r")):
+        for rank in range(16):
+            identity = f"{prefix}{rank:02d}"
+            source.append({"arm": arm, "source_window_identity_sha256": identity})
+            if rank < 12:
+                prior.add(identity)
+    selected, ranks = finalize.deterministic_next_rows(source, prior)
+    assert [row["arm"] for row in selected] == ["Interactive100"] * 4 + ["Random100"] * 4
+    assert ranks == {"Interactive100": [13, 14, 15, 16], "Random100": [13, 14, 15, 16]}
+
+    with pytest.raises(ValueError, match="equal nonzero arm counts"):
+        finalize.deterministic_next_rows(source, prior | {f"i{i:02d}" for i in range(12, 16)})
+    with pytest.raises(ValueError, match="exhausted for both arms"):
+        finalize.deterministic_next_rows(source, {row["source_window_identity_sha256"] for row in source})
+
+
 def source_row(recording, first, last, moving):
     row = {"recording": recording, "location": 1, "ego_track_id": 100 + first,
            "first_frame": first, "last_frame": last, "moving_track_ids": moving}

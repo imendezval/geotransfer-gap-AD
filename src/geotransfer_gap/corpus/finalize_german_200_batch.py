@@ -346,13 +346,17 @@ def _row_without_queue_order(row: dict) -> dict:
 
 def deterministic_next_rows(source_rows: list[dict], prior_ids: set[str]) -> tuple[list[dict], dict[str, list[int]]]:
     selected, ranks = [], {}
+    per_arm_counts = []
     for arm in ("Interactive100", "Random100"):
         ranked = [row for row in source_rows if row.get("arm") == arm]
         arm_rows = [row for row in ranked if row.get("source_window_identity_sha256") not in prior_ids][:12]
-        if len(arm_rows) != 12:
-            raise ValueError(f"Frozen rank queue has fewer than 12 remaining {arm} rows")
+        per_arm_counts.append(len(arm_rows))
         ranks[arm] = [next(i + 1 for i, row in enumerate(ranked) if row["source_window_identity_sha256"] == chosen["source_window_identity_sha256"]) for chosen in arm_rows]
         selected.extend(arm_rows)
+    if per_arm_counts[0] == 0 and per_arm_counts[1] == 0:
+        raise ValueError("Frozen rank queue is exhausted for both arms")
+    if per_arm_counts[0] != per_arm_counts[1]:
+        raise ValueError("Remaining frozen rank queue must have equal nonzero arm counts")
     return selected, ranks
 
 
@@ -460,8 +464,13 @@ def validate_source_only_next(queue_path: Path, queue: dict, rows: list[dict], o
     prior_ids = {identity for record in records for identity in record["ordered_primary_identity_sha256"]}
     source_rows = json.loads(source_path.read_text()).get("candidates", [])
     selected, ranks = deterministic_next_rows(source_rows, prior_ids)
-    if len(rows) != 24 or [row.get("arm") for row in rows] != ["Interactive100"] * 12 + ["Random100"] * 12:
-        raise ValueError("Next source-only queue must be 12 Interactive100 followed by 12 Random100")
+    arm_counts = {arm: sum(row.get("arm") == arm for row in rows) for arm in ("Interactive100", "Random100")}
+    arm_count = arm_counts["Interactive100"]
+    if not 1 <= arm_count <= 12 or arm_counts["Random100"] != arm_count:
+        raise ValueError("Next source-only queue must have the same 1-12 frozen rows per arm")
+    expected_arms = ["Interactive100"] * arm_count + ["Random100"] * arm_count
+    if [row.get("arm") for row in rows] != expected_arms:
+        raise ValueError("Next source-only queue must order Interactive100 before Random100")
     for actual, expected in zip(rows, selected):
         if _row_without_queue_order(actual) != expected:
             raise ValueError("Next queue omits, duplicates, or reorders the frozen source ranks")
@@ -524,17 +533,19 @@ def verify_later_record(record: dict, prior_records: list[dict], anchors: list[d
     require_owner_match(json.loads((output_root / "batch_owner.json").read_text()), runner.batch_owner(queue_path, record["queue_sha256"], output_root))
     rows = runner.get_rows(queue)
     ids = [row.get("source_window_identity_sha256") for row in rows]
-    if ids != record.get("ordered_primary_identity_sha256") or len(rows) != 24 or len(set(ids)) != 24:
-        raise ValueError("Earlier retention queue membership/order changed")
     source_rows = json.loads((PROJECT_ROOT / "artifacts/german_200_v1/queues.json").read_text())["candidates"]
     first = json.loads((PROJECT_ROOT / "artifacts/german_200_v1/first_batch.json").read_text())
     prior_ids = {identity for item in prior_records for identity in item["ordered_primary_identity_sha256"]}
     expected, _ = deterministic_next_rows(source_rows, prior_ids)
+    if (ids != record.get("ordered_primary_identity_sha256") or len(rows) != len(expected)
+            or len(set(ids)) != len(expected)):
+        raise ValueError("Earlier retention queue membership/order changed")
     if record["batch_number"] >= 3 and [_row_without_queue_order(row) for row in rows] != expected:
         raise ValueError("Earlier retention queue is not the deterministic frozen-rank successor")
     ledger = json.loads((output_root / "batch_ledger.json").read_text())
     by_index = {int(result.get("queue_index", -1)): result for result in ledger.get("results", [])}
-    if ledger.get("queue_sha256") != record["queue_sha256"] or ledger.get("queue_row_count") != 24 or set(by_index) != set(range(24)) or len(by_index) != len(ledger.get("results", [])):
+    if (ledger.get("queue_sha256") != record["queue_sha256"] or ledger.get("queue_row_count") != len(rows)
+            or set(by_index) != set(range(len(rows))) or len(by_index) != len(ledger.get("results", []))):
         raise ValueError("Earlier retention ledger is incomplete or bound to another queue")
     for index, row in enumerate(rows):
         result = by_index[index]
