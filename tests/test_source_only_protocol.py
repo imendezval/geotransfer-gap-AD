@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 
+from geotransfer_gap.corpus import freeze_random_interactive_v1 as selector
 from geotransfer_gap.corpus.source_only_protocol import (
     independence_conflicts,
     source_context_actors,
@@ -101,3 +103,20 @@ def test_split_policy_holds_location_four_and_uses_recording_mod_five_elsewhere(
     assert split_label(4, 1) == "heldout_location_4"
     assert split_label(2, 10) == "validation_recording"
     assert split_label(1, 11) == "adaptation_recording"
+
+
+@pytest.mark.parametrize("filename", ("queues.json", "first_batch.json", "summary.json"))
+def test_build_protocol_refuses_reusing_any_frozen_output_before_selection(
+    tmp_path, monkeypatch, filename
+):
+    protected = tmp_path / filename
+    protected.write_text("preserve frozen bytes")
+
+    def selection_must_not_start():
+        raise AssertionError("output collision must be detected before selection")
+
+    monkeypatch.setattr(selector, "_eligible_sources", selection_must_not_start)
+    with pytest.raises(FileExistsError, match="Refusing to overwrite frozen"):
+        selector.build_protocol(output_dir=tmp_path)
+
+    assert protected.read_text() == "preserve frozen bytes"

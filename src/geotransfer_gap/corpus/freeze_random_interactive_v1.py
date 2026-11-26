@@ -476,7 +476,24 @@ def _batch_rows(candidates, count=24):
     return chosen[:count]
 
 
+def _assert_fresh_output_path(output_dir):
+    output_dir = Path(output_dir)
+    existing = [
+        output_dir / name
+        for name in ("queues.json", "first_batch.json", "summary.json")
+        if (output_dir / name).exists()
+    ]
+    if existing:
+        names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(
+            "Refusing to overwrite frozen German-200 outputs: "
+            f"{names}. Choose a new --output-dir."
+        )
+
+
 def build_protocol(output_dir=OUTPUT_DIR, target_per_arm=100, batch_size=24):
+    output_dir = Path(output_dir)
+    _assert_fresh_output_path(output_dir)
     eligible_windows, catalog_summary, preflight_summary = _eligible_sources()
     interaction_pool, selector_inputs, selector_row_counts, selector_exact_counts = _load_interaction_pool(eligible_windows)
 
@@ -627,7 +644,6 @@ def build_protocol(output_dir=OUTPUT_DIR, target_per_arm=100, batch_size=24):
             ],
         },
     }
-    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "queues.json").write_text(json.dumps(result, indent=2) + "\n")
     (output_dir / "first_batch.json").write_text(
