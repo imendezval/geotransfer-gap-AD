@@ -139,8 +139,14 @@ def _source_prior_coverage(obj: dict[str, Any], target_velocity: float = 15.0) -
     }
 
 
-def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
-    """Run the real native scheduler for one full, fixed source window."""
+def _native_probe(root: Path, traffic_protocol: str,
+                  ego_controller: str = "idm") -> dict[str, Any]:
+    """Run the native scheduler for one fixed window with IDM traffic.
+
+    The IDM/IDM mode proves the evaluated role pair. Expert/IDM is a separate
+    reference protocol for task-actor preservation, independent of IDM-ego
+    collisions or removals.
+    """
     ensure_bench()
     from geotransfer_gap.runtime import late_spawn_runtime
     from geotransfer_gap.runtime.session import evaluation_env
@@ -162,9 +168,16 @@ def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
         raise RuntimeError("native IDM proof loaded a binding outside the pinned runtime")
 
     env = evaluation_env(root)
-    idm_ego = IDMController("ego")
+    if ego_controller == "idm":
+        ego = IDMController("ego")
+    elif ego_controller == "expert":
+        from geotransfer_gap.planners.expert_controller import ExpertController
+
+        ego = ExpertController("ego")
+    else:
+        raise ValueError(f"unsupported native IDM probe ego: {ego_controller}")
     idm_traffic = IDMController("traffic")
-    scheduler = EpisodeScheduler(binding, idm_ego, idm_traffic, startup=startup)
+    scheduler = EpisodeScheduler(binding, ego, idm_traffic, startup=startup)
     identity_ok = True
     reasons: set[str] = set()
     role_rows = {role: {} for role in ("ego", "traffic")}
@@ -178,6 +191,7 @@ def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
     permanently_removed: set[int] = set()
     actor_generations: dict[int, int] = {}
     following_frames: dict[int, list[dict[str, Any]]] = {}
+    task_view_frames: dict[int, list[dict[str, Any]]] = {}
     identity = None
     try:
         env.reset()
@@ -214,9 +228,32 @@ def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
 
             advances = step < 90
             plan = scheduler.decide(current, advances_simulation=advances)
+            pre_step_task_frames = []
             for assignment in plan.assignments:
                 if assignment.role == "context" and assignment.slot is not None and advances:
                     lifecycle["context_replay_samples"] += 1
+                if assignment.role not in ("ego", "traffic"):
+                    if assignment.role != "context":
+                        continue
+                if assignment.slot is not None and assignment.native_mode is not None:
+                    actor = current.actor_for(assignment.source_id)
+                    entity = state["entities"][assignment.binary_index]
+                    pre_step_task_frames.append({
+                        "source_id": int(assignment.source_id),
+                        "binary_index": int(assignment.binary_index),
+                        "lifetime_generation": actor.lifetime_generation,
+                        "step": step,
+                        "role": assignment.role,
+                        "source_valid": bool(actor.source_valid),
+                        "native_present": bool(actor.native_present),
+                        "present": entity.get("x") != -10000.0 and not bool(entity.get("removed")),
+                        "planned_native_mode": int(assignment.native_mode),
+                        "native_route_valid": (
+                            summarize_route(entity)["valid"]
+                            if assignment.role == "traffic" and assignment.native_mode == Mode.IDM
+                            else None
+                        ),
+                    })
                 if assignment.role not in ("ego", "traffic"):
                     continue
                 actor = current.actor_for(assignment.source_id)
@@ -253,6 +290,15 @@ def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
             else:
                 after = state
             after_entities = after["entities"]
+            for frame in pre_step_task_frames:
+                after_entity = after_entities[frame["binary_index"]]
+                readback = int(after_entity.get("movement_mode", -1))
+                frame["mode_readback"] = readback
+                frame["mode_readback_matches"] = readback == frame["planned_native_mode"]
+                frame["post_step_present"] = (
+                    after_entity.get("x") != -10000.0 and not bool(after_entity.get("removed"))
+                )
+                task_view_frames.setdefault(frame["source_id"], []).append(frame)
             for assignment in plan.assignments:
                 if assignment.slot is None or assignment.native_mode is None:
                     continue
@@ -369,6 +415,7 @@ def _native_probe(root: Path, traffic_protocol: str) -> dict[str, Any]:
             "route_failures": route_failures,
             "dynamics_failures": dynamics_failures,
             "lifecycle": lifecycle,
+            "task_view_frames": task_view_frames,
             "idm_parameters": vars(scheduler.idm_parameters) if scheduler.idm_parameters else None,
             "runtime_reasons": sorted(reasons),
             "leader_observations": following_frames,
@@ -557,6 +604,7 @@ def _tool_hashes() -> dict[str, str]:
     return {
         "producer": sha256(Path(__file__)),
         "idm_adapter": sha256(Path(__file__).resolve().parents[1] / "planners/idm_controller.py"),
+        "expert_reference": sha256(Path(__file__).resolve().parents[1] / "planners/expert_controller.py"),
         "controller_api": sha256(Path(__file__).resolve().parents[1] / "planners/controller_api.py"),
         "scheduler": sha256(Path(scheduler.__file__)),
         "actor_index": sha256(Path(__file__).resolve().parents[1] / "runtime/actor_index.py"),
