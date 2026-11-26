@@ -247,6 +247,127 @@ def fallback_candidates(primary: dict, retained: list[dict]) -> tuple[list[dict]
     return selected, skipped
 
 
+COHORT_QUEUE_SHA256 = "33069002fe04000c0b6e35213f90a219554a1accba6c9bce8230bb990d779cba"
+FIRST_BATCH_SHA256 = "5af1c9ef57cb57adffbbf54a59cf74ab5181b2347c68ca4282121b9ed5a2c6a0"
+SECOND_BATCH_SHA256 = "a7d39afc578cbb2e7c95e54b79ba1463e23ce0b74fc78022facc015fcb2fb11f"
+FIRST_BATCH_LEDGER_SHA256 = "4076644465ae3d7a9483499bad9ab28b37a2e5effadc32a43bbba98a36dcdf4a"
+
+
+def load_frozen_cohort(queue_path: Path, rows: list[dict]) -> tuple[list[dict], list[dict], Path, bool]:
+    """Load the one pinned German-200 cohort and accept only frozen Batch 1/2 queues."""
+    cohort_path = PROJECT_ROOT / "artifacts/german_200_v1/queues.json"
+    first_batch_path = cohort_path.parent / "first_batch.json"
+    batch2_path = PROJECT_ROOT / "artifacts/german_200_v1_workstream_d/next_validation_queue.json"
+    if not cohort_path.is_file() or not first_batch_path.is_file():
+        raise ValueError("Missing frozen German-200 cohort or first-batch evidence")
+    if sha(cohort_path) != COHORT_QUEUE_SHA256 or sha(first_batch_path) != FIRST_BATCH_SHA256:
+        raise ValueError("Frozen German-200 cohort evidence hash changed")
+    is_first_batch = sha(queue_path) == FIRST_BATCH_SHA256
+    if not is_first_batch and (not batch2_path.is_file() or sha(queue_path) != SECOND_BATCH_SHA256):
+        raise ValueError("Unsupported batch queue: prior retention evidence is only complete for frozen Batch 1/2")
+    if not is_first_batch and sha(batch2_path) != SECOND_BATCH_SHA256:
+        raise ValueError("Frozen Batch 2 queue evidence hash changed")
+
+    cohort = json.loads(cohort_path.read_text())
+    anchors, primaries = cohort.get("frozen_16_identity_rows"), cohort.get("candidates")
+    if not isinstance(anchors, list) or len(anchors) != 16 or not isinstance(primaries, list) or len(primaries) != 200:
+        raise ValueError("Missing cohort evidence: expected all 16 anchors and 200 frozen primaries")
+    first_batch = json.loads(first_batch_path.read_text())
+    expected_rows = first_batch["candidates"] if is_first_batch else json.loads(batch2_path.read_text())["candidates"]
+    primary_by_id = {row["source_window_identity_sha256"]: row for row in primaries}
+    for row, frozen in zip(rows, expected_rows):
+        current = {k: v for k, v in row.items() if k not in {"first_batch_order", "queue_order", "next_queue_order"}}
+        frozen_data = {k: v for k, v in frozen.items() if k not in {"first_batch_order", "queue_order", "next_queue_order"}}
+        if current != frozen_data:
+            raise ValueError("Missing cohort evidence: batch row differs from its frozen queue")
+        if primary_by_id.get(row["source_window_identity_sha256"]) != frozen_data:
+            raise ValueError("Missing cohort evidence: batch row is outside the frozen 200-primary cohort")
+    if len(rows) != len(expected_rows):
+        raise ValueError("Missing cohort evidence: batch row count differs from its frozen queue")
+    return anchors, primaries, first_batch_path, is_first_batch
+
+
+def retained_for_replacement(
+    anchors: list[dict],
+    primaries: list[dict],
+    earlier_fallbacks: list[dict],
+    replaced_primary: dict,
+) -> list[dict]:
+    """Keep every frozen row except the one primary whose phase is being replaced."""
+    replaced_identity = source_window_identity_sha256(replaced_primary)
+    matches = [row for row in primaries if source_window_identity_sha256(row) == replaced_identity]
+    if len(matches) != 1:
+        raise ValueError("Missing cohort evidence: replacement primary is not unique in the frozen 200-row cohort")
+    return [
+        *anchors,
+        *(row for row in primaries if source_window_identity_sha256(row) != replaced_identity),
+        *earlier_fallbacks,
+    ]
+
+
+def load_prior_screened_fallbacks(
+    first_batch_path: Path,
+    anchors: list[dict],
+    primaries: list[dict],
+    runner,
+) -> tuple[list[dict], list[dict]]:
+    """Validate prior batch choices and return only structurally retained alternates."""
+    first_batch_path = first_batch_path.resolve()
+    if sha(first_batch_path) != FIRST_BATCH_SHA256:
+        raise ValueError("Frozen first-batch evidence hash changed")
+    first_batch = json.loads(first_batch_path.read_text())
+    ledger_path = first_batch_path.parent.parent / "german_200_v1_workstream_b/batch_ledger.json"
+    if not ledger_path.is_file() or sha(ledger_path) != FIRST_BATCH_LEDGER_SHA256:
+        raise ValueError("Missing or changed frozen Batch 1 retention ledger")
+    ledger = json.loads(ledger_path.read_text())
+    first_batch_rows = first_batch.get("candidates")
+    if not isinstance(first_batch_rows, list):
+        raise ValueError("Missing cohort evidence: prior first-batch candidates are unavailable")
+    result_by_index = {int(result.get("queue_index", -1)): result for result in ledger.get("results", [])}
+    if len(result_by_index) != len(first_batch_rows):
+        raise ValueError("Missing cohort evidence: prior first-batch result ledger is incomplete")
+
+    retained, audit = [], []
+    for index, primary in enumerate(first_batch_rows):
+        result = result_by_index.get(index)
+        if result is None or result.get("frozen_row") != primary:
+            raise ValueError(f"Missing Batch 1 frozen row evidence at {index}")
+        if result.get("status") not in STRUCTURAL_STATUSES:
+            continue
+        choice = result.get("phase_fallback")
+        if not isinstance(choice, dict):
+            raise ValueError(f"Missing Batch 1 fallback disposition at row {index}")
+        if choice.get("status") == "unavailable":
+            continue
+        candidate = choice.get("candidate")
+        fallback_result = choice.get("result")
+        order = choice.get("replacement_order")
+        if not isinstance(candidate, dict) or not isinstance(fallback_result, dict) or fallback_result.get("frozen_row") != candidate:
+            raise ValueError(f"Missing cohort evidence: Batch 1 fallback choice/result mismatch at row {index}")
+        if not any(
+            int(item.get("replacement_order", -1)) == order
+            and item.get("candidate") == candidate
+            and item.get("replacement_rule") == choice.get("replacement_rule")
+            for item in primary.get("alternate_source_windows", [])
+        ):
+            raise ValueError(f"Missing cohort evidence: Batch 1 fallback is not a frozen alternate at row {index}")
+        if runner.verify_source_identity(candidate):
+            raise ValueError(f"Missing cohort evidence: Batch 1 fallback source changed at row {index}")
+        preflight = fallback_result.get("source_preflight")
+        if not isinstance(preflight, dict) or preflight.get("status") != "source_screened":
+            continue
+        conflicts = independence_conflicts(candidate, retained_for_replacement(anchors, primaries, retained, primary))
+        audit.append({"queue_index": index, "source_window_identity_sha256": source_window_identity_sha256(candidate), "conflicts": conflicts})
+        structurally_retained = not preflight.get("structural_reasons") and not preflight.get("physical_reasons")
+        if conflicts and structurally_retained:
+            raise ValueError(
+                f"Batch 1 screened fallback conflicts with frozen cohort at row {index}: {json.dumps(conflicts, sort_keys=True)}"
+            )
+        if structurally_retained:
+            retained.append(candidate)
+    return retained, audit
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queue", type=Path, required=True)
@@ -257,6 +378,7 @@ def main() -> None:
     from geotransfer_gap.corpus import run_german_200_batch as runner
 
     rows = runner.get_rows(queue)
+    anchors, frozen_primaries, first_batch_path, is_first_batch = load_frozen_cohort(queue_path, rows)
     queue_sha = sha(queue_path)
     cfg = settings()
     output_root = runner.output_namespace(cfg, queue_path, args.output_root)
@@ -310,6 +432,13 @@ def main() -> None:
             require_fingerprint_match(fallback_fp.get("global"), global_fingerprint, f"fallback for row {index}")
             expected_fallback = runner.candidate_fingerprint(fallback_row, queue_sha, support, global_fingerprint)
             require_fingerprint_match(fallback_fp, expected_fallback, f"fallback for row {index}")
+
+    prior_fallbacks = []
+    prior_fallback_audit = []
+    if not is_first_batch:
+        prior_fallbacks, prior_fallback_audit = load_prior_screened_fallbacks(
+            first_batch_path, anchors, frozen_primaries, runner
+        )
     for result in result_by_index.values():
         classify_primary(result)
         if result.get("status") == "review_blocked" and "review_assets" not in result:
@@ -318,11 +447,12 @@ def main() -> None:
             result["output_tree_sha256"] = runner.output_tree_fingerprint(Path(result["root"]))
 
     structural = {i for i, result in result_by_index.items() if result.get("status") in STRUCTURAL_STATUSES}
-    retained = [rows[i] for i in range(len(rows)) if i not in structural]
+    earlier_fallbacks = list(prior_fallbacks)
     fallback_outcomes = []
     for index in sorted(structural):
         primary_result = result_by_index[index]
         prior_fallback = primary_result.get("phase_fallback")
+        retained = retained_for_replacement(anchors, frozen_primaries, earlier_fallbacks, rows[index])
         selected, skipped = fallback_candidates(rows[index], retained)
         if not selected:
             primary_result["phase_fallback"] = {
@@ -376,7 +506,7 @@ def main() -> None:
             fallback_result.get("source_preflight", {}).get("structural_reasons")
             or fallback_result.get("source_preflight", {}).get("physical_reasons")
         ):
-            retained.append(alternate)
+            earlier_fallbacks.append(alternate)
         ledger["results"] = [result_by_index[i] for i in sorted(result_by_index)]
         ledger["fallback_updated_utc"] = datetime.now(timezone.utc).isoformat()
         atomic_json(ledger_path, ledger)
@@ -384,12 +514,20 @@ def main() -> None:
     results = [result_by_index[i] for i in sorted(result_by_index)]
     ledger["results"] = results
     ledger["fallback_updated_utc"] = datetime.now(timezone.utc).isoformat()
+    ledger["prior_fallback_cohort_audit"] = prior_fallback_audit
     atomic_json(ledger_path, ledger)
-    write_reports(output_root, rows, results, fallback_outcomes, queue_sha)
+    write_reports(output_root, rows, results, fallback_outcomes, queue_sha, prior_fallback_audit)
     print(json.dumps(json.loads((output_root / "batch_run_report.json").read_text()), indent=2))
 
 
-def write_reports(output_root: Path, frozen_rows: list[dict], results: list[dict], fallbacks: list[dict], queue_sha: str) -> None:
+def write_reports(
+    output_root: Path,
+    frozen_rows: list[dict],
+    results: list[dict],
+    fallbacks: list[dict],
+    queue_sha: str,
+    prior_fallback_audit: list[dict] | None = None,
+) -> None:
     statuses = Counter(r.get("status", "pending") for r in results)
     primary_eligible = sum(r.get("status") in {"awaiting_human_review", "technical_rejection", "review_blocked"} for r in results)
     primary_pass = sum(r.get("technical_admission", {}).get("technical_admitted") is True for r in results)
@@ -478,7 +616,8 @@ def write_reports(output_root: Path, frozen_rows: list[dict], results: list[dict
         "source_context_independence_passed": json.loads((output_root / "batch_independence_audit.json").read_text()).get("passed") is True,
         "semantic_flags_are_annotation_only": True,
         "manual_reviews_created": False,
-        "fallback_policy": "At most one prespecified same-arm/task alternate is attempted for each primary source geometry/physical rejection; each is checked against the remaining primaries plus prior accepted fallbacks. No fallback is selected after a technical gate or rollout outcome.",
+        "fallback_policy": "At most one prespecified same-arm/task alternate is attempted for each structural rejection; each is checked against all 16 anchors, all other frozen German-200 primaries, and previously retained screened fallbacks. Batch 1/2 evidence only; unknown later batches fail closed.",
+        "prior_fallback_cohort_audit": prior_fallback_audit or [],
         "scope": "This frozen mixed-arm batch only. The raw primary fraction is kept separate from the technical-eligible and fallback-adjusted fractions; no historic ledger pooling.",
     }
     atomic_json(output_root / "batch_run_report.json", report)
