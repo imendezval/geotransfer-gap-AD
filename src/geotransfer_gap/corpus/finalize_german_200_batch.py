@@ -785,7 +785,7 @@ def load_prior_screened_fallbacks(
 
 
 def finish_batch_results(queue_path, queue, rows, output_root, queue_sha, result_by_index, anchors, frozen_primaries,
-                         is_first_batch, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
+                         ledger, ledger_path, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
                          global_fingerprint, runner, retention_state=None):
     if retention_batch:
         current_records, current_prefix = read_retention_history()
@@ -982,13 +982,13 @@ def main() -> None:
         with retention_history_lock():
             completed = finish_batch_results(
                 queue_path, queue, rows, output_root, queue_sha, result_by_index, anchors, frozen_primaries,
-                is_first_batch, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
+                ledger, ledger_path, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
                 global_fingerprint, runner, retention_state,
             )
     else:
         completed = finish_batch_results(
             queue_path, queue, rows, output_root, queue_sha, result_by_index, anchors, frozen_primaries,
-            is_first_batch, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
+            ledger, ledger_path, retention_batch, prior_fallbacks, prior_fallback_audit, env, support,
             global_fingerprint, runner,
         )
     if completed:

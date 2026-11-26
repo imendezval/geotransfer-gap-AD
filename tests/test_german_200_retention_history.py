@@ -276,3 +276,46 @@ def test_native_runner_refuses_to_persist_after_retention_receipt(tmp_path, monk
 
     with pytest.raises(ValueError, match="use the finalizer's read-only resume path"):
         runner.main()
+
+
+def test_finalizer_publication_writes_fallback_and_reports(tmp_path, monkeypatch):
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    queue_path = tmp_path / "plan" / "queue.json"
+    queue_path.parent.mkdir()
+    queue_path.write_text("{}\n")
+    (output_root / "batch_owner.json").write_text(json.dumps({"queue_path": str(queue_path)}))
+    (output_root / "source_support_provenance.json").write_text("{}\n")
+    (output_root / "batch_independence_audit.json").write_text('{"passed":true}\n')
+
+    primary = {"queue_index": 0, "candidate_id": "primary", "status": "source_physical_rejection",
+               "frozen_row": {"arm": "Interactive100", "source_window_identity_sha256": "primary"}}
+    alternate = {"arm": "Interactive100", "source_window_identity_sha256": "alternate"}
+    ledger = {"results": [primary]}
+    ledger_path = output_root / "batch_ledger.json"
+    ledger_path.write_text(json.dumps(ledger))
+    monkeypatch.setattr(finalize, "fallback_candidates", lambda _row, _retained: ([
+        {"candidate": alternate, "replacement_order": 1, "replacement_rule": "same-arm"}
+    ], []))
+    monkeypatch.setattr(finalize, "retained_for_replacement", lambda *_args: [])
+    fake_runner = SimpleNamespace(
+        candidate_fingerprint=lambda *_args: {},
+        output_tree_fingerprint=lambda _root: {},
+        process_row=lambda *_args: {"status": "technical_rejection", "source_preflight": {
+            "status": "source_screened", "structural_reasons": [], "physical_reasons": []
+        }},
+    )
+
+    finalize.finish_batch_results(
+        queue_path, {}, [primary["frozen_row"]], output_root, "queue-sha", {0: primary}, [], [],
+        ledger, ledger_path, False, [], [], {}, {}, {}, fake_runner,
+    )
+
+    saved_ledger = json.loads(ledger_path.read_text())
+    fallback = saved_ledger["results"][0]["phase_fallback"]
+    assert fallback["candidate"] == alternate
+    assert fallback["result"]["status"] == "technical_rejection"
+    report = json.loads((output_root / "batch_run_report.json").read_text())
+    summary = json.loads((output_root / "batch_summary.json").read_text())
+    assert report["fallback_attempt_count"] == 1
+    assert summary == report
