@@ -352,6 +352,28 @@ def batch_owner(queue_path: Path, queue_sha: str, output_root: Path) -> dict[str
     }
 
 
+def retention_output_has_finalizer_receipt(output_root: Path, queue_path: Path, queue: dict) -> bool:
+    """Keep a completed/pending append-only batch out of the runner's persistence path."""
+    if not isinstance(queue.get("batch_number"), int) or queue["batch_number"] < 3:
+        return False
+    if (output_root / "retention_pending.json").is_file():
+        return True
+    from geotransfer_gap.corpus import finalize_german_200_batch as finalizer
+
+    records, _ = finalizer.read_retention_history()
+    finalizer.verify_retention_roots(records, sys.modules[__name__])
+    finalizer.check_history_tip(records, allow_one_behind=True)
+    relative_queue = str(queue_path.resolve().relative_to(PROJECT_ROOT.resolve()))
+    return any(
+        record.get("batch_number", 0) >= 3
+        and (
+            record.get("queue_path") == relative_queue
+            or record.get("output_root") == str(output_root.resolve())
+        )
+        for record in records
+    )
+
+
 def validate_existing_ledger(ledger: dict[str, Any], rows: list[dict[str, Any]], queue_sha: str, support: dict[str, Any], global_fp: dict[str, Any]) -> None:
     if ledger.get("queue_sha256") != queue_sha or ledger.get("queue_row_count") != len(rows):
         raise ValueError("Existing output ledger belongs to a different frozen queue; choose a new named namespace")
@@ -1002,6 +1024,8 @@ def main() -> None:
     frozen = json.loads(queue_path.read_text())
     rows = get_rows(frozen)
     queue_hash = sha(queue_path)
+    if retention_output_has_finalizer_receipt(output_root, queue_path, frozen):
+        raise ValueError("This batch has a durable pending/finalized retention receipt; use the finalizer's read-only resume path")
     owner_path = output_root / "batch_owner.json"
     owner = batch_owner(queue_path, queue_hash, output_root)
     owner_exists = owner_path.is_file()
