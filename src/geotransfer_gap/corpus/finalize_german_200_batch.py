@@ -89,6 +89,19 @@ def require_candidate_root(result: dict, output_root: Path, label: str) -> None:
         raise ValueError(f"Candidate root escapes its owned namespace: {label}")
 
 
+def _verify_result_tree(result: dict, output_root: Path, runner, label: str) -> None:
+    require_candidate_root(result, output_root, label)
+    raw = result.get("root")
+    if not raw:
+        return
+    root = Path(raw).resolve()
+    if not root.is_dir():
+        raise ValueError(f"Candidate output root is missing: {label}")
+    current = runner.output_tree_fingerprint(root)
+    if not current or result.get("output_tree_sha256") != current:
+        raise ValueError(f"Candidate output evidence changed: {label}")
+
+
 def gate_report(result: dict) -> tuple[dict | None, Path | None]:
     root = Path(result.get("root", "/missing"))
     path = root / "testing/admission_hybrid_startup.json"

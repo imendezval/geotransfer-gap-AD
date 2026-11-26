@@ -195,7 +195,7 @@ def test_prior_batch_rejects_stale_ledger_bytes(tmp_path, monkeypatch):
         "queue_receipt_sha256": sha256(receipt_path),
         "retained_fallbacks": [],
     }
-    finalize.verify_later_record(record, prior, [], source_rows, runner, [])
+    finalize.verify_later_record(record, prior, [], source_rows, runner, [], verify_primary_trees=True)
     ledger_path.write_text('{"queue_sha256":"changed"}')
     with pytest.raises(ValueError, match="batch_ledger.json is missing or stale"):
         finalize.verify_later_record(record, prior, [], source_rows, runner, [])
@@ -319,3 +319,17 @@ def test_finalizer_publication_writes_fallback_and_reports(tmp_path, monkeypatch
     summary = json.loads((output_root / "batch_summary.json").read_text())
     assert report["fallback_attempt_count"] == 1
     assert summary == report
+
+
+def test_tree_verification_requires_existing_nonempty_candidate_root(tmp_path):
+    output_root = tmp_path / "output"
+    missing = output_root / "candidate_runs" / "missing"
+    with pytest.raises(ValueError, match="output root is missing"):
+        finalize._verify_result_tree({"root": str(missing), "output_tree_sha256": {}}, output_root,
+                                     SimpleNamespace(output_tree_fingerprint=lambda _root: {}), "synthetic row")
+
+    existing = output_root / "candidate_runs" / "candidate"
+    existing.mkdir(parents=True)
+    with pytest.raises(ValueError, match="output evidence changed"):
+        finalize._verify_result_tree({"root": str(existing), "output_tree_sha256": {}}, output_root,
+                                     SimpleNamespace(output_tree_fingerprint=lambda _root: {}), "synthetic row")
