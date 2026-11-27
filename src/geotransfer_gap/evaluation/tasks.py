@@ -652,29 +652,61 @@ def _low_progress(frames, times, route_output, profile, evidence_refs):
 def _native_goal(events, exposure, goal_binding):
     goals = [row for row in events if row.get("channel") == "goal_reached"]
     coverage = exposure.get("event_observation_coverage", {}).get("windows", {}).get("full", {})
-    channel = coverage.get("channels", {}).get("reached_goal", {})
+    channels = coverage.get("channels", {})
+    channel = channels.get("reached_goal", {})
+    counter_channel = channels.get("native_goal_counter", {})
     first = min(goals, key=lambda row: row.get("time_s") if _finite(row.get("time_s")) else math.inf) if goals else None
     observed = bool(goals)
-    complete_coverage = channel.get("fraction") == 1.0
-    absence_observed = not observed and complete_coverage
+    flag_absence_observed = channel.get("fraction") == 1.0
+    counter_capture_expected = goal_binding.get("capture_schema_version") == 2
+    counter_initial = counter_channel.get("initial_value")
+    counter_absence_observed = (
+        counter_channel.get("status") == "valid"
+        and counter_channel.get("fraction") == 1.0
+        and _finite(counter_initial) and counter_initial == 0
+    )
+    absence_observed = not observed and (
+        counter_absence_observed
+        or (flag_absence_observed and not counter_capture_expected)
+    )
+    if observed:
+        status = "valid"
+    elif absence_observed:
+        status = "valid"
+    else:
+        status = "unavailable"
+    if first:
+        source = first.get("evidence")
+    elif counter_absence_observed:
+        source = "complete_native_goal_counter_no_increment"
+    elif counter_channel.get("left_censored_initial_active") is True:
+        source = "native_goal_counter_left_censored_initial_count"
+    elif counter_capture_expected:
+        source = "native_goal_counter_coverage_unavailable"
+    else:
+        source = "no_active_goal_flag_observed"
     return {
-        "status": "valid" if observed or absence_observed else "unavailable",
+        "status": status,
         "observed": True if observed else False if absence_observed else None,
         "step": first.get("step") if first else None,
         "time_s": first.get("time_s") if first else None,
         "attribution": first.get("attribution") if first else None,
-        "source": first.get("evidence") if first else "no_active_goal_flag_observed",
+        "source": source,
         "coverage": channel,
+        "native_goal_counter_coverage": counter_channel,
         "task_goal_binding": goal_binding,
     }
 
 
 def _captured_task_goal_binding(capture, capture_bound, ego_id, ego_binary_index,
                                 task, report, frame_count):
+    capture_version = (capture.get("schema_version") if isinstance(capture, dict)
+                       and type(capture.get("schema_version")) is int else None)
     if not capture_bound or capture is None:
         return {"status": "unavailable", "matches": None,
+                "capture_schema_version": capture_version,
                 "reason": "No hash-bound native navigation-goal capture is available"}
-    if (type(capture.get("schema_version")) is not int or capture.get("schema_version") != 1
+    if (capture_version not in {1, 2}
             or capture.get("ego_source_id") != ego_id
             or capture.get("ego_binary_index") != ego_binary_index
             or capture.get("binary_sha256") != report.get("binary_sha256")
@@ -682,15 +714,18 @@ def _captured_task_goal_binding(capture, capture_bound, ego_id, ego_binary_index
             or not isinstance(capture.get("observations"), list)
             or len(capture["observations"]) != frame_count):
         return {"status": "invalid", "matches": None,
+                "capture_schema_version": capture_version,
                 "reason": "Bound native goal capture identity or observation count contradicts the trace"}
     if task.goal_xy is None:
         return {"status": "unavailable", "matches": None,
+                "capture_schema_version": capture_version,
                 "reason": "Validated source task has no goal position"}
     recorded_goals = []
     for step, observation in enumerate(capture["observations"]):
         if (not isinstance(observation, dict) or observation.get("step") != step
                 or not isinstance(observation.get("actors"), list)):
             return {"status": "invalid", "matches": None,
+                    "capture_schema_version": capture_version,
                     "reason": "Native goal capture step sequence differs from the trace"}
         actors = [row for row in observation.get("actors", ())
                   if isinstance(row, dict) and row.get("source_id") == ego_id]
@@ -698,6 +733,7 @@ def _captured_task_goal_binding(capture, capture_bound, ego_id, ego_binary_index
             continue
         if len(actors) != 1 or actors[0].get("binary_index") != ego_binary_index:
             return {"status": "invalid", "matches": None,
+                    "capture_schema_version": capture_version,
                     "reason": "Native goal capture ego identity is duplicated or inconsistent"}
         goal = actors[0].get("navigation_goal_world_xy")
         if goal is None:
@@ -705,17 +741,20 @@ def _captured_task_goal_binding(capture, capture_bound, ego_id, ego_binary_index
         if not (isinstance(goal, list) and len(goal) == 2
                 and all(_finite(value) for value in goal)):
             return {"status": "invalid", "matches": None,
+                    "capture_schema_version": capture_version,
                     "reason": "Native goal capture contains a malformed goal position"}
         recorded_goals.append({"step": step,
                                "position_world_xy": [float(goal[0]), float(goal[1])]})
     if not recorded_goals:
         return {"status": "unavailable", "matches": None,
+                "capture_schema_version": capture_version,
                 "reason": "Bound capture contains no ego navigation-goal position"}
     distances = [math.dist(row["position_world_xy"], task.goal_xy) for row in recorded_goals]
     matches = all(distance <= _NATIVE_GOAL_MATCH_TOLERANCE_M for distance in distances)
     return {
         "status": "valid",
         "matches": matches,
+        "capture_schema_version": capture_version,
         "reason": ("Captured native navigation goal matches the bounded source task"
                    if matches else
                    "Captured native navigation goal differs from the bounded source task"),

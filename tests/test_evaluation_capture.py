@@ -32,10 +32,12 @@ def fixture_capture(collision_state=1, partner_index=2):
                        goal_position_x=1., goal_position_y=2.)
     actors = [
         SimpleNamespace(source_id=sid, fixed_binary_index=i, lifetime_generation=4,
-                        native_present=(i != 1), controller_eligible=True)
+                        native_present=(i != 1), controller_eligible=(i == 1),
+                        current_active_slot=i)
         for i, sid in enumerate(ids)
     ]
-    snapshot = SimpleNamespace(step=0, actors=(actors[2], actors[1], actors[0]))
+    snapshot = SimpleNamespace(step=0, actors=(actors[2], actors[1], actors[0]),
+                               active_agent_indices=(0, 1, 2))
     capture = EvaluationCapture(binary, {
         "dynamics_model": "classic", "action_type_flag": 1, "episode_length": 91,
         "observation_width": 1151, "goal_behavior": 3,
@@ -58,9 +60,12 @@ def fixture_capture(collision_state=1, partner_index=2):
                 {"id": 100, "binary_index": 0, "present": True, "collision_state": 0},
             ]},
             "actors": [
-                {"source_id": 500, "binary_index": 2, "lifetime_generation": 4},
-                {"source_id": 1035, "binary_index": 1, "lifetime_generation": 4},
-                {"source_id": 100, "binary_index": 0, "lifetime_generation": 4},
+                {"source_id": 500, "binary_index": 2, "lifetime_generation": 4,
+                 "slot": 2, "role": "context"},
+                {"source_id": 1035, "binary_index": 1, "lifetime_generation": 4,
+                 "slot": 1, "role": "ego"},
+                {"source_id": 100, "binary_index": 0, "lifetime_generation": 4,
+                 "slot": 0, "role": "context"},
             ],
         }],
     }
@@ -120,6 +125,83 @@ def test_unmapped_native_partner_is_explicit_unknown_without_a_source_id():
     assert ego["native_collision_partner_index"] == 99
     assert ego["collision_partner_binary_index"] is None
     assert ego["collision_partner_source_id"] is None
+
+
+def test_goal_counter_is_identity_bound_and_v1_captures_remain_readable():
+    capture, trace = fixture_capture()
+    # Rebuild with the read-only counter result from the mapped ego slot.
+    capture._observations.clear()
+    state = {"entities": [
+        {"traj_x": [90.0 + i], "traj_y": [180.0 + i], "collision_state": 0,
+         "collided_with_index": -1, "collision_x": 0., "collision_y": 0.,
+         "collision_other_x": 0., "collision_other_y": 0., "goal_position_x": 0.,
+         "goal_position_y": 0., "removed": False, "x": 0.}
+        for i in range(3)
+    ]}
+    state["entities"][1].update(collision_state=1, collided_with_index=2,
+                                collision_x=2., collision_y=3.,
+                                collision_other_x=4., collision_other_y=5.)
+    capture.capture_pre_step(
+        SimpleNamespace(step=0, actors=(
+            SimpleNamespace(source_id=1035, fixed_binary_index=1, lifetime_generation=4,
+                            native_present=False, controller_eligible=True,
+                            current_active_slot=1),
+            SimpleNamespace(source_id=500, fixed_binary_index=2, lifetime_generation=4,
+                            native_present=True, controller_eligible=False,
+                            current_active_slot=2),
+            SimpleNamespace(source_id=100, fixed_binary_index=0, lifetime_generation=4,
+                            native_present=True, controller_eligible=False,
+                            current_active_slot=0),
+        ), active_agent_indices=(0, 1, 2)),
+        state,
+        goal_counter={"status": "observed", "slot": 1,
+                      "slot_mapping_verified": True, "value": 0.0, "reason": None},
+    )
+    saved = capture.build(trace, "b" * 64)
+    assert validate_evaluation_capture(saved, trace, "b" * 64)
+    fractional = deepcopy(saved)
+    fractional["observations"][0]["ego_goal_counter"]["value"] = 0.5
+    with pytest.raises(ValueError, match="fractional"):
+        validate_evaluation_capture(fractional, trace, "b" * 64)
+    corrupted = deepcopy(saved)
+    corrupted["observations"][0]["ego_goal_counter"]["slot"] = 0
+    with pytest.raises(ValueError, match="slot/eligibility differs"):
+        validate_evaluation_capture(corrupted, trace, "b" * 64)
+    corrupted = deepcopy(saved)
+    corrupted["observations"][0]["ego_goal_counter"]["lifetime_generation"] = 5
+    with pytest.raises(ValueError, match="actor identity differs"):
+        validate_evaluation_capture(corrupted, trace, "b" * 64)
+
+    legacy = deepcopy(saved)
+    legacy["schema_version"] = 1
+    legacy["observations"][0].pop("ego_goal_counter")
+    assert validate_evaluation_capture(legacy, trace, "b" * 64)
+
+
+def test_goal_remove_counter_rejects_more_than_one_event_per_applied_transition():
+    capture, trace = fixture_capture()
+    first = capture._observations[0]
+    first["ego_goal_counter"].update(
+        status="observed", slot=1, slot_mapping_verified=True,
+        controller_eligible=True, value=0.0, reason=None,
+    )
+    second = deepcopy(first)
+    second["step"] = 1
+    second["ego_goal_counter"]["value"] = 2.0
+    capture._observations.append(second)
+
+    trace["requested_observation_frames"] = 2
+    trace["observation_frames"] = 2
+    trace["transitions"] = 1
+    trace["frames"][0]["transition_applied"] = True
+    final_frame = deepcopy(trace["frames"][0])
+    final_frame["step"] = 1
+    final_frame["state"]["step"] = 1
+    final_frame["transition_applied"] = False
+    trace["frames"].append(final_frame)
+
+    with pytest.raises(ValueError, match="exceeds one GOAL_REMOVE event"):
+        capture.build(trace, "b" * 64)
 
 
 def test_capture_collision_state_and_native_settings_must_match_canonical_evidence():

@@ -288,10 +288,39 @@ def _ownership_segments(rows, times, intervals):
     return masks, segments
 
 
-def _event_rows(rows, times, report, warmup, last):
+def _native_goal_counter_delta(previous, current, previous_frame):
+    """Return an assessable cumulative-counter delta for one applied transition."""
+    if previous_frame.get("transition_applied") is not True:
+        return 0.0
+    if (not isinstance(previous, dict) or not isinstance(current, dict)
+            or previous.get("status") != "observed"
+            or current.get("status") != "observed"
+            or previous.get("slot_mapping_verified") is not True
+            or current.get("slot_mapping_verified") is not True
+            or previous.get("controller_eligible") is not True
+            or type(previous.get("slot")) is not int
+            or current.get("slot") != previous.get("slot")
+            or previous.get("source_id") != current.get("source_id")
+            or previous.get("binary_index") != current.get("binary_index")
+            or type(previous.get("lifetime_generation")) is not int
+            or previous.get("lifetime_generation") != current.get("lifetime_generation")
+            or not _number(previous.get("value")) or not _number(current.get("value"))):
+        return None
+    return float(current["value"] - previous["value"])
+
+
+def _event_rows(rows, times, report, warmup, last, *,
+                evaluation_capture=None, evaluation_capture_bound=False):
     events = []
     channels = ("collision_state", "reached_goal")
     coverage = {"windows": {}}
+    counter_observations = None
+    if (evaluation_capture_bound and isinstance(evaluation_capture, dict)
+            and evaluation_capture.get("schema_version") == 2
+            and isinstance(evaluation_capture.get("observations"), list)
+            and len(evaluation_capture["observations"]) == len(rows)):
+        counter_observations = [row.get("ego_goal_counter")
+                                for row in evaluation_capture["observations"]]
     for window in ("full", "primary"):
         selected = [(frame, actor) for i, (frame, actor) in enumerate(rows)
                     if window == "full" or warmup <= i <= last]
@@ -306,6 +335,43 @@ def _event_rows(rows, times, report, warmup, last):
                 "observations_with_field": count if count else None,
                 "observation_count": len(selected),
                 "fraction": float(count / len(selected)) if count and selected else None,
+            }
+        if counter_observations is not None:
+            selected_indices = [index for index in range(len(rows))
+                                if window == "full" or warmup <= index <= last]
+            selected_counters = [counter_observations[index] for index in selected_indices]
+            valid_count = sum(isinstance(item, dict)
+                              and item.get("status") == "observed"
+                              and item.get("slot_mapping_verified") is True
+                              for item in selected_counters)
+            expected_transitions = assessable_transitions = 0
+            for left_index, right_index in zip(selected_indices, selected_indices[1:]):
+                if right_index != left_index + 1:
+                    continue
+                if rows[left_index][0].get("transition_applied") is True:
+                    expected_transitions += 1
+                    delta = _native_goal_counter_delta(
+                        counter_observations[left_index],
+                        counter_observations[right_index], rows[left_index][0],
+                    )
+                    assessable_transitions += delta is not None
+            complete = (valid_count == len(selected_indices)
+                        and assessable_transitions == expected_transitions)
+            initial = selected_counters[0] if selected_counters else None
+            initial_value = (float(initial["value"])
+                             if isinstance(initial, dict) and initial.get("status") == "observed"
+                             and _number(initial.get("value")) else None)
+            details["channels"]["native_goal_counter"] = {
+                "status": "valid" if complete else "unavailable",
+                "observations_with_field": valid_count if valid_count else None,
+                "observation_count": len(selected_indices),
+                "fraction": (float(valid_count / len(selected_indices))
+                             if valid_count and selected_indices else None),
+                "assessable_applied_transition_count": assessable_transitions,
+                "expected_applied_transition_count": expected_transitions,
+                "initial_value": initial_value,
+                "left_censored_initial_active": bool(initial_value is not None
+                                                     and initial_value > 0),
             }
         coverage["windows"][window] = details
     for index, (frame, actor) in enumerate(rows):
@@ -363,6 +429,51 @@ def _event_rows(rows, times, report, warmup, last):
                 "evidence": "trace_native_state_or_goal_flag",
                 "cause_established": False,
             })
+    if counter_observations is not None:
+        by_step_and_actor = {(row.get("step"), row.get("actor", {}).get("source_id"),
+                              row.get("actor", {}).get("lifetime_generation")): row
+                             for row in events if row.get("channel") == "goal_reached"}
+        for index in range(1, min(len(rows), len(counter_observations))):
+            previous_counter = counter_observations[index - 1]
+            current_counter = counter_observations[index]
+            delta = _native_goal_counter_delta(previous_counter, current_counter,
+                                               rows[index - 1][0])
+            if delta is None or delta <= 0:
+                continue
+            step = rows[index][0].get("step", index)
+            source_id = current_counter["source_id"]
+            generation = current_counter["lifetime_generation"]
+            existing = by_step_and_actor.get((step, source_id, generation))
+            if existing is not None:
+                existing["evidence"] = "trace_native_goal_flag_and_goal_counter_increment"
+                existing["native_goal_counter_delta"] = delta
+                existing["native_goal_counter_before"] = float(previous_counter["value"])
+                existing["native_goal_counter_after"] = float(current_counter["value"])
+                continue
+            previous_frame, previous_actor = rows[index - 1]
+            owner = _owner(previous_actor) if previous_actor else None
+            if index <= warmup:
+                observation, attribution = "newly_observed_during_warmup", "warmup_or_initial_condition"
+            elif previous_frame.get("transition_applied") is True and owner and owner.startswith("ego:"):
+                observation, attribution = "newly_observed_onset", "recorded_controlled_transition"
+            else:
+                observation, attribution = "newly_observed_onset", "unattributed"
+            event = {
+                "event_id": f"goal_reached:{source_id}:{generation}:{step}",
+                "channel": "goal_reached", "observation": observation,
+                "attribution": attribution, "step": step, "time_s": times[index],
+                "actor": {"source_id": source_id,
+                          "lifetime_generation": generation,
+                          "binary_index": current_counter["binary_index"]},
+                "pose_present": _present(rows[index][1]),
+                "evidence": "hash_bound_native_goals_reached_counter_increment",
+                "native_goal_counter_delta": delta,
+                "native_goal_counter_before": float(previous_counter["value"]),
+                "native_goal_counter_after": float(current_counter["value"]),
+                "cause_established": False,
+            }
+            events.append(event)
+            by_step_and_actor[(step, source_id, generation)] = event
     terminal = report.get("terminal_reason")
     if terminal not in (None, "horizon"):
         frame, actor = rows[-1] if rows else ({}, None)
@@ -383,7 +494,8 @@ def _event_rows(rows, times, report, warmup, last):
     return events, coverage
 
 
-def measure_kinematics(frames, ego_id, report, profile):
+def measure_kinematics(frames, ego_id, report, profile, *,
+                       evaluation_capture=None, evaluation_capture_bound=False):
     """Calculate PE02 metrics from saved states; no simulator imports or calls."""
     profile_values = profile.values
     version = profile_values["profile"]["definition_version"]
@@ -783,7 +895,11 @@ def measure_kinematics(frames, ego_id, report, profile):
                 actors=window_actors,
             ))
 
-    events, coverage = _event_rows(rows, times, report, warmup, last)
+    events, coverage = _event_rows(
+        rows, times, report, warmup, last,
+        evaluation_capture=evaluation_capture,
+        evaluation_capture_bound=evaluation_capture_bound,
+    )
     exposure["event_observation_coverage"] = coverage
     requested = report.get("requested_observation_frames", count)
     exposure["censoring"] = {

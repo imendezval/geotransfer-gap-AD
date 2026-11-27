@@ -1,14 +1,14 @@
 """Optional, hash-bound native episode evidence capture.
 
-This module only copies values already exposed by the episode worker's
-pre-step snapshot. It does not read simulator logs or change runtime state.
+Version 2 also records a read-only per-agent goal counter through the current
+verified slot mapping. It does not change simulator state or trace frames.
 """
 
 import math
 import re
 
 
-CAPTURE_SCHEMA_VERSION = 1
+CAPTURE_SCHEMA_VERSION = 2
 CAPTURE_FILENAME = "evaluation_capture.json"
 _NATIVE_SETTING_KEYS = {
     "dynamics_model", "action_type_flag", "episode_length",
@@ -68,7 +68,7 @@ class EvaluationCapture:
             raise ValueError("capture requires the supported native evaluation settings")
         self._observations = []
 
-    def capture_pre_step(self, snapshot, native):
+    def capture_pre_step(self, snapshot, native, *, goal_counter=None):
         """Copy identity and detector fields before the next native step."""
         state = native
         if isinstance(native, list):
@@ -137,11 +137,37 @@ class EvaluationCapture:
                 "partner_center_world_xy": other_center,
                 "navigation_goal_world_xy": goal,
             })
+        ego_index = int(self._binary["sdc_track_index"])
+        ego = next((actor for actor in snapshot.actors
+                    if actor.fixed_binary_index == ego_index), None)
+        if ego is None:
+            raise ValueError("evaluation capture snapshot has no ego actor")
+        counter = goal_counter if isinstance(goal_counter, dict) else {}
+        counter_status = counter.get("status", "unavailable")
+        counter_value = counter.get("value")
+        counter_slot = counter.get("slot", getattr(ego, "current_active_slot", None))
+        slot_mapping_verified = counter.get("slot_mapping_verified", False)
+        reason = counter.get("reason", "native_counter_readback_not_supplied")
+        if counter_status not in {"observed", "unavailable"}:
+            raise ValueError("unsupported native goal-counter readback status")
+        counter_row = {
+            "status": counter_status,
+            "source_id": int(ego.source_id),
+            "binary_index": ego_index,
+            "lifetime_generation": (None if ego.lifetime_generation is None
+                                    else int(ego.lifetime_generation)),
+            "slot": counter_slot,
+            "slot_mapping_verified": slot_mapping_verified,
+            "controller_eligible": bool(ego.controller_eligible),
+            "value": counter_value,
+            "reason": reason if counter_status == "unavailable" else None,
+        }
         self._observations.append({
             "step": int(snapshot.step),
             "coordinate_offset_world_minus_native_m": list(offset),
             "coordinate_anchor_binary_index": anchor,
             "actors": rows,
+            "ego_goal_counter": counter_row,
         })
 
     def build(self, trace, trace_sha256):
@@ -176,7 +202,7 @@ class EvaluationCapture:
             "observations": self._observations,
             "limitations": [
                 "Collision positions are detector actor centers, not exact physical impact points.",
-                "No upstream aggregate or per-agent log API was read; reset/index behavior is not needed for these copied fields.",
+                "The native per-agent goal counter was read through the current verified slot mapping.",
                 "Partner status and raw native index distinguish an unreported or unmapped partner; no source ID is fabricated.",
             ],
         }
@@ -186,8 +212,9 @@ class EvaluationCapture:
 
 def validate_evaluation_capture(capture, trace, trace_sha256, *, verification=None):
     """Check capture structure and exact trace/protocol/actor binding."""
-    if not isinstance(capture, dict) or type(capture.get("schema_version")) is not int \
-            or capture["schema_version"] != CAPTURE_SCHEMA_VERSION:
+    if (not isinstance(capture, dict)
+            or type(capture.get("schema_version")) is not int
+            or capture["schema_version"] not in {1, CAPTURE_SCHEMA_VERSION}):
         raise ValueError("unsupported evaluation capture schema")
     _check_finite(capture)
     ego_id = next((int(actor["id"]) for actor in trace["frames"][0]["state"]["actors"]
@@ -227,6 +254,7 @@ def validate_evaluation_capture(capture, trace, trace_sha256, *, verification=No
     if (not isinstance(coordinate, dict)
             or coordinate.get("transform") != "world_xy = native_xy + coordinate_offset_world_minus_native_m"):
         raise ValueError("unsupported evaluation capture coordinate transform")
+    prior_counter = None
     for step, (observation, frame) in enumerate(zip(observations, trace["frames"])):
         if (type(observation.get("step")) is not int or observation["step"] != step
                 or frame.get("step") != step):
@@ -309,4 +337,60 @@ def validate_evaluation_capture(capture, trace, trace_sha256, *, verification=No
                                          or row["collision_center_world_xy"] is not None
                                          or row["partner_center_world_xy"] is not None):
                 raise ValueError(f"non-vehicle event carries vehicle collision data at observation {step}")
+        if capture["schema_version"] == 2:
+            counter = observation.get("ego_goal_counter")
+            expected_ego = capture["ego_source_id"]
+            state = state_by_id.get(expected_ego)
+            assignment = assignment_by_id.get(expected_ego)
+            if not isinstance(counter, dict) or set(counter) != {
+                    "status", "source_id", "binary_index", "lifetime_generation", "slot",
+                    "slot_mapping_verified", "controller_eligible", "value", "reason"}:
+                raise ValueError(f"native goal-counter record is malformed at observation {step}")
+            if (state is None or assignment is None
+                    or type(counter.get("source_id")) is not int
+                    or counter.get("source_id") != expected_ego
+                    or type(counter.get("binary_index")) is not int
+                    or counter.get("binary_index") != capture["ego_binary_index"]
+                    or counter.get("binary_index") != state.get("binary_index")
+                    or (counter.get("lifetime_generation") is not None
+                        and (type(counter.get("lifetime_generation")) is not int
+                             or counter.get("lifetime_generation") < 0))
+                    or counter.get("lifetime_generation") != assignment.get("lifetime_generation")):
+                raise ValueError(f"native goal-counter actor identity differs at observation {step}")
+            status = counter.get("status")
+            slot = counter.get("slot")
+            slot_verified = counter.get("slot_mapping_verified")
+            controller_eligible = counter.get("controller_eligible")
+            value = counter.get("value")
+            reason = counter.get("reason")
+            if (status not in {"observed", "unavailable"}
+                    or type(slot_verified) is not bool
+                    or type(controller_eligible) is not bool
+                    or (slot is not None and (type(slot) is not int or slot < 0))
+                    or (slot_verified and type(slot) is not int)):
+                raise ValueError(f"native goal-counter slot/status is invalid at observation {step}")
+            if (slot_verified and assignment.get("slot") != slot
+                    or controller_eligible != (assignment.get("role") == "ego")):
+                raise ValueError(f"native goal-counter slot/eligibility differs from trace assignment at observation {step}")
+            if status == "observed":
+                if (type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                        or not float(value).is_integer()
+                        or slot is None or not slot_verified or reason is not None
+                        or assignment.get("slot") != slot):
+                    raise ValueError(f"native goal-counter readback is invalid or fractional at observation {step}")
+            elif value is not None or not isinstance(reason, str) or not reason:
+                raise ValueError(f"missing native goal-counter readback is malformed at observation {step}")
+            same_lifetime = (status == "observed" and prior_counter is not None
+                    and prior_counter.get("status") == "observed"
+                    and prior_counter.get("source_id") == counter.get("source_id")
+                    and prior_counter.get("binary_index") == counter.get("binary_index")
+                    and prior_counter.get("lifetime_generation") == counter.get("lifetime_generation"))
+            if (same_lifetime
+                    and prior_counter.get("slot") == slot
+                    and value < prior_counter.get("value")):
+                raise ValueError(f"native goal-counter decreased without a lifetime/slot boundary at observation {step}")
+            if (same_lifetime and native_settings["goal_behavior"] == 3
+                    and value - prior_counter.get("value") > 1):
+                raise ValueError(f"native goal-counter increment exceeds one GOAL_REMOVE event at observation {step}")
+            prior_counter = counter
     return True

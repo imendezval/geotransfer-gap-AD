@@ -1,6 +1,7 @@
 """Fresh-process entry point for a supported controller pair."""
 
 import argparse
+import math
 from pathlib import Path
 
 from geotransfer_gap.artifacts import read_json, reference, sha256, write_json
@@ -151,6 +152,46 @@ def _traffic_ppo_provenance(report, observation):
     }
 
 
+def _read_ego_goal_counter(env, snapshot):
+    """Read the native cumulative goal count through its current mapped slot.
+
+    The slot-to-binary identity check is performed against this immutable
+    snapshot before calling the native per-agent log API. A failed read is
+    preserved as unavailable; zero remains an observed counter value.
+    """
+    ego = snapshot.actor_for(snapshot.ego_id)
+    slot = ego.current_active_slot
+    if type(slot) is not int:
+        return {"status": "unavailable", "slot": None,
+                "slot_mapping_verified": False, "value": None,
+                "reason": "ego_slot_absent"}
+    active = snapshot.active_agent_indices
+    if (slot < 0 or slot >= len(active)
+            or type(active[slot]) is not int
+            or active[slot] != ego.fixed_binary_index):
+        return {"status": "unavailable", "slot": slot,
+                "slot_mapping_verified": False, "value": None,
+                "reason": "ego_slot_mapping_unverified"}
+    try:
+        log = env.get_agent_log(slot)
+    except Exception:
+        return {"status": "unavailable", "slot": slot,
+                "slot_mapping_verified": True, "value": None,
+                "reason": "native_agent_log_unavailable"}
+    if not isinstance(log, dict) or "goals_reached_this_episode" not in log:
+        return {"status": "unavailable", "slot": slot,
+                "slot_mapping_verified": True, "value": None,
+                "reason": "native_goal_counter_missing"}
+    value = log["goals_reached_this_episode"]
+    if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+        return {"status": "unavailable", "slot": slot,
+                "slot_mapping_verified": True, "value": None,
+                "reason": "native_goal_counter_invalid"}
+    return {"status": "observed", "slot": slot,
+            "slot_mapping_verified": True, "value": float(value),
+            "reason": None}
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     if not 1 <= args.steps <= 91:
@@ -217,6 +258,13 @@ def main(argv=None):
         env.reset()
         ego_controller = factories[args.ego]("ego")
         traffic_controller = factories[args.traffic]("traffic")
+
+        def capture_evaluation_frame(snapshot, native):
+            evaluation_capture.capture_pre_step(
+                snapshot, native,
+                goal_counter=_read_ego_goal_counter(env, snapshot),
+            )
+
         report = run_episode(
             env,
             binary,
@@ -229,7 +277,7 @@ def main(argv=None):
             binary_sha256=sha256(binary_file),
             startup=startup,
             capture_lifecycle=lambda snapshot, native: lifecycle.append(lifecycle_frame(snapshot, native)),
-            capture_evaluation=(evaluation_capture.capture_pre_step
+            capture_evaluation=(capture_evaluation_frame
                                 if evaluation_capture is not None else None),
         )
     finally:

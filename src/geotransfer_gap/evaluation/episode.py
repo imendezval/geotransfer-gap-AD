@@ -26,7 +26,7 @@ RESULT_SCHEMA_VERSION = 1
 
 def _code_identity():
     package = Path(__file__).parent
-    owners = ("contracts.py", "profile.py", "kinematics.py", "safety.py",
+    owners = ("contracts.py", "profile.py", "kinematics.py", "capture.py", "safety.py",
               "context.py", "map_metrics.py", "tasks.py", "interactions.py",
               "semantics.py", "compatibility.py", "episode.py", "commands.py")
     files = {f"evaluation/{name}": sha256(package / name) for name in owners}
@@ -44,7 +44,11 @@ def evaluate_episode(saved, profile, *, scene=None, map_context=None, scene_root
     """Read a saved trace and calculate supported exposure and driving metrics."""
     report = saved.playback.report
     frames = list(saved.frames())
-    measured = measure_kinematics(frames, saved.ego_source_id, report, profile)
+    measured = measure_kinematics(
+        frames, saved.ego_source_id, report, profile,
+        evaluation_capture=saved.playback.evaluation_capture,
+        evaluation_capture_bound=saved.playback.evaluation_capture_bound,
+    )
     safety = measure_safety(
         frames, saved.ego_source_id, report, profile, measured["events"],
         measured["exposure"],

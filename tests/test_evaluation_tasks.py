@@ -66,7 +66,11 @@ def run(frames, task, *, planner="ppo", terminal="horizon", requested=None,
         "requested_observation_frames": requested or len(frames),
         "terminal_reason": terminal,
     }
-    measured = measure_kinematics(frames, EGO, report, profile)
+    measured = measure_kinematics(
+        frames, EGO, report, profile,
+        evaluation_capture=evaluation_capture,
+        evaluation_capture_bound=evaluation_capture_bound,
+    )
     result = measure_tasks(frames, EGO, report, profile, measured["exposure"],
                            measured["events"], task,
                            evaluation_capture=evaluation_capture,
@@ -83,6 +87,31 @@ def native_goal_capture(count, goal=(3.0, 0.0), *, ego_id=EGO, binary_index=1):
             "actors": [{"source_id": ego_id, "binary_index": binary_index,
                         "navigation_goal_world_xy": list(goal)}],
         } for step in range(count)],
+    }
+
+
+def native_goal_counter_capture(values, goal=(4.0, 0.0), *, unavailable_steps=()):
+    observations = []
+    for step, value in enumerate(values):
+        unavailable = step in unavailable_steps
+        observations.append({
+            "step": step,
+            "actors": [{"source_id": EGO, "binary_index": 1,
+                        "navigation_goal_world_xy": list(goal)}],
+            "ego_goal_counter": {
+                "status": "unavailable" if unavailable else "observed",
+                "source_id": EGO, "binary_index": 1,
+                "lifetime_generation": 0, "slot": 0,
+                "slot_mapping_verified": True, "controller_eligible": True,
+                "value": None if unavailable else float(value),
+                "reason": "native_goal_counter_missing" if unavailable else None,
+            },
+        })
+    return {
+        "schema_version": 2, "ego_source_id": EGO, "ego_binary_index": 1,
+        "binary_sha256": "b" * 64,
+        "scene": {"root": "artifacts", "path": "synthetic"},
+        "observations": observations,
     }
 
 
@@ -450,6 +479,78 @@ def test_native_goal_terminal_without_pose_preserves_completion_event():
     assert task_result["bounded_task_completion"]["completion_basis"] == "matched_native_goal_event"
     assert task_result["native_goal_event"]["task_goal_binding"]["matches"] is True
     assert task_result["terminal"]["truncation_status"] == "observed_before_requested_horizon"
+
+
+def test_v2_goal_counter_increment_completes_bound_task_on_poseless_terminal():
+    task = task_for([(float(i), 0.0) for i in range(5)])
+    trace = frames([0, 1, 2, 3], terminal_missing=True)
+    result, measured = run(
+        trace, task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture([0, 0, 0, 1]),
+        evaluation_capture_bound=True,
+    )
+    goals = [row for row in measured["events"] if row["channel"] == "goal_reached"]
+    assert len(goals) == 1
+    assert goals[0]["step"] == 3 and goals[0]["pose_present"] is False
+    assert goals[0]["native_goal_counter_before"] == 0
+    assert goals[0]["native_goal_counter_after"] == 1
+    assert result["task"]["native_goal_event"]["observed"] is True
+    assert result["task"]["bounded_task_completion"]["outcome"] == "completed"
+    assert result["task"]["bounded_task_completion"]["completion_basis"] == "matched_native_goal_event"
+
+
+def test_v2_native_goal_counter_and_legacy_flag_do_not_duplicate_an_onset():
+    task = task_for([(float(i), 0.0) for i in range(5)])
+    trace = frames([0, 1, 2, 3], goals={3}, terminal_missing=True)
+    _, measured = run(
+        trace, task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture([0, 0, 0, 1]),
+        evaluation_capture_bound=True,
+    )
+    goals = [row for row in measured["events"] if row["channel"] == "goal_reached"]
+    assert len(goals) == 1
+    assert goals[0]["evidence"] == "trace_native_goal_flag_and_goal_counter_increment"
+
+
+def test_v2_left_censored_or_missing_goal_counter_is_not_a_false_absence():
+    task = task_for([(float(i * 10), 0.0) for i in range(5)])
+    left_censored, _ = run(
+        frames([0, 1, 2, 3]), task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture([2, 2, 2, 2]),
+        evaluation_capture_bound=True,
+    )
+    event = left_censored["task"]["native_goal_event"]
+    assert event["observed"] is None
+    assert event["source"] == "native_goal_counter_left_censored_initial_count"
+
+    missing, _ = run(
+        frames([0, 1, 2, 3]), task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture(
+            [0, 0, 0, 0], unavailable_steps={3}),
+        evaluation_capture_bound=True,
+    )
+    assert missing["task"]["native_goal_event"]["observed"] is None
+    assert missing["task"]["native_goal_event"]["source"] == "native_goal_counter_coverage_unavailable"
+
+
+def test_unbound_counter_and_unrelated_removal_never_create_goal_evidence():
+    task = task_for([(float(i * 10), 0.0) for i in range(5)])
+    unbound, measured = run(
+        frames([0, 1, 2, 3]), task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture([0, 0, 0, 1]),
+        evaluation_capture_bound=False,
+    )
+    assert not any(row["channel"] == "goal_reached" for row in measured["events"])
+    assert unbound["task"]["native_goal_event"]["observed"] is None
+
+    unrelated, measured = run(
+        frames([0, 1, 2, 3]), task, terminal="ego_removed", requested=8,
+        evaluation_capture=native_goal_counter_capture([0, 0, 0, 0]),
+        evaluation_capture_bound=True,
+    )
+    assert not any(row["channel"] == "goal_reached" for row in measured["events"])
+    assert unrelated["task"]["native_goal_event"]["observed"] is False
+    assert unrelated["task"]["bounded_task_completion"]["outcome"] == "unresolved"
 
 
 def test_unbound_or_contradictory_native_goal_does_not_complete_source_task():
