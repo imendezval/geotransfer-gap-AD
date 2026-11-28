@@ -86,12 +86,17 @@ def prepare(plan_dir: Path, output_root: Path) -> dict:
             raise ValueError("Pinned German-200 source queue changed")
         prior_ids = {identity for record in records for identity in record["ordered_primary_identity_sha256"]}
         selected, ranks = finalizer.deterministic_next_rows(source_queue.get("candidates", []), prior_ids)
-        if len(selected) != 24:
-            raise ValueError("Frozen rank source did not produce 12 rows for each arm")
+        per_arm_count = sum(row.get("arm") == "Interactive100" for row in selected)
+        expected_arms = ["Interactive100"] * per_arm_count + ["Random100"] * per_arm_count
+        if (not 1 <= per_arm_count <= 12 or len(selected) != 2 * per_arm_count
+                or [row.get("arm") for row in selected] != expected_arms):
+            raise ValueError("Frozen rank source did not produce 1-12 ordered rows for each arm")
         rows = [dict(row) for row in selected]
+        next_order_by_arm = {"Interactive100": 0, "Random100": 0}
         for index, row in enumerate(rows):
             row["queue_order"] = index + 1
-            row["next_queue_order"] = index % 12 + 1
+            next_order_by_arm[row["arm"]] += 1
+            row["next_queue_order"] = next_order_by_arm[row["arm"]]
 
         queue_path_relative = str((plan_dir / "next_validation_queue.json").relative_to(project))
         previous_queue = json.loads((project / records[-1]["queue_path"]).read_text())
@@ -119,7 +124,7 @@ def prepare(plan_dir: Path, output_root: Path) -> dict:
                 "outcome_conditioned_selection": False,
                 "protocol_version": "german_random100_interactive100_source_only_v1",
                 "selection": (
-                    f"Next 12 frozen primary rows in original deterministic {arm} rank order "
+                    f"Next {per_arm_count} frozen primary rows in original deterministic {arm} rank order "
                     f"after excluding only B1-B{batch_number - 1} primary identities."
                 ),
             }
@@ -163,7 +168,7 @@ def prepare(plan_dir: Path, output_root: Path) -> dict:
             "outcome_conditioned_selection": False,
             "selection_rule": (
                 f"For each arm, preserve frozen candidate rank order, exclude only prior primary identities B1-B{batch_number - 1}, "
-                "then take the next 12; output Interactive100 then Random100."
+                f"then take the next {per_arm_count}; output Interactive100 then Random100."
             ),
             "queue_path": queue_path_relative,
             "queue_sha256": queue_sha,
